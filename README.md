@@ -10,7 +10,9 @@ A real-time Windows vocoder application built with C++ and JUCE. The DSP engine 
 - Pass-through mode for checking audio routing
 - 32-band voice-analysis and carrier filter banks
 - Attack/release envelope tracking
-- Built-in three-note chord carrier
+- Polyphonic internal synthesizer carrier with on-screen and external MIDI input
+- Selectable sine, saw, square, triangle and noise waveforms
+- Carrier octave shift from -2 to +2
 - Optional external carrier from input channel 2
 - Adjustable output level
 - Windows x64 GitHub Actions build
@@ -19,12 +21,13 @@ A real-time Windows vocoder application built with C++ and JUCE. The DSP engine 
 
 1. Open the app and select the microphone/input and speakers/output in **Audio settings**.
 2. Select **Vocoder** under Processing.
-3. Select **Built-in chord** for the internal carrier, or **External input 2** and connect the carrier synth/audio source to the second input channel.
+3. Select **Internal MIDI synth** to play the on-screen keyboard or a connected MIDI controller, or select **External input 2** and connect an external synth/audio source to the second input channel.
+4. Choose the carrier waveform and octave. The internal synth supports 16 simultaneous voices.
 4. Speak or sing into input channel 1.
 
 For an external carrier, the selected Windows audio device must expose at least two input channels. Virtual devices such as VB-CABLE or VoiceMeeter appear in the device lists when their drivers are installed.
 
-The internal carrier is currently a fixed three-note chord. MIDI note input, editable oscillator waveforms, and additional synthesis controls are planned follow-up work.
+The internal carrier is a 16-voice polyphonic synthesizer. MIDI input devices can be selected in the MIDI input list; the on-screen keyboard is also available. Waveform and octave controls are provided.
 
 ## Build locally
 
@@ -57,8 +60,8 @@ JUCE is fetched at build time from its official GitHub repository and is pinned 
 
 1. [x] Audio device setup and pass-through
 2. [x] Initial 32-band vocoder DSP
-3. [x] Built-in chord carrier and external carrier selection
-4. [ ] MIDI input and polyphonic carrier synthesizer controls
+3. [x] Polyphonic MIDI carrier synth and external carrier selection
+4. [ ] Attack/release, frequency range, formant shaping, dry/wet and effects controls
 5. [ ] Attack/release, frequency range, formant shaping, dry/wet and effects controls
 6. [ ] Spectrum display, metering and latency tuning
 7. [ ] VST3 plugin target sharing the DSP engine
