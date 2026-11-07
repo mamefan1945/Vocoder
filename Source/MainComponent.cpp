@@ -211,8 +211,15 @@ void MainComponent::audioDeviceIOCallbackWithContext(const float* const* inputCh
                                                      int numSamples,
                                                      const juce::AudioIODeviceCallbackContext&)
 {
-    if (synthBuffer.getNumSamples() < numSamples)
-        synthBuffer.setSize(1, numSamples, false, false, true);
+    // The buffer is sized in audioDeviceAboutToStart, never reallocated on the
+    // real-time callback thread. A device should not exceed its reported block size.
+    if (numSamples > synthBuffer.getNumSamples())
+    {
+        for (int channel = 0; channel < numOutputChannels; ++channel)
+            if (outputChannelData[channel] != nullptr)
+                juce::FloatVectorOperations::clear(outputChannelData[channel], numSamples);
+        return;
+    }
 
     synthBuffer.clear();
     midiBuffer.clear();
