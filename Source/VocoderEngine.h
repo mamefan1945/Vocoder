@@ -12,8 +12,10 @@ public:
     void reset();
 
     // Processes one mono sample. The modulator is the voice/microphone;
-    // externalCarrier is an optional second input channel.
-    float processSample(float modulator, float externalCarrier, bool useExternalCarrier);
+    // externalCarrier is an optional second input channel. internalCarrier is the
+    // polyphonic synthesizer output when the built-in carrier is selected.
+    float processSample(float modulator, float externalCarrier, bool useExternalCarrier,
+                        float internalCarrier);
 
     void setAttackMs(float milliseconds) noexcept;
     void setReleaseMs(float milliseconds) noexcept;
@@ -25,7 +27,6 @@ private:
     std::array<Filter, bandCount> modulatorFilters;
     std::array<Filter, bandCount> carrierFilters;
     std::array<float, bandCount> envelopes {};
-    std::array<float, 3> oscillatorPhases {};
 
     double currentSampleRate = 44100.0;
     float attackCoefficient = 0.0f;
@@ -34,6 +35,5 @@ private:
     float attackMs = 8.0f;
     float releaseMs = 75.0f;
 
-    float nextInternalCarrier() noexcept;
     void updateEnvelopeTimes() noexcept;
 };
