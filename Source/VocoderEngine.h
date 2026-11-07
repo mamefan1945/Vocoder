@@ -31,6 +31,8 @@ private:
     float attackCoefficient = 0.0f;
     float releaseCoefficient = 0.0f;
     float outputGain = 1.0f;
+    float attackMs = 8.0f;
+    float releaseMs = 75.0f;
 
     float nextInternalCarrier() noexcept;
     void updateEnvelopeTimes() noexcept;
