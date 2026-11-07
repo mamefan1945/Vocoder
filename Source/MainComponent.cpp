@@ -1,17 +1,38 @@
 #include "MainComponent.h"
 
 MainComponent::MainComponent()
-    : deviceSelector(deviceManager, 0, 2, 0, 2, true, false, true, false)
+    : deviceSelector(deviceManager, 1, 2, 0, 2, true, false, true, false)
 {
-    setSize(900, 620);
+    setSize(900, 700);
 
-    titleLabel.setText("VOCODER  |  AUDIO I/O TEST", juce::dontSendNotification);
+    titleLabel.setText("VOCODER  |  REAL-TIME AUDIO", juce::dontSendNotification);
     titleLabel.setFont(juce::Font(24.0f, juce::Font::bold));
     addAndMakeVisible(titleLabel);
 
-    outputLevelLabel.setText("Output level", juce::dontSendNotification);
-    addAndMakeVisible(outputLevelLabel);
+    modeLabel.setText("Processing", juce::dontSendNotification);
+    addAndMakeVisible(modeLabel);
+    processingMode.addItem("Pass-through", 1);
+    processingMode.addItem("Vocoder", 2);
+    processingMode.setSelectedId(1);
+    processingMode.onChange = [this]
+    {
+        selectedMode.store(processingMode.getSelectedId() == 2 ? 1 : 0);
+    };
+    addAndMakeVisible(processingMode);
 
+    carrierLabel.setText("Carrier source", juce::dontSendNotification);
+    addAndMakeVisible(carrierLabel);
+    carrierSource.addItem("Built-in chord", 1);
+    carrierSource.addItem("External input 2", 2);
+    carrierSource.setSelectedId(1);
+    carrierSource.onChange = [this]
+    {
+        selectedCarrier.store(carrierSource.getSelectedId() == 2 ? 1 : 0);
+    };
+    addAndMakeVisible(carrierSource);
+
+    outputLevelLabel.setText("Output level", juce::dontSendNotification);
+    addAndMakeVisible(outputLevel);
     outputLevel.setRange(0.0, 2.0, 0.01);
     outputLevel.setValue(1.0);
     outputLevel.setTextValueSuffix(" x");
@@ -49,10 +70,19 @@ void MainComponent::resized()
 {
     auto area = getLocalBounds().reduced(28);
     titleLabel.setBounds(area.removeFromTop(42));
-    area.removeFromTop(14);
+    area.removeFromTop(10);
+
+    auto row = area.removeFromTop(32);
+    modeLabel.setBounds(row.removeFromLeft(100));
+    processingMode.setBounds(row.removeFromLeft(190));
+    row.removeFromLeft(20);
+    carrierLabel.setBounds(row.removeFromLeft(100));
+    carrierSource.setBounds(row.removeFromLeft(190));
+
+    area.removeFromTop(10);
     outputLevelLabel.setBounds(area.removeFromTop(24));
-    outputLevel.setBounds(area.removeFromTop(38));
-    area.removeFromTop(12);
+    outputLevel.setBounds(area.removeFromTop(36));
+    area.removeFromTop(8);
     statusLabel.setBounds(area.removeFromTop(26));
     area.removeFromTop(8);
     deviceSelector.setBounds(area);
@@ -61,11 +91,18 @@ void MainComponent::resized()
 void MainComponent::sliderValueChanged(juce::Slider* slider)
 {
     if (slider == &outputLevel)
-        outputGain.store(static_cast<float>(outputLevel.getValue()));
+    {
+        const auto gain = static_cast<float>(outputLevel.getValue());
+        outputGain.store(gain);
+        vocoder.setOutputGain(gain);
+    }
 }
 
 void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
 {
+    if (device != nullptr)
+        vocoder.prepare(device->getCurrentSampleRate());
+
     juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<MainComponent>(this),
                                      deviceName = device != nullptr ? device->getName() : juce::String{}]
     {
@@ -81,6 +118,7 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
 
 void MainComponent::audioDeviceStopped()
 {
+    vocoder.reset();
     juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<MainComponent>(this)]
     {
         if (safeThis != nullptr)
@@ -105,21 +143,31 @@ void MainComponent::processAudio(const float* const* inputChannelData,
                                  int numSamples)
 {
     const auto gain = outputGain.load();
+    const auto vocoderEnabled = selectedMode.load() == 1;
+    const auto externalCarrier = selectedCarrier.load() == 1;
 
-    for (int output = 0; output < numOutputChannels; ++output)
+    for (int sample = 0; sample < numSamples; ++sample)
     {
-        auto* destination = outputChannelData[output];
-        if (destination == nullptr)
-            continue;
+        const auto voice = numInputChannels > 0 && inputChannelData[0] != nullptr
+            ? inputChannelData[0][sample] : 0.0f;
+        const auto carrier = numInputChannels > 1 && inputChannelData[1] != nullptr
+            ? inputChannelData[1][sample] : 0.0f;
 
-        const auto input = numInputChannels > 0 ? juce::jmin(output, numInputChannels - 1) : -1;
+        const auto processed = vocoderEnabled
+            ? vocoder.processSample(voice, carrier, externalCarrier)
+            : voice * gain;
 
-        if (input >= 0 && inputChannelData[input] != nullptr)
-            juce::FloatVectorOperations::copy(destination, inputChannelData[input], numSamples);
-        else
-            juce::FloatVectorOperations::clear(destination, numSamples);
+        for (int channel = 0; channel < numOutputChannels; ++channel)
+        {
+            if (outputChannelData[channel] != nullptr)
+            {
+                const auto passThrough = !vocoderEnabled && channel < numInputChannels
+                    && inputChannelData[channel] != nullptr;
 
-        if (gain != 1.0f)
-            juce::FloatVectorOperations::multiply(destination, gain, numSamples);
+                outputChannelData[channel][sample] = passThrough
+                    ? inputChannelData[channel][sample] * gain
+                    : processed;
+            }
+        }
     }
 }
