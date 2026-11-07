@@ -91,19 +91,3 @@ void VocoderEngine::updateEnvelopeTimes() noexcept
     releaseCoefficient = std::exp(-1.0f / (releaseSeconds * static_cast<float>(currentSampleRate)));
 }
 
-float VocoderEngine::nextInternalCarrier() noexcept
-{
-    float sample = 0.0f;
-
-    for (size_t oscillator = 0; oscillator < oscillatorPhases.size(); ++oscillator)
-    {
-        auto& phase = oscillatorPhases[oscillator];
-        sample += std::sin(phase);
-        phase += twoPi * chordFrequencies[oscillator] / static_cast<float>(currentSampleRate);
-
-        if (phase >= twoPi)
-            phase -= twoPi;
-    }
-
-    return sample * 0.18f;
-}
