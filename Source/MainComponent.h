@@ -3,7 +3,8 @@
 #include <JuceHeader.h>
 #include "VocoderEngine.h"
 
-class MainComponent final : public juce::AudioIODeviceCallback,
+class MainComponent final : public juce::Component,
+                            public juce::AudioIODeviceCallback,
                             private juce::Slider::Listener
 {
 public:
