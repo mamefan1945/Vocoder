@@ -14,11 +14,6 @@ public:
 
     void audioDeviceAboutToStart(juce::AudioIODevice* device) override;
     void audioDeviceStopped() override;
-    void audioDeviceIOCallback(const float* const* inputChannelData,
-                               int numInputChannels,
-                               float* const* outputChannelData,
-                               int numOutputChannels,
-                               int numSamples) override;
     void audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
                                           int numInputChannels,
                                           float* const* outputChannelData,
