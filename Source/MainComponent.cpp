@@ -1,12 +1,14 @@
 #include "MainComponent.h"
 
 MainComponent::MainComponent()
-    : deviceSelector(deviceManager, 1, 2, 0, 2, true, false, true, false)
+    : deviceSelector(deviceManager, 1, 2, 0, 2, false, false, true, false),
+      midiInputRouter(keyboardState),
+      keyboardComponent(keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard)
 {
-    setSize(900, 700);
+    setSize(960, 780);
 
     titleLabel.setText("VOCODER  |  REAL-TIME AUDIO", juce::dontSendNotification);
-    titleLabel.setFont(juce::Font(24.0f, juce::Font::bold));
+    titleLabel.setFont(juce::Font(juce::FontOptions(24.0f, juce::Font::bold)));
     addAndMakeVisible(titleLabel);
 
     modeLabel.setText("Processing", juce::dontSendNotification);
@@ -20,9 +22,9 @@ MainComponent::MainComponent()
     };
     addAndMakeVisible(processingMode);
 
-    carrierLabel.setText("Carrier source", juce::dontSendNotification);
+    carrierLabel.setText("Carrier", juce::dontSendNotification);
     addAndMakeVisible(carrierLabel);
-    carrierSource.addItem("Built-in chord", 1);
+    carrierSource.addItem("Internal MIDI synth", 1);
     carrierSource.addItem("External input 2", 2);
     carrierSource.setSelectedId(1);
     carrierSource.onChange = [this]
@@ -31,8 +33,44 @@ MainComponent::MainComponent()
     };
     addAndMakeVisible(carrierSource);
 
+    midiLabel.setText("MIDI input", juce::dontSendNotification);
+    addAndMakeVisible(midiLabel);
+    midiInput.addItem("No MIDI input", 1);
+    const auto midiDevices = juce::MidiInput::getAvailableDevices();
+    midiInputIdentifiers.clear();
+    for (int i = 0; i < midiDevices.size(); ++i)
+    {
+        midiInputIdentifiers.add(midiDevices.getReference(i).identifier);
+        midiInput.addItem(midiDevices.getReference(i).name, i + 2);
+    }
+    midiInput.setSelectedId(1);
+    midiInput.onChange = [this] { selectMidiInput(); };
+    addAndMakeVisible(midiInput);
+
+    waveformLabel.setText("Waveform", juce::dontSendNotification);
+    addAndMakeVisible(waveformLabel);
+    waveform.addItem("Sine", 1);
+    waveform.addItem("Saw", 2);
+    waveform.addItem("Square", 3);
+    waveform.addItem("Triangle", 4);
+    waveform.addItem("Noise", 5);
+    waveform.setSelectedId(1);
+    waveform.onChange = [this] { carrierSynth.setWaveform(waveform.getSelectedId() - 1); };
+    addAndMakeVisible(waveform);
+
+    octaveLabel.setText("Octave", juce::dontSendNotification);
+    addAndMakeVisible(octaveLabel);
+    octave.addItem("-2", 1);
+    octave.addItem("-1", 2);
+    octave.addItem("0", 3);
+    octave.addItem("+1", 4);
+    octave.addItem("+2", 5);
+    octave.setSelectedId(3);
+    octave.onChange = [this] { carrierSynth.setOctave(octave.getSelectedId() - 3); };
+    addAndMakeVisible(octave);
+
     outputLevelLabel.setText("Output level", juce::dontSendNotification);
-    addAndMakeVisible(outputLevel);
+    addAndMakeVisible(outputLevelLabel);
     outputLevel.setRange(0.0, 2.0, 0.01);
     outputLevel.setValue(1.0);
     outputLevel.setTextValueSuffix(" x");
@@ -40,6 +78,10 @@ MainComponent::MainComponent()
     outputLevel.setTextBoxStyle(juce::Slider::TextBoxRight, false, 72, 28);
     outputLevel.addListener(this);
     addAndMakeVisible(outputLevel);
+
+    keyboardComponent.setAvailableRange(48, 84);
+    keyboardComponent.setKeyWidth(24.0f);
+    addAndMakeVisible(keyboardComponent);
 
     statusLabel.setText("Initializing audio devices...", juce::dontSendNotification);
     addAndMakeVisible(statusLabel);
@@ -55,8 +97,27 @@ MainComponent::MainComponent()
 MainComponent::~MainComponent()
 {
     deviceManager.removeAudioCallback(this);
+    if (activeMidiIdentifier.isNotEmpty())
+        deviceManager.removeMidiInputDeviceCallback(activeMidiIdentifier, &midiInputRouter);
     outputLevel.removeListener(this);
     deviceManager.closeAudioDevice();
+}
+
+void MainComponent::selectMidiInput()
+{
+    if (activeMidiIdentifier.isNotEmpty())
+    {
+        deviceManager.removeMidiInputDeviceCallback(activeMidiIdentifier, &midiInputRouter);
+        activeMidiIdentifier.clear();
+    }
+
+    const auto selectedIndex = midiInput.getSelectedId() - 2;
+    if (!juce::isPositiveAndBelow(selectedIndex, midiInputIdentifiers.size()))
+        return;
+
+    activeMidiIdentifier = midiInputIdentifiers[selectedIndex];
+    deviceManager.setMidiInputDeviceEnabled(activeMidiIdentifier, true);
+    deviceManager.addMidiInputDeviceCallback(activeMidiIdentifier, &midiInputRouter);
 }
 
 void MainComponent::paint(juce::Graphics& graphics)
@@ -73,17 +134,30 @@ void MainComponent::resized()
     area.removeFromTop(10);
 
     auto row = area.removeFromTop(32);
-    modeLabel.setBounds(row.removeFromLeft(100));
-    processingMode.setBounds(row.removeFromLeft(190));
-    row.removeFromLeft(20);
-    carrierLabel.setBounds(row.removeFromLeft(100));
-    carrierSource.setBounds(row.removeFromLeft(190));
+    modeLabel.setBounds(row.removeFromLeft(82));
+    processingMode.setBounds(row.removeFromLeft(150));
+    row.removeFromLeft(14);
+    carrierLabel.setBounds(row.removeFromLeft(58));
+    carrierSource.setBounds(row.removeFromLeft(170));
+    row.removeFromLeft(14);
+    midiLabel.setBounds(row.removeFromLeft(72));
+    midiInput.setBounds(row.removeFromLeft(190));
 
-    area.removeFromTop(10);
-    outputLevelLabel.setBounds(area.removeFromTop(24));
-    outputLevel.setBounds(area.removeFromTop(36));
+    area.removeFromTop(12);
+    row = area.removeFromTop(32);
+    waveformLabel.setBounds(row.removeFromLeft(70));
+    waveform.setBounds(row.removeFromLeft(130));
+    row.removeFromLeft(18);
+    octaveLabel.setBounds(row.removeFromLeft(55));
+    octave.setBounds(row.removeFromLeft(90));
+
     area.removeFromTop(8);
-    statusLabel.setBounds(area.removeFromTop(26));
+    outputLevelLabel.setBounds(area.removeFromTop(22));
+    outputLevel.setBounds(area.removeFromTop(34));
+    area.removeFromTop(10);
+    keyboardComponent.setBounds(area.removeFromTop(110));
+    area.removeFromTop(8);
+    statusLabel.setBounds(area.removeFromTop(24));
     area.removeFromTop(8);
     deviceSelector.setBounds(area);
 }
@@ -101,7 +175,11 @@ void MainComponent::sliderValueChanged(juce::Slider* slider)
 void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
 {
     if (device != nullptr)
+    {
         vocoder.prepare(device->getCurrentSampleRate());
+        carrierSynth.setCurrentPlaybackSampleRate(device->getCurrentSampleRate());
+        synthBuffer.setSize(1, juce::jmax(512, device->getCurrentBufferSizeSamples()), false, false, true);
+    }
 
     juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<MainComponent>(this),
                                      deviceName = device != nullptr ? device->getName() : juce::String{}]
@@ -133,14 +211,24 @@ void MainComponent::audioDeviceIOCallbackWithContext(const float* const* inputCh
                                                      int numSamples,
                                                      const juce::AudioIODeviceCallbackContext&)
 {
-    processAudio(inputChannelData, numInputChannels, outputChannelData, numOutputChannels, numSamples);
+    if (synthBuffer.getNumSamples() < numSamples)
+        synthBuffer.setSize(1, numSamples, false, false, true);
+
+    synthBuffer.clear();
+    midiBuffer.clear();
+    keyboardState.processNextMidiBuffer(midiBuffer, 0, numSamples, true);
+    carrierSynth.renderNextBlock(synthBuffer, midiBuffer, 0, numSamples);
+
+    processAudio(inputChannelData, numInputChannels, outputChannelData, numOutputChannels,
+                 numSamples, synthBuffer.getReadPointer(0));
 }
 
 void MainComponent::processAudio(const float* const* inputChannelData,
                                  int numInputChannels,
                                  float* const* outputChannelData,
                                  int numOutputChannels,
-                                 int numSamples)
+                                 int numSamples,
+                                 const float* internalCarrier)
 {
     const auto gain = outputGain.load();
     const auto vocoderEnabled = selectedMode.load() == 1;
@@ -150,11 +238,12 @@ void MainComponent::processAudio(const float* const* inputChannelData,
     {
         const auto voice = numInputChannels > 0 && inputChannelData[0] != nullptr
             ? inputChannelData[0][sample] : 0.0f;
-        const auto carrier = numInputChannels > 1 && inputChannelData[1] != nullptr
+        const auto external = numInputChannels > 1 && inputChannelData[1] != nullptr
             ? inputChannelData[1][sample] : 0.0f;
+        const auto synth = internalCarrier != nullptr ? internalCarrier[sample] : 0.0f;
 
         const auto processed = vocoderEnabled
-            ? vocoder.processSample(voice, carrier, externalCarrier)
+            ? vocoder.processSample(voice, external, externalCarrier, synth)
             : voice * gain;
 
         for (int channel = 0; channel < numOutputChannels; ++channel)
