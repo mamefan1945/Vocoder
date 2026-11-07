@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "VocoderEngine.h"
 
 class MainComponent final : public juce::AudioIODeviceCallback,
                             private juce::Slider::Listener
@@ -31,12 +32,19 @@ private:
 
     juce::AudioDeviceManager deviceManager;
     juce::AudioDeviceSelectorComponent deviceSelector;
+    juce::ComboBox processingMode;
+    juce::ComboBox carrierSource;
+    juce::Label modeLabel;
+    juce::Label carrierLabel;
     juce::Slider outputLevel;
     juce::Label outputLevelLabel;
     juce::Label statusLabel;
     juce::Label titleLabel;
 
+    VocoderEngine vocoder;
     std::atomic<float> outputGain { 1.0f };
+    std::atomic<int> selectedMode { 0 };
+    std::atomic<int> selectedCarrier { 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
