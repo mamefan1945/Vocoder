@@ -22,8 +22,8 @@ void VocoderEngine::prepare(double sampleRate)
         auto coefficients = juce::dsp::IIR::Coefficients<float>::makeBandPass(
             currentSampleRate, safeCentre, filterQ);
 
-        *modulatorFilters[static_cast<size_t>(band)].coefficients = *coefficients;
-        *carrierFilters[static_cast<size_t>(band)].coefficients = *coefficients;
+        modulatorFilters[static_cast<size_t>(band)].coefficients = coefficients;
+        carrierFilters[static_cast<size_t>(band)].coefficients = coefficients;
     }
 
     updateEnvelopeTimes();
@@ -70,13 +70,13 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
 
 void VocoderEngine::setAttackMs(float milliseconds) noexcept
 {
-    juce::ignoreUnused(milliseconds);
+    attackMs = juce::jlimit(0.5f, 100.0f, milliseconds);
     updateEnvelopeTimes();
 }
 
 void VocoderEngine::setReleaseMs(float milliseconds) noexcept
 {
-    juce::ignoreUnused(milliseconds);
+    releaseMs = juce::jlimit(5.0f, 1000.0f, milliseconds);
     updateEnvelopeTimes();
 }
 
@@ -87,8 +87,8 @@ void VocoderEngine::setOutputGain(float gain) noexcept
 
 void VocoderEngine::updateEnvelopeTimes() noexcept
 {
-    const auto attackSeconds = 0.008f;
-    const auto releaseSeconds = 0.075f;
+    const auto attackSeconds = attackMs * 0.001f;
+    const auto releaseSeconds = releaseMs * 0.001f;
     attackCoefficient = std::exp(-1.0f / (attackSeconds * static_cast<float>(currentSampleRate)));
     releaseCoefficient = std::exp(-1.0f / (releaseSeconds * static_cast<float>(currentSampleRate)));
 }
