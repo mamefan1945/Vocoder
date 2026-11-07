@@ -28,12 +28,12 @@ MainComponent::MainComponent()
     if (error.isNotEmpty())
         statusLabel.setText("Audio initialization: " + error, juce::dontSendNotification);
 
-    deviceManager.addAudioDeviceCallback(this);
+    deviceManager.addAudioCallback(this);
 }
 
 MainComponent::~MainComponent()
 {
-    deviceManager.removeAudioDeviceCallback(this);
+    deviceManager.removeAudioCallback(this);
     outputLevel.removeListener(this);
     deviceManager.closeAudioDevice();
 }
@@ -86,15 +86,6 @@ void MainComponent::audioDeviceStopped()
         if (safeThis != nullptr)
             safeThis->statusLabel.setText("Audio device stopped", juce::dontSendNotification);
     });
-}
-
-void MainComponent::audioDeviceIOCallback(const float* const* inputChannelData,
-                                          int numInputChannels,
-                                          float* const* outputChannelData,
-                                          int numOutputChannels,
-                                          int numSamples)
-{
-    processAudio(inputChannelData, numInputChannels, outputChannelData, numOutputChannels, numSamples);
 }
 
 void MainComponent::audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
