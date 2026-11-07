@@ -5,8 +5,6 @@ namespace
 constexpr float lowestBandHz = 120.0f;
 constexpr float highestBandHz = 8000.0f;
 constexpr float filterQ = 1.35f;
-constexpr std::array<float, 3> chordFrequencies { 110.0f, 164.81f, 220.0f };
-constexpr float twoPi = juce::MathConstants<float>::twoPi;
 }
 
 void VocoderEngine::prepare(double sampleRate)
@@ -39,12 +37,12 @@ void VocoderEngine::reset()
         filter.reset();
 
     envelopes.fill(0.0f);
-    oscillatorPhases.fill(0.0f);
 }
 
-float VocoderEngine::processSample(float modulator, float externalCarrier, bool useExternalCarrier)
+float VocoderEngine::processSample(float modulator, float externalCarrier, bool useExternalCarrier,
+                                   float internalCarrier)
 {
-    const auto carrier = useExternalCarrier ? externalCarrier : nextInternalCarrier();
+    const auto carrier = useExternalCarrier ? externalCarrier : internalCarrier;
     float output = 0.0f;
 
     for (int band = 0; band < bandCount; ++band)
