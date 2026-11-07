@@ -23,6 +23,8 @@ juce_add_gui_app(Vocoder
     BUNDLE_ID "com.personalaudiotools.vocoder"
 )
 
+juce_generate_juce_header(Vocoder)
+
 target_sources(Vocoder PRIVATE
     Source/Main.cpp
     Source/MainComponent.h
@@ -37,6 +39,7 @@ target_compile_definitions(Vocoder PRIVATE
 target_link_libraries(Vocoder PRIVATE
     juce::juce_gui_extra
     juce::juce_audio_utils
+    juce::juce_dsp
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags
