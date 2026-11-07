@@ -29,6 +29,8 @@ target_sources(Vocoder PRIVATE
     Source/Main.cpp
     Source/MainComponent.h
     Source/MainComponent.cpp
+    Source/CarrierSynth.h
+    Source/CarrierSynth.cpp
 )
 
 target_compile_definitions(Vocoder PRIVATE
