@@ -62,6 +62,5 @@ JUCE is fetched at build time from its official GitHub repository and is pinned 
 2. [x] Initial 32-band vocoder DSP
 3. [x] Polyphonic MIDI carrier synth and external carrier selection
 4. [ ] Attack/release, frequency range, formant shaping, dry/wet and effects controls
-5. [ ] Attack/release, frequency range, formant shaping, dry/wet and effects controls
-6. [ ] Spectrum display, metering and latency tuning
-7. [ ] VST3 plugin target sharing the DSP engine
+5. [ ] Spectrum display, metering and latency tuning
+6. [ ] VST3 plugin target sharing the DSP engine
