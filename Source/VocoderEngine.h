@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include <array>
+#include <atomic>
 
 class VocoderEngine
 {
@@ -11,15 +12,14 @@ public:
     void prepare(double sampleRate);
     void reset();
 
-    // Processes one mono sample. The modulator is the voice/microphone;
-    // externalCarrier is an optional second input channel. internalCarrier is the
-    // polyphonic synthesizer output when the built-in carrier is selected.
     float processSample(float modulator, float externalCarrier, bool useExternalCarrier,
                         float internalCarrier);
 
     void setAttackMs(float milliseconds) noexcept;
     void setReleaseMs(float milliseconds) noexcept;
     void setOutputGain(float gain) noexcept;
+    void setDryWet(float mix) noexcept;
+    void setFrequencyRange(float lowHz, float highHz) noexcept;
 
 private:
     using Filter = juce::dsp::IIR::Filter<float>;
@@ -27,13 +27,17 @@ private:
     std::array<Filter, bandCount> modulatorFilters;
     std::array<Filter, bandCount> carrierFilters;
     std::array<float, bandCount> envelopes {};
+    std::array<float, bandCount> bandCentres {};
 
     double currentSampleRate = 44100.0;
-    float attackCoefficient = 0.0f;
-    float releaseCoefficient = 0.0f;
-    float outputGain = 1.0f;
-    float attackMs = 8.0f;
-    float releaseMs = 75.0f;
+    std::atomic<float> attackCoefficient { 0.0f };
+    std::atomic<float> releaseCoefficient { 0.0f };
+    std::atomic<float> outputGain { 1.0f };
+    std::atomic<float> dryWet { 1.0f };
+    std::atomic<float> lowFrequency { 120.0f };
+    std::atomic<float> highFrequency { 8000.0f };
+    std::atomic<float> attackMs { 8.0f };
+    std::atomic<float> releaseMs { 75.0f };
 
     void updateEnvelopeTimes() noexcept;
 };
