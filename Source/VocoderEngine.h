@@ -28,6 +28,7 @@ private:
     std::array<Filter, bandCount> modulatorFilters;
     std::array<Filter, bandCount> carrierFilters;
     std::array<float, bandCount> envelopes {};
+    std::array<float, bandCount> envelopePowers {};
     std::array<float, bandCount> bandCentres {};
 
     double currentSampleRate = 44100.0;
