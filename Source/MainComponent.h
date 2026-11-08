@@ -76,6 +76,8 @@ private:
     juce::Label formantShiftLabel;
     juce::Label inputMeterLabel;
     juce::Label outputMeterLabel;
+    juce::ToggleButton microphoneMonitor;
+    juce::ToggleButton carrierPreview;
     juce::Label attackLabel;
     juce::Label releaseLabel;
     juce::Label lowFrequencyLabel;
@@ -95,6 +97,8 @@ private:
     std::atomic<float> outputPeak { 0.0f };
     std::atomic<int> selectedMode { 0 };
     std::atomic<int> selectedCarrier { 0 };
+    std::atomic<bool> monitorMicrophone { false };
+    std::atomic<bool> previewCarrier { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
