@@ -65,6 +65,16 @@ private:
     juce::Label octaveLabel;
     juce::Slider outputLevel;
     juce::Label outputLevelLabel;
+    juce::Slider attackTime;
+    juce::Slider releaseTime;
+    juce::Slider lowFrequency;
+    juce::Slider highFrequency;
+    juce::Slider dryWetMix;
+    juce::Label attackLabel;
+    juce::Label releaseLabel;
+    juce::Label lowFrequencyLabel;
+    juce::Label highFrequencyLabel;
+    juce::Label dryWetLabel;
     juce::Label statusLabel;
     juce::Label titleLabel;
 
