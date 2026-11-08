@@ -83,7 +83,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         if (bandCentres[index] >= 2600.0f)
         {
             const auto noiseBand = sibilanceNoiseFilters[index].processSample(noiseSample);
-            carrierBands[index] = tonalBand * 0.35f + noiseBand * 0.85f;
+            carrierBands[index] = tonalBand * 0.90f + noiseBand * 0.08f;
         }
         else
         {
