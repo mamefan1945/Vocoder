@@ -4,7 +4,9 @@ namespace
 {
 constexpr float lowestBandHz = 120.0f;
 constexpr float highestBandHz = 8000.0f;
-constexpr float filterQ = 1.35f;
+// Adjacent logarithmic bands are spaced by roughly 16%; Q=4 gives
+// useful overlap without smearing the spectral envelope across many bands.
+constexpr float filterQ = 4.0f;
 }
 
 void VocoderEngine::prepare(double sampleRate)
@@ -49,9 +51,22 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto shift = formantShift.load(std::memory_order_relaxed);
     const auto bandsPerOctave = static_cast<float>(bandCount - 1) / std::log2(highestBandHz / lowestBandHz);
     const auto bandOffset = shift * (bandsPerOctave / 12.0f);
-    const auto envelopeSnapshot = envelopes;
-    float wetOutput = 0.0f;
+    // First update every modulator envelope. Using the newly updated values
+    // in the carrier stage avoids an unnecessary one-sample-old control signal.
+    // Keep all filters running even when a band is outside the audible range so
+    // re-enabling that band does not expose stale filter/envelope state.
+    std::array<float, bandCount> carrierBands {};
+    for (int band = 0; band < bandCount; ++band)
+    {
+        const auto index = static_cast<size_t>(band);
+        const auto voiceBand = std::abs(modulatorFilters[index].processSample(modulator));
+        carrierBands[index] = carrierFilters[index].processSample(carrier);
+        const auto coefficient = voiceBand > envelopes[index] ? attack : release;
+        envelopes[index] = coefficient * envelopes[index] + (1.0f - coefficient) * voiceBand;
+    }
 
+    // Then apply each updated voice-band envelope to its matching carrier band.
+    float wetOutput = 0.0f;
     for (int band = 0; band < bandCount; ++band)
     {
         const auto index = static_cast<size_t>(band);
@@ -59,21 +74,17 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         if (centre < low || centre > high)
             continue;
 
-        const auto voiceBand = std::abs(modulatorFilters[index].processSample(modulator));
-        const auto carrierBand = carrierFilters[index].processSample(carrier);
         const auto sourcePosition = juce::jlimit(0.0f, static_cast<float>(bandCount - 1),
                                                  static_cast<float>(band) - bandOffset);
         const auto lower = static_cast<int>(sourcePosition);
         const auto upper = juce::jmin(lower + 1, bandCount - 1);
         const auto fraction = sourcePosition - static_cast<float>(lower);
-        const auto shiftedEnvelope = envelopeSnapshot[static_cast<size_t>(lower)] * (1.0f - fraction)
-                                   + envelopeSnapshot[static_cast<size_t>(upper)] * fraction;
-        const auto coefficient = voiceBand > envelopes[index] ? attack : release;
-        envelopes[index] = coefficient * envelopes[index] + (1.0f - coefficient) * voiceBand;
-        wetOutput += carrierBand * shiftedEnvelope * 18.0f;
+        const auto shiftedEnvelope = envelopes[static_cast<size_t>(lower)] * (1.0f - fraction)
+                                   + envelopes[static_cast<size_t>(upper)] * fraction;
+        wetOutput += carrierBands[index] * shiftedEnvelope * 18.0f;
     }
 
-    wetOutput *= (outputGain.load(std::memory_order_relaxed) / static_cast<float>(bandCount)) * 32.0f;
+    wetOutput *= outputGain.load(std::memory_order_relaxed);
     const auto mix = dryWet.load(std::memory_order_relaxed);
     return wetOutput * mix + modulator * (1.0f - mix);
 }
