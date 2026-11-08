@@ -250,11 +250,13 @@ void MainComponent::resized()
     area.removeFromTop(8);
     statusLabel.setBounds(area.removeFromTop(24));
     area.removeFromTop(8);
-    // Keep device configuration accessible without allowing its long list of
-    // controls to push the main vocoder controls below the visible screen.
-    const auto devicePanelHeight = juce::jmin(170, juce::jmax(120, area.getHeight()));
-    deviceViewport.setBounds(area.removeFromTop(devicePanelHeight));
-    deviceSelector.setBounds(0, 0, juce::jmax(320, deviceViewport.getWidth() - 18), 300);
+    // Let the device settings use all remaining space. The viewport grows
+    // with the window; the viewed component grows with it and only scrolls
+    // when the available height is genuinely smaller than its content.
+    deviceViewport.setBounds(area);
+    deviceSelector.setBounds(0, 0,
+                             juce::jmax(320, deviceViewport.getWidth() - 18),
+                             juce::jmax(300, deviceViewport.getHeight()));
 }
 
 void MainComponent::sliderValueChanged(juce::Slider* slider)
