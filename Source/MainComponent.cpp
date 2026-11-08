@@ -5,7 +5,7 @@ MainComponent::MainComponent()
       midiInputRouter(keyboardState),
       keyboardComponent(keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard)
 {
-    setSize(960, 780);
+    setSize(960, 820);
 
     titleLabel.setText("VOCODER  |  REAL-TIME AUDIO", juce::dontSendNotification);
     titleLabel.setFont(juce::Font(juce::FontOptions(24.0f, juce::Font::bold)));
@@ -105,6 +105,23 @@ MainComponent::MainComponent()
     outputMeterLabel.setText("Output: -120.0 dBFS", juce::dontSendNotification);
     addAndMakeVisible(inputMeterLabel);
     addAndMakeVisible(outputMeterLabel);
+
+    microphoneMonitor.setButtonText("Mic monitor");
+    microphoneMonitor.setTooltip("Audition the microphone directly alongside the processed signal.");
+    microphoneMonitor.onClick = [this]
+    {
+        monitorMicrophone.store(microphoneMonitor.getToggleState(), std::memory_order_relaxed);
+    };
+    addAndMakeVisible(microphoneMonitor);
+
+    carrierPreview.setButtonText("Carrier preview");
+    carrierPreview.setTooltip("Audition the selected carrier directly, independently of the vocoder.");
+    carrierPreview.onClick = [this]
+    {
+        previewCarrier.store(carrierPreview.getToggleState(), std::memory_order_relaxed);
+    };
+    addAndMakeVisible(carrierPreview);
+
     startTimerHz(20);
 
     keyboardComponent.setAvailableRange(48, 84);
@@ -215,6 +232,11 @@ void MainComponent::resized()
     formantShiftSlider.setBounds(row.removeFromLeft(210));
     inputMeterLabel.setBounds(row.removeFromLeft(180));
     outputMeterLabel.setBounds(row);
+
+    area.removeFromTop(6);
+    row = area.removeFromTop(28);
+    microphoneMonitor.setBounds(row.removeFromLeft(150));
+    carrierPreview.setBounds(row.removeFromLeft(170));
 
     area.removeFromTop(8);
     keyboardComponent.setBounds(area.removeFromTop(110));
@@ -338,6 +360,10 @@ void MainComponent::processAudio(const float* const* inputChannelData,
     const auto gain = outputGain.load();
     const auto vocoderEnabled = selectedMode.load() == 1;
     const auto externalCarrier = selectedCarrier.load() == 1;
+    const auto monitorMic = monitorMicrophone.load(std::memory_order_relaxed);
+    const auto preview = previewCarrier.load(std::memory_order_relaxed);
+    float blockInputPeak = 0.0f;
+    float blockOutputPeak = 0.0f;
 
     for (int sample = 0; sample < numSamples; ++sample)
     {
@@ -346,28 +372,34 @@ void MainComponent::processAudio(const float* const* inputChannelData,
         const auto external = numInputChannels > 1 && inputChannelData[1] != nullptr
             ? inputChannelData[1][sample] : 0.0f;
         const auto synth = internalCarrier != nullptr ? internalCarrier[sample] : 0.0f;
-        auto currentInputPeak = inputPeak.load(std::memory_order_relaxed);
-        currentInputPeak = juce::jmax(currentInputPeak, std::abs(voice));
-        inputPeak.store(currentInputPeak, std::memory_order_relaxed);
+        blockInputPeak = juce::jmax(blockInputPeak, std::abs(voice));
 
-        const auto processed = vocoderEnabled
+        const auto vocoderOutput = vocoderEnabled
             ? vocoder.processSample(voice, external, externalCarrier, synth)
             : voice * gain;
+        const auto microphoneOutput = monitorMic && vocoderEnabled ? voice * gain : 0.0f;
+        const auto carrierSignal = externalCarrier ? external : synth;
+        const auto carrierOutput = preview ? carrierSignal * gain : 0.0f;
+        const auto output = vocoderOutput + microphoneOutput + carrierOutput;
 
-        auto currentOutputPeak = outputPeak.load(std::memory_order_relaxed);
-        currentOutputPeak = juce::jmax(currentOutputPeak, std::abs(processed));
-        outputPeak.store(currentOutputPeak, std::memory_order_relaxed);
+        blockOutputPeak = juce::jmax(blockOutputPeak, std::abs(output));
         for (int channel = 0; channel < numOutputChannels; ++channel)
         {
             if (outputChannelData[channel] != nullptr)
-            {
-                const auto passThrough = !vocoderEnabled && channel < numInputChannels
-                    && inputChannelData[channel] != nullptr;
-
-                outputChannelData[channel][sample] = passThrough
-                    ? inputChannelData[channel][sample] * gain
-                    : processed;
-            }
+                outputChannelData[channel][sample] = output;
         }
     }
+
+    const auto updatePeak = [](std::atomic<float>& peak, float blockPeak)
+    {
+        auto previous = peak.load(std::memory_order_relaxed);
+        while (blockPeak > previous
+               && !peak.compare_exchange_weak(previous, blockPeak,
+                                              std::memory_order_relaxed,
+                                              std::memory_order_relaxed))
+        {
+        }
+    };
+    updatePeak(inputPeak, blockInputPeak);
+    updatePeak(outputPeak, blockOutputPeak);
 }
