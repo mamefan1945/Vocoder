@@ -73,7 +73,9 @@ private:
     juce::Slider highFrequency;
     juce::Slider dryWetMix;
     juce::Slider formantShiftSlider;
+    juce::Slider gateThresholdSlider;
     juce::Label formantShiftLabel;
+    juce::Label gateThresholdLabel;
     juce::Label inputMeterLabel;
     juce::Label outputMeterLabel;
     juce::ToggleButton microphoneMonitor;
