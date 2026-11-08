@@ -38,6 +38,7 @@ void VocoderEngine::reset()
     for (auto& filter : carrierFilters)
         filter.reset();
     envelopes.fill(0.0f);
+    envelopePowers.fill(0.0f);
 }
 
 float VocoderEngine::processSample(float modulator, float externalCarrier, bool useExternalCarrier,
@@ -51,21 +52,24 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto shift = formantShift.load(std::memory_order_relaxed);
     const auto bandsPerOctave = static_cast<float>(bandCount - 1) / std::log2(highestBandHz / lowestBandHz);
     const auto bandOffset = shift * (bandsPerOctave / 12.0f);
-    // First update every modulator envelope. Using the newly updated values
-    // in the carrier stage avoids an unnecessary one-sample-old control signal.
-    // Keep all filters running even when a band is outside the audible range so
-    // re-enabling that band does not expose stale filter/envelope state.
+
+    // Analyse speech as band-limited RMS energy, not a smoothed absolute peak.
+    // RMS is more stable for voiced sounds and less dependent on waveform shape.
     std::array<float, bandCount> carrierBands {};
     for (int band = 0; band < bandCount; ++band)
     {
         const auto index = static_cast<size_t>(band);
-        const auto voiceBand = std::abs(modulatorFilters[index].processSample(modulator));
+        const auto voiceBand = modulatorFilters[index].processSample(modulator);
+        const auto power = voiceBand * voiceBand;
+        const auto coefficient = power > envelopePowers[index] ? attack : release;
+        envelopePowers[index] = coefficient * envelopePowers[index] + (1.0f - coefficient) * power;
+        envelopes[index] = std::sqrt(juce::jmax(0.0f, envelopePowers[index]));
         carrierBands[index] = carrierFilters[index].processSample(carrier);
-        const auto coefficient = voiceBand > envelopes[index] ? attack : release;
-        envelopes[index] = coefficient * envelopes[index] + (1.0f - coefficient) * voiceBand;
     }
 
-    // Then apply each updated voice-band envelope to its matching carrier band.
+    // Convert each band level to a compressed modulation depth. This calibration
+    // lifts quiet speech bands while the square-root curve preserves consonant
+    // and vowel dynamics instead of letting a few loud bands dominate.
     float wetOutput = 0.0f;
     for (int band = 0; band < bandCount; ++band)
     {
@@ -79,12 +83,15 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         const auto lower = static_cast<int>(sourcePosition);
         const auto upper = juce::jmin(lower + 1, bandCount - 1);
         const auto fraction = sourcePosition - static_cast<float>(lower);
-        const auto shiftedEnvelope = envelopes[static_cast<size_t>(lower)] * (1.0f - fraction)
-                                   + envelopes[static_cast<size_t>(upper)] * fraction;
-        wetOutput += carrierBands[index] * shiftedEnvelope * 18.0f;
+        const auto shiftedLevel = envelopes[static_cast<size_t>(lower)] * (1.0f - fraction)
+                                + envelopes[static_cast<size_t>(upper)] * fraction;
+        const auto modulation = std::sqrt(juce::jlimit(0.0f, 1.0f, shiftedLevel * 24.0f));
+        wetOutput += carrierBands[index] * modulation;
     }
 
-    wetOutput *= outputGain.load(std::memory_order_relaxed);
+    // The compressed envelopes are much larger than the previous raw levels;
+    // use a conservative summing scale to retain headroom across 32 bands.
+    wetOutput *= 0.45f * outputGain.load(std::memory_order_relaxed);
     const auto mix = dryWet.load(std::memory_order_relaxed);
     return wetOutput * mix + modulator * (1.0f - mix);
 }
