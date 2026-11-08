@@ -101,6 +101,7 @@ MainComponent::MainComponent()
     configureControl(highFrequency, highFrequencyLabel, "High freq", 500.0, 8000.0, 10.0, 8000.0, " Hz");
     configureControl(dryWetMix, dryWetLabel, "Dry / wet", 0.0, 100.0, 1.0, 100.0, " %");
     configureControl(formantShiftSlider, formantShiftLabel, "Formant", -12.0, 12.0, 0.5, 0.0, " st");
+    configureControl(gateThresholdSlider, gateThresholdLabel, "Noise gate", 0.0, 0.02, 0.0005, 0.003, " RMS");
     inputMeterLabel.setText("Input: -120.0 dBFS", juce::dontSendNotification);
     outputMeterLabel.setText("Output: -120.0 dBFS", juce::dontSendNotification);
     addAndMakeVisible(inputMeterLabel);
@@ -151,6 +152,7 @@ MainComponent::~MainComponent()
     highFrequency.removeListener(this);
     dryWetMix.removeListener(this);
     formantShiftSlider.removeListener(this);
+    gateThresholdSlider.removeListener(this);
     stopTimer();
     deviceManager.closeAudioDevice();
 }
@@ -230,6 +232,8 @@ void MainComponent::resized()
     row = area.removeFromTop(30);
     formantShiftLabel.setBounds(row.removeFromLeft(64));
     formantShiftSlider.setBounds(row.removeFromLeft(210));
+    gateThresholdLabel.setBounds(row.removeFromLeft(86));
+    gateThresholdSlider.setBounds(row.removeFromLeft(220));
     inputMeterLabel.setBounds(row.removeFromLeft(180));
     outputMeterLabel.setBounds(row);
 
@@ -278,6 +282,8 @@ void MainComponent::sliderValueChanged(juce::Slider* slider)
         vocoder.setDryWet(static_cast<float>(dryWetMix.getValue() / 100.0));
     else if (slider == &formantShiftSlider)
         vocoder.setFormantShift(static_cast<float>(formantShiftSlider.getValue()));
+    else if (slider == &gateThresholdSlider)
+        vocoder.setGateThreshold(static_cast<float>(gateThresholdSlider.getValue()));
 }
 
 void MainComponent::timerCallback()
