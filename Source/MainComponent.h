@@ -50,6 +50,7 @@ private:
 
     juce::AudioDeviceManager deviceManager;
     juce::AudioDeviceSelectorComponent deviceSelector;
+    juce::Viewport deviceViewport;
     juce::MidiKeyboardState keyboardState;
     MidiInputRouter midiInputRouter;
     juce::MidiKeyboardComponent keyboardComponent;
