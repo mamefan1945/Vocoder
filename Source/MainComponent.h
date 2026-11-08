@@ -6,7 +6,8 @@
 
 class MainComponent final : public juce::Component,
                             public juce::AudioIODeviceCallback,
-                            private juce::Slider::Listener
+                            private juce::Slider::Listener,
+                            private juce::Timer
 {
 public:
     MainComponent();
@@ -38,6 +39,7 @@ private:
     };
 
     void sliderValueChanged(juce::Slider* slider) override;
+    void timerCallback() override;
     void selectMidiInput();
     void processAudio(const float* const* inputChannelData,
                       int numInputChannels,
@@ -70,6 +72,10 @@ private:
     juce::Slider lowFrequency;
     juce::Slider highFrequency;
     juce::Slider dryWetMix;
+    juce::Slider formantShiftSlider;
+    juce::Label formantShiftLabel;
+    juce::Label inputMeterLabel;
+    juce::Label outputMeterLabel;
     juce::Label attackLabel;
     juce::Label releaseLabel;
     juce::Label lowFrequencyLabel;
@@ -85,6 +91,8 @@ private:
     juce::String activeMidiIdentifier;
 
     std::atomic<float> outputGain { 1.0f };
+    std::atomic<float> inputPeak { 0.0f };
+    std::atomic<float> outputPeak { 0.0f };
     std::atomic<int> selectedMode { 0 };
     std::atomic<int> selectedCarrier { 0 };
 
