@@ -5,7 +5,7 @@ MainComponent::MainComponent()
       midiInputRouter(keyboardState),
       keyboardComponent(keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard)
 {
-    setSize(960, 820);
+    setSize(1080, 740);
 
     titleLabel.setText("VOCODER  |  REAL-TIME AUDIO", juce::dontSendNotification);
     titleLabel.setFont(juce::Font(juce::FontOptions(24.0f, juce::Font::bold)));
@@ -131,7 +131,10 @@ MainComponent::MainComponent()
 
     statusLabel.setText("Initializing audio devices...", juce::dontSendNotification);
     addAndMakeVisible(statusLabel);
-    addAndMakeVisible(deviceSelector);
+    deviceViewport.setViewedComponent(&deviceSelector, false);
+    deviceViewport.setScrollBarsShown(true, false);
+    deviceViewport.setScrollOnDragEnabled(true);
+    addAndMakeVisible(deviceViewport);
 
     const auto error = deviceManager.initialise(2, 2, nullptr, true);
     if (error.isNotEmpty())
@@ -243,11 +246,15 @@ void MainComponent::resized()
     carrierPreview.setBounds(row.removeFromLeft(170));
 
     area.removeFromTop(8);
-    keyboardComponent.setBounds(area.removeFromTop(110));
+    keyboardComponent.setBounds(area.removeFromTop(88));
     area.removeFromTop(8);
     statusLabel.setBounds(area.removeFromTop(24));
     area.removeFromTop(8);
-    deviceSelector.setBounds(area);
+    // Keep device configuration accessible without allowing its long list of
+    // controls to push the main vocoder controls below the visible screen.
+    const auto devicePanelHeight = juce::jmin(170, juce::jmax(120, area.getHeight()));
+    deviceViewport.setBounds(area.removeFromTop(devicePanelHeight));
+    deviceSelector.setBounds(0, 0, juce::jmax(320, deviceViewport.getWidth() - 18), 300);
 }
 
 void MainComponent::sliderValueChanged(juce::Slider* slider)
