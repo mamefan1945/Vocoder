@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include <array>
 #include <atomic>
+#include <cstdint>
 
 class VocoderEngine
 {
@@ -28,6 +29,8 @@ private:
 
     std::array<Filter, bandCount> modulatorFilters;
     std::array<Filter, bandCount> carrierFilters;
+    std::array<Filter, bandCount> sibilanceNoiseFilters;
+    std::uint32_t noiseState = 0x6d2b79f5u;
     std::array<float, bandCount> envelopes {};
     std::array<float, bandCount> envelopePowers {};
     std::array<float, bandCount> bandCentres {};
