@@ -59,15 +59,6 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
 
     // Analyse speech as band-limited RMS energy, not a smoothed absolute peak.
     // RMS is more stable for voiced sounds and less dependent on waveform shape.
-    // A deterministic white-noise source supplies the broadband energy that
-    // tonal oscillators lack in unvoiced consonants (s, f, sh, t). It is only
-    // mixed into the upper speech bands, and those bands remain controlled by
-    // the microphone's own band envelopes and gate.
-    noiseState ^= noiseState << 13;
-    noiseState ^= noiseState >> 17;
-    noiseState ^= noiseState << 5;
-    const auto noiseSample = static_cast<float>(noiseState & 0x00ffffffu)
-                           * (2.0f / 16777215.0f) - 1.0f;
 
     std::array<float, bandCount> carrierBands {};
     for (int band = 0; band < bandCount; ++band)
@@ -79,16 +70,10 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         envelopePowers[index] = coefficient * envelopePowers[index] + (1.0f - coefficient) * power;
         envelopes[index] = std::sqrt(juce::jmax(0.0f, envelopePowers[index]));
 
-        const auto tonalBand = carrierFilters[index].processSample(carrier);
-        if (bandCentres[index] >= 2600.0f)
-        {
-            const auto noiseBand = sibilanceNoiseFilters[index].processSample(noiseSample);
-            carrierBands[index] = tonalBand * 0.90f + noiseBand * 0.08f;
-        }
-        else
-        {
-            carrierBands[index] = tonalBand;
-        }
+        // Keep the carrier purely tonal for now. Broadband noise excitation
+        // obscures the formant pattern when its level is not calibrated to the
+        // microphone and carrier, so consonant noise is intentionally disabled.
+        carrierBands[index] = carrierFilters[index].processSample(carrier);
     }
 
     // Convert each band level to a compressed modulation depth. This calibration
