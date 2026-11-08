@@ -100,6 +100,12 @@ MainComponent::MainComponent()
     configureControl(lowFrequency, lowFrequencyLabel, "Low freq", 120.0, 4000.0, 10.0, 120.0, " Hz");
     configureControl(highFrequency, highFrequencyLabel, "High freq", 500.0, 8000.0, 10.0, 8000.0, " Hz");
     configureControl(dryWetMix, dryWetLabel, "Dry / wet", 0.0, 100.0, 1.0, 100.0, " %");
+    configureControl(formantShiftSlider, formantShiftLabel, "Formant", -12.0, 12.0, 0.5, 0.0, " st");
+    inputMeterLabel.setText("Input: -120.0 dBFS", juce::dontSendNotification);
+    outputMeterLabel.setText("Output: -120.0 dBFS", juce::dontSendNotification);
+    addAndMakeVisible(inputMeterLabel);
+    addAndMakeVisible(outputMeterLabel);
+    startTimerHz(20);
 
     keyboardComponent.setAvailableRange(48, 84);
     keyboardComponent.setKeyWidth(24.0f);
@@ -127,6 +133,8 @@ MainComponent::~MainComponent()
     lowFrequency.removeListener(this);
     highFrequency.removeListener(this);
     dryWetMix.removeListener(this);
+    formantShiftSlider.removeListener(this);
+    stopTimer();
     deviceManager.closeAudioDevice();
 }
 
@@ -201,6 +209,13 @@ void MainComponent::resized()
     highFrequencyLabel.setBounds(row.removeFromLeft(70));
     highFrequency.setBounds(row.removeFromLeft(190));
 
+    area.removeFromTop(6);
+    row = area.removeFromTop(30);
+    formantShiftLabel.setBounds(row.removeFromLeft(64));
+    formantShiftSlider.setBounds(row.removeFromLeft(210));
+    inputMeterLabel.setBounds(row.removeFromLeft(180));
+    outputMeterLabel.setBounds(row);
+
     area.removeFromTop(8);
     keyboardComponent.setBounds(area.removeFromTop(110));
     area.removeFromTop(8);
@@ -239,6 +254,20 @@ void MainComponent::sliderValueChanged(juce::Slider* slider)
     }
     else if (slider == &dryWetMix)
         vocoder.setDryWet(static_cast<float>(dryWetMix.getValue() / 100.0));
+    else if (slider == &formantShiftSlider)
+        vocoder.setFormantShift(static_cast<float>(formantShiftSlider.getValue()));
+}
+
+void MainComponent::timerCallback()
+{
+    const auto input = inputPeak.exchange(0.0f, std::memory_order_relaxed);
+    const auto output = outputPeak.exchange(0.0f, std::memory_order_relaxed);
+    const auto toDb = [](float peak)
+    {
+        return peak > 0.000001f ? juce::Decibels::gainToDecibels(peak, -120.0f) : -120.0f;
+    };
+    inputMeterLabel.setText("Input: " + juce::String(toDb(input), 1) + " dBFS", juce::dontSendNotification);
+    outputMeterLabel.setText("Output: " + juce::String(toDb(output), 1) + " dBFS", juce::dontSendNotification);
 }
 
 void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
@@ -317,11 +346,17 @@ void MainComponent::processAudio(const float* const* inputChannelData,
         const auto external = numInputChannels > 1 && inputChannelData[1] != nullptr
             ? inputChannelData[1][sample] : 0.0f;
         const auto synth = internalCarrier != nullptr ? internalCarrier[sample] : 0.0f;
+        auto currentInputPeak = inputPeak.load(std::memory_order_relaxed);
+        currentInputPeak = juce::jmax(currentInputPeak, std::abs(voice));
+        inputPeak.store(currentInputPeak, std::memory_order_relaxed);
 
         const auto processed = vocoderEnabled
             ? vocoder.processSample(voice, external, externalCarrier, synth)
             : voice * gain;
 
+        auto currentOutputPeak = outputPeak.load(std::memory_order_relaxed);
+        currentOutputPeak = juce::jmax(currentOutputPeak, std::abs(processed));
+        outputPeak.store(currentOutputPeak, std::memory_order_relaxed);
         for (int channel = 0; channel < numOutputChannels; ++channel)
         {
             if (outputChannelData[channel] != nullptr)
