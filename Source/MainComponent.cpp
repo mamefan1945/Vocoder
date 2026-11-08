@@ -79,6 +79,28 @@ MainComponent::MainComponent()
     outputLevel.addListener(this);
     addAndMakeVisible(outputLevel);
 
+    const auto configureControl = [this](juce::Slider& slider, juce::Label& label,
+                                         const juce::String& caption, double minimum,
+                                         double maximum, double step, double initial,
+                                         const juce::String& suffix)
+    {
+        label.setText(caption, juce::dontSendNotification);
+        addAndMakeVisible(label);
+        slider.setRange(minimum, maximum, step);
+        slider.setValue(initial, juce::dontSendNotification);
+        slider.setTextValueSuffix(suffix);
+        slider.setSliderStyle(juce::Slider::LinearHorizontal);
+        slider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 68, 24);
+        slider.addListener(this);
+        addAndMakeVisible(slider);
+    };
+
+    configureControl(attackTime, attackLabel, "Attack", 0.5, 100.0, 0.5, 8.0, " ms");
+    configureControl(releaseTime, releaseLabel, "Release", 5.0, 1000.0, 1.0, 75.0, " ms");
+    configureControl(lowFrequency, lowFrequencyLabel, "Low freq", 120.0, 4000.0, 10.0, 120.0, " Hz");
+    configureControl(highFrequency, highFrequencyLabel, "High freq", 500.0, 8000.0, 10.0, 8000.0, " Hz");
+    configureControl(dryWetMix, dryWetLabel, "Dry / wet", 0.0, 100.0, 1.0, 100.0, " %");
+
     keyboardComponent.setAvailableRange(48, 84);
     keyboardComponent.setKeyWidth(24.0f);
     addAndMakeVisible(keyboardComponent);
@@ -100,6 +122,11 @@ MainComponent::~MainComponent()
     if (activeMidiIdentifier.isNotEmpty())
         deviceManager.removeMidiInputDeviceCallback(activeMidiIdentifier, &midiInputRouter);
     outputLevel.removeListener(this);
+    attackTime.removeListener(this);
+    releaseTime.removeListener(this);
+    lowFrequency.removeListener(this);
+    highFrequency.removeListener(this);
+    dryWetMix.removeListener(this);
     deviceManager.closeAudioDevice();
 }
 
@@ -154,7 +181,27 @@ void MainComponent::resized()
     area.removeFromTop(8);
     outputLevelLabel.setBounds(area.removeFromTop(22));
     outputLevel.setBounds(area.removeFromTop(34));
-    area.removeFromTop(10);
+    area.removeFromTop(8);
+
+    row = area.removeFromTop(30);
+    attackLabel.setBounds(row.removeFromLeft(52));
+    attackTime.setBounds(row.removeFromLeft(150));
+    row.removeFromLeft(12);
+    releaseLabel.setBounds(row.removeFromLeft(58));
+    releaseTime.setBounds(row.removeFromLeft(170));
+    row.removeFromLeft(12);
+    dryWetLabel.setBounds(row.removeFromLeft(64));
+    dryWetMix.setBounds(row);
+
+    area.removeFromTop(6);
+    row = area.removeFromTop(30);
+    lowFrequencyLabel.setBounds(row.removeFromLeft(64));
+    lowFrequency.setBounds(row.removeFromLeft(180));
+    row.removeFromLeft(12);
+    highFrequencyLabel.setBounds(row.removeFromLeft(70));
+    highFrequency.setBounds(row.removeFromLeft(190));
+
+    area.removeFromTop(8);
     keyboardComponent.setBounds(area.removeFromTop(110));
     area.removeFromTop(8);
     statusLabel.setBounds(area.removeFromTop(24));
@@ -170,6 +217,28 @@ void MainComponent::sliderValueChanged(juce::Slider* slider)
         outputGain.store(gain);
         vocoder.setOutputGain(gain);
     }
+    else if (slider == &attackTime)
+        vocoder.setAttackMs(static_cast<float>(attackTime.getValue()));
+    else if (slider == &releaseTime)
+        vocoder.setReleaseMs(static_cast<float>(releaseTime.getValue()));
+    else if (slider == &lowFrequency)
+    {
+        const auto low = static_cast<float>(lowFrequency.getValue());
+        const auto high = static_cast<float>(highFrequency.getValue());
+        if (low >= high)
+            highFrequency.setValue(juce::jmin(8000.0, low + 10.0), juce::dontSendNotification);
+        vocoder.setFrequencyRange(low, static_cast<float>(highFrequency.getValue()));
+    }
+    else if (slider == &highFrequency)
+    {
+        const auto high = static_cast<float>(highFrequency.getValue());
+        const auto low = static_cast<float>(lowFrequency.getValue());
+        if (high <= low)
+            lowFrequency.setValue(juce::jmax(120.0, high - 10.0), juce::dontSendNotification);
+        vocoder.setFrequencyRange(static_cast<float>(lowFrequency.getValue()), high);
+    }
+    else if (slider == &dryWetMix)
+        vocoder.setDryWet(static_cast<float>(dryWetMix.getValue() / 100.0));
 }
 
 void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
