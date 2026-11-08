@@ -302,12 +302,15 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
     }
 
     juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<MainComponent>(this),
-                                     deviceName = device != nullptr ? device->getName() : juce::String{}]
+                                     deviceName = device != nullptr ? device->getName() : juce::String{},
+                                     sampleRate = device != nullptr ? device->getCurrentSampleRate() : 0.0,
+                                     bufferSize = device != nullptr ? device->getCurrentBufferSizeSamples() : 0]
     {
         if (safeThis != nullptr)
         {
             const auto message = deviceName.isNotEmpty()
-                ? "Audio active: " + deviceName
+                ? "Audio active: " + deviceName + " | " + juce::String(sampleRate, 0) + " Hz | "
+                    + juce::String(bufferSize) + " samples"
                 : "No audio device active";
             safeThis->statusLabel.setText(message, juce::dontSendNotification);
         }
