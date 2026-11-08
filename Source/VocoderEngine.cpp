@@ -25,6 +25,7 @@ void VocoderEngine::prepare(double sampleRate)
 
         modulatorFilters[static_cast<size_t>(band)].coefficients = coefficients;
         carrierFilters[static_cast<size_t>(band)].coefficients = coefficients;
+        sibilanceNoiseFilters[static_cast<size_t>(band)].coefficients = coefficients;
     }
 
     updateEnvelopeTimes();
@@ -37,6 +38,9 @@ void VocoderEngine::reset()
         filter.reset();
     for (auto& filter : carrierFilters)
         filter.reset();
+    for (auto& filter : sibilanceNoiseFilters)
+        filter.reset();
+    noiseState = 0x6d2b79f5u;
     envelopes.fill(0.0f);
     envelopePowers.fill(0.0f);
 }
@@ -55,6 +59,16 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
 
     // Analyse speech as band-limited RMS energy, not a smoothed absolute peak.
     // RMS is more stable for voiced sounds and less dependent on waveform shape.
+    // A deterministic white-noise source supplies the broadband energy that
+    // tonal oscillators lack in unvoiced consonants (s, f, sh, t). It is only
+    // mixed into the upper speech bands, and those bands remain controlled by
+    // the microphone's own band envelopes and gate.
+    noiseState ^= noiseState << 13;
+    noiseState ^= noiseState >> 17;
+    noiseState ^= noiseState << 5;
+    const auto noiseSample = static_cast<float>(noiseState & 0x00ffffffu)
+                           * (2.0f / 16777215.0f) - 1.0f;
+
     std::array<float, bandCount> carrierBands {};
     for (int band = 0; band < bandCount; ++band)
     {
@@ -64,7 +78,17 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         const auto coefficient = power > envelopePowers[index] ? attack : release;
         envelopePowers[index] = coefficient * envelopePowers[index] + (1.0f - coefficient) * power;
         envelopes[index] = std::sqrt(juce::jmax(0.0f, envelopePowers[index]));
-        carrierBands[index] = carrierFilters[index].processSample(carrier);
+
+        const auto tonalBand = carrierFilters[index].processSample(carrier);
+        if (bandCentres[index] >= 2600.0f)
+        {
+            const auto noiseBand = sibilanceNoiseFilters[index].processSample(noiseSample);
+            carrierBands[index] = tonalBand * 0.35f + noiseBand * 0.85f;
+        }
+        else
+        {
+            carrierBands[index] = tonalBand;
+        }
     }
 
     // Convert each band level to a compressed modulation depth. This calibration
