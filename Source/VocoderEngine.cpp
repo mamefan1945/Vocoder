@@ -85,7 +85,12 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         const auto fraction = sourcePosition - static_cast<float>(lower);
         const auto shiftedLevel = envelopes[static_cast<size_t>(lower)] * (1.0f - fraction)
                                 + envelopes[static_cast<size_t>(upper)] * fraction;
-        const auto modulation = std::sqrt(juce::jlimit(0.0f, 1.0f, shiftedLevel * 24.0f));
+        // A real gate prevents microphone self-noise and room noise from
+        // continuously opening the carrier. The threshold is expressed as
+        // per-band RMS amplitude and remains adjustable from the UI.
+        const auto aboveGate = juce::jmax(0.0f,
+            shiftedLevel - gateThreshold.load(std::memory_order_relaxed));
+        const auto modulation = std::sqrt(juce::jlimit(0.0f, 1.0f, aboveGate * 24.0f));
         wetOutput += carrierBands[index] * modulation;
     }
 
@@ -129,6 +134,11 @@ void VocoderEngine::setFrequencyRange(float lowHz, float highHz) noexcept
 void VocoderEngine::setFormantShift(float semitones) noexcept
 {
     formantShift.store(juce::jlimit(-12.0f, 12.0f, semitones), std::memory_order_relaxed);
+}
+
+void VocoderEngine::setGateThreshold(float level) noexcept
+{
+    gateThreshold.store(juce::jlimit(0.0f, 0.02f, level), std::memory_order_relaxed);
 }
 
 void VocoderEngine::updateEnvelopeTimes() noexcept
