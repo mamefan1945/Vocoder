@@ -32,6 +32,7 @@ private:
     std::array<Filter, bandCount> sibilanceNoiseFilters;
     std::uint32_t noiseState = 0x6d2b79f5u;
     float previousModulator = 0.0f;
+    float previousPreEmphasisInput = 0.0f;
     float zeroCrossingRate = 0.0f;
     float voicingSmoothingCoefficient = 0.0f;
     float carrierActivity = 0.0f;
