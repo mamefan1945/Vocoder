@@ -34,6 +34,9 @@ private:
     float previousModulator = 0.0f;
     float zeroCrossingRate = 0.0f;
     float voicingSmoothingCoefficient = 0.0f;
+    float carrierActivity = 0.0f;
+    float carrierActivityAttackCoefficient = 0.0f;
+    float carrierActivityReleaseCoefficient = 0.0f;
     std::array<float, bandCount> envelopes {};
     std::array<float, bandCount> envelopePowers {};
     std::array<float, bandCount> bandCentres {};
