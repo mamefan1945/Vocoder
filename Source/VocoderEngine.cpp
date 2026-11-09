@@ -28,6 +28,7 @@ void VocoderEngine::prepare(double sampleRate)
         sibilanceNoiseFilters[static_cast<size_t>(band)].coefficients = coefficients;
     }
 
+    voicingSmoothingCoefficient = std::exp(-1.0f / (0.010f * static_cast<float>(currentSampleRate)));
     updateEnvelopeTimes();
     reset();
 }
@@ -41,6 +42,8 @@ void VocoderEngine::reset()
     for (auto& filter : sibilanceNoiseFilters)
         filter.reset();
     noiseState = 0x6d2b79f5u;
+    previousModulator = 0.0f;
+    zeroCrossingRate = 0.0f;
     envelopes.fill(0.0f);
     envelopePowers.fill(0.0f);
 }
@@ -57,8 +60,29 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto bandsPerOctave = static_cast<float>(bandCount - 1) / std::log2(highestBandHz / lowestBandHz);
     const auto bandOffset = shift * (bandsPerOctave / 12.0f);
 
+    // A short-term zero-crossing estimate distinguishes noisy, unvoiced speech
+    // from predominantly periodic vowels. It is deliberately smoothed over 10 ms
+    // so individual samples do not cause rapid switching.
+    const auto crossedZero = (modulator >= 0.0f) != (previousModulator >= 0.0f);
+    previousModulator = modulator;
+    const auto crossing = crossedZero ? 1.0f : 0.0f;
+    zeroCrossingRate = voicingSmoothingCoefficient * zeroCrossingRate
+                     + (1.0f - voicingSmoothingCoefficient) * crossing;
+    const auto unvoicedAmount = juce::jlimit(0.0f, 1.0f,
+        (zeroCrossingRate - 0.035f) / 0.105f);
+
     // Analyse speech as band-limited RMS energy, not a smoothed absolute peak.
     // RMS is more stable for voiced sounds and less dependent on waveform shape.
+
+    // Generate one shared white-noise sample and pass it through the same
+    // synthesis bands. Noise is added only for likely unvoiced speech and is
+    // weighted toward upper frequencies, where fricatives carry most of their
+    // identifying energy. This avoids the broadband wash from the earlier mix.
+    noiseState ^= noiseState << 13;
+    noiseState ^= noiseState >> 17;
+    noiseState ^= noiseState << 5;
+    const auto noiseSample = static_cast<float>(noiseState & 0x00ffffffu)
+                           / 8388607.5f - 1.0f;
 
     std::array<float, bandCount> carrierBands {};
     for (int band = 0; band < bandCount; ++band)
@@ -70,10 +94,13 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         envelopePowers[index] = coefficient * envelopePowers[index] + (1.0f - coefficient) * power;
         envelopes[index] = std::sqrt(juce::jmax(0.0f, envelopePowers[index]));
 
-        // Keep the carrier purely tonal for now. Broadband noise excitation
-        // obscures the formant pattern when its level is not calibrated to the
-        // microphone and carrier, so consonant noise is intentionally disabled.
-        carrierBands[index] = carrierFilters[index].processSample(carrier);
+        const auto tonalBand = carrierFilters[index].processSample(carrier);
+        const auto noiseBand = sibilanceNoiseFilters[index].processSample(noiseSample);
+        const auto highFrequencyWeight = juce::jlimit(0.0f, 1.0f,
+            (bandCentres[index] - 900.0f) / 2600.0f);
+        const auto noiseAmount = 0.18f * unvoicedAmount * highFrequencyWeight;
+        carrierBands[index] = tonalBand * (1.0f - noiseAmount)
+                            + noiseBand * noiseAmount;
     }
 
     // Convert each band level to a compressed modulation depth. This calibration
