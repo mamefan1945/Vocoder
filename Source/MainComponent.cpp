@@ -1,9 +1,63 @@
 #include "MainComponent.h"
 
+int MainComponent::LockableMidiKeyboard::noteAt(juce::Point<float> position) const
+{
+    // Black keys overlap the white-key rectangles, so test them first.
+    for (int pass = 0; pass < 2; ++pass)
+        for (int note = 84; note >= 48; --note)
+            if (isBlackKey(note) == (pass == 0)
+                && getRectangleForKey(note).contains(position))
+                return note;
+    return -1;
+}
+
+bool MainComponent::LockableMidiKeyboard::isBlackKey(int note) noexcept
+{
+    const auto semitone = note % 12;
+    return semitone == 1 || semitone == 3 || semitone == 6
+        || semitone == 8 || semitone == 10;
+}
+
+void MainComponent::LockableMidiKeyboard::mouseDown(const juce::MouseEvent& event)
+{
+    const auto note = noteAt(event.position);
+    if (event.mods.isRightButtonDown())
+    {
+        if (note >= 0)
+        {
+            auto& locked = lockedNotes[static_cast<size_t>(note)];
+            if (locked)
+                keyboardState.noteOff(1, note, 0.0f);
+            else
+                keyboardState.noteOn(1, note, 0.8f);
+            locked = !locked;
+        }
+        suppressMouseSequence = true;
+        return;
+    }
+
+    suppressMouseSequence = note >= 0 && lockedNotes[static_cast<size_t>(note)];
+    if (!suppressMouseSequence)
+        juce::MidiKeyboardComponent::mouseDown(event);
+}
+
+void MainComponent::LockableMidiKeyboard::mouseDrag(const juce::MouseEvent& event)
+{
+    if (!suppressMouseSequence)
+        juce::MidiKeyboardComponent::mouseDrag(event);
+}
+
+void MainComponent::LockableMidiKeyboard::mouseUp(const juce::MouseEvent& event)
+{
+    if (!suppressMouseSequence)
+        juce::MidiKeyboardComponent::mouseUp(event);
+    suppressMouseSequence = false;
+}
+
 MainComponent::MainComponent()
     : deviceSelector(deviceManager, 1, 2, 0, 2, false, false, true, false),
       midiInputRouter(keyboardState),
-      keyboardComponent(keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard)
+      keyboardComponent(keyboardState)
 {
     setSize(1080, 740);
 
