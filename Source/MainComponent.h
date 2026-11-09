@@ -26,6 +26,28 @@ public:
                                           const juce::AudioIODeviceCallbackContext& context) override;
 
 private:
+    class LockableMidiKeyboard final : public juce::MidiKeyboardComponent
+    {
+    public:
+        LockableMidiKeyboard(juce::MidiKeyboardState& state)
+            : juce::MidiKeyboardComponent(state, juce::MidiKeyboardComponent::horizontalKeyboard),
+              keyboardState(state)
+        {
+            setTooltip("Left-click to play. Right-click a key to latch or unlatch it.");
+        }
+
+        void mouseDown(const juce::MouseEvent& event) override;
+        void mouseUp(const juce::MouseEvent& event) override;
+        void mouseDrag(const juce::MouseEvent& event) override;
+
+    private:
+        int noteAt(juce::Point<float> position) const;
+        static bool isBlackKey(int note) noexcept;
+        juce::MidiKeyboardState& keyboardState;
+        std::array<bool, 128> lockedNotes {};
+        bool suppressMouseSequence = false;
+    };
+
     class MidiInputRouter final : public juce::MidiInputCallback
     {
     public:
@@ -53,7 +75,7 @@ private:
     juce::Viewport deviceViewport;
     juce::MidiKeyboardState keyboardState;
     MidiInputRouter midiInputRouter;
-    juce::MidiKeyboardComponent keyboardComponent;
+    LockableMidiKeyboard keyboardComponent;
     juce::StringArray midiInputIdentifiers;
 
     juce::ComboBox processingMode;
