@@ -95,8 +95,8 @@ MainComponent::MainComponent()
         addAndMakeVisible(slider);
     };
 
-    configureControl(attackTime, attackLabel, "Attack", 0.5, 100.0, 0.5, 8.0, " ms");
-    configureControl(releaseTime, releaseLabel, "Release", 5.0, 1000.0, 1.0, 75.0, " ms");
+    configureControl(attackTime, attackLabel, "Attack", 0.1, 30.0, 0.1, 1.0, " ms");
+    configureControl(releaseTime, releaseLabel, "Release", 1.0, 250.0, 0.5, 10.0, " ms");
     configureControl(lowFrequency, lowFrequencyLabel, "Low freq", 120.0, 4000.0, 10.0, 120.0, " Hz");
     configureControl(highFrequency, highFrequencyLabel, "High freq", 500.0, 8000.0, 10.0, 8000.0, " Hz");
     configureControl(dryWetMix, dryWetLabel, "Dry / wet", 0.0, 100.0, 1.0, 100.0, " %");
