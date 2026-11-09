@@ -47,8 +47,8 @@ private:
     std::atomic<float> highFrequency { 8000.0f };
     std::atomic<float> formantShift { 0.0f };
     std::atomic<float> gateThreshold { 0.003f };
-    std::atomic<float> attackMs { 8.0f };
-    std::atomic<float> releaseMs { 75.0f };
+    std::atomic<float> attackMs { 1.0f };
+    std::atomic<float> releaseMs { 10.0f };
 
     void updateEnvelopeTimes() noexcept;
 };
