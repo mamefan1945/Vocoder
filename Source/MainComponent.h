@@ -33,7 +33,6 @@ private:
             : juce::MidiKeyboardComponent(state, juce::MidiKeyboardComponent::horizontalKeyboard),
               keyboardState(state)
         {
-            setTooltip("Left-click to play. Right-click a key to latch or unlatch it.");
         }
 
         void mouseDown(const juce::MouseEvent& event) override;
