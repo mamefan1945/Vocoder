@@ -29,6 +29,8 @@ void VocoderEngine::prepare(double sampleRate)
     }
 
     voicingSmoothingCoefficient = std::exp(-1.0f / (0.010f * static_cast<float>(currentSampleRate)));
+    carrierActivityAttackCoefficient = std::exp(-1.0f / (0.001f * static_cast<float>(currentSampleRate)));
+    carrierActivityReleaseCoefficient = std::exp(-1.0f / (0.020f * static_cast<float>(currentSampleRate)));
     updateEnvelopeTimes();
     reset();
 }
@@ -44,6 +46,7 @@ void VocoderEngine::reset()
     noiseState = 0x6d2b79f5u;
     previousModulator = 0.0f;
     zeroCrossingRate = 0.0f;
+    carrierActivity = 0.0f;
     envelopes.fill(0.0f);
     envelopePowers.fill(0.0f);
 }
@@ -84,6 +87,17 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto noiseSample = static_cast<float>(noiseState & 0x00ffffffu)
                            / 8388607.5f - 1.0f;
 
+    // Unvoiced excitation must still have a carrier to excite. Track the selected
+    // carrier independently of the speech envelopes so this also works with an
+    // external carrier input. The short release avoids clicks when notes stop.
+    const auto carrierLevel = std::abs(carrier);
+    const auto carrierCoefficient = carrierLevel > carrierActivity
+        ? carrierActivityAttackCoefficient : carrierActivityReleaseCoefficient;
+    carrierActivity = carrierCoefficient * carrierActivity
+                    + (1.0f - carrierCoefficient) * carrierLevel;
+    const auto carrierPresence = juce::jlimit(0.0f, 1.0f,
+        (carrierActivity - 0.0001f) / 0.0009f);
+
     std::array<float, bandCount> carrierBands {};
     for (int band = 0; band < bandCount; ++band)
     {
@@ -98,7 +112,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         const auto noiseBand = sibilanceNoiseFilters[index].processSample(noiseSample);
         const auto highFrequencyWeight = juce::jlimit(0.0f, 1.0f,
             (bandCentres[index] - 900.0f) / 2600.0f);
-        const auto noiseAmount = 0.18f * unvoicedAmount * highFrequencyWeight;
+        const auto noiseAmount = 0.18f * unvoicedAmount * highFrequencyWeight * carrierPresence;
         carrierBands[index] = tonalBand * (1.0f - noiseAmount)
                             + noiseBand * noiseAmount;
     }
