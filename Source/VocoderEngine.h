@@ -31,6 +31,9 @@ private:
     std::array<Filter, bandCount> carrierFilters;
     std::array<Filter, bandCount> sibilanceNoiseFilters;
     std::uint32_t noiseState = 0x6d2b79f5u;
+    float previousModulator = 0.0f;
+    float zeroCrossingRate = 0.0f;
+    float voicingSmoothingCoefficient = 0.0f;
     std::array<float, bandCount> envelopes {};
     std::array<float, bandCount> envelopePowers {};
     std::array<float, bandCount> bandCentres {};
