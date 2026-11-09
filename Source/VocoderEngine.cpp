@@ -135,12 +135,19 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         const auto fraction = sourcePosition - static_cast<float>(lower);
         const auto shiftedLevel = envelopes[static_cast<size_t>(lower)] * (1.0f - fraction)
                                 + envelopes[static_cast<size_t>(upper)] * fraction;
-        // A real gate prevents microphone self-noise and room noise from
-        // continuously opening the carrier. The threshold is expressed as
-        // per-band RMS amplitude and remains adjustable from the UI.
-        const auto aboveGate = juce::jmax(0.0f,
-            shiftedLevel - gateThreshold.load(std::memory_order_relaxed));
-        const auto modulation = std::sqrt(juce::jlimit(0.0f, 1.0f, aboveGate * 24.0f));
+        // Use a frequency-dependent soft gate. Quiet high-frequency speech
+        // components carry much of the identity of fricatives (S, F, SH, T),
+        // so applying the full low-band threshold there can erase consonants.
+        // The threshold tapers down above 900 Hz, while the soft knee avoids
+        // the abrupt band-to-band chopping caused by a hard subtraction gate.
+        const auto normalizedFrequency = juce::jlimit(0.0f, 1.0f,
+            (centre - 900.0f) / 3100.0f);
+        const auto thresholdScale = 1.0f - 0.55f * normalizedFrequency;
+        const auto threshold = gateThreshold.load(std::memory_order_relaxed)
+                             * thresholdScale;
+        const auto gateGain = shiftedLevel / (shiftedLevel + threshold + 1.0e-9f);
+        const auto gatedLevel = shiftedLevel * gateGain;
+        const auto modulation = std::sqrt(juce::jlimit(0.0f, 1.0f, gatedLevel * 24.0f));
         wetOutput += carrierBands[index] * modulation;
     }
 
