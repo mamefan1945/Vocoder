@@ -139,13 +139,13 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
 
 void VocoderEngine::setAttackMs(float milliseconds) noexcept
 {
-    attackMs.store(juce::jlimit(0.5f, 100.0f, milliseconds), std::memory_order_relaxed);
+    attackMs.store(juce::jlimit(0.1f, 30.0f, milliseconds), std::memory_order_relaxed);
     updateEnvelopeTimes();
 }
 
 void VocoderEngine::setReleaseMs(float milliseconds) noexcept
 {
-    releaseMs.store(juce::jlimit(5.0f, 1000.0f, milliseconds), std::memory_order_relaxed);
+    releaseMs.store(juce::jlimit(1.0f, 250.0f, milliseconds), std::memory_order_relaxed);
     updateEnvelopeTimes();
 }
 
