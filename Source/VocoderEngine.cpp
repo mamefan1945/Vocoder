@@ -7,6 +7,8 @@ constexpr float highestBandHz = 8000.0f;
 // Adjacent logarithmic bands are spaced by roughly 16%; Q=4 gives
 // useful overlap without smearing the spectral envelope across many bands.
 constexpr float filterQ = 4.0f;
+// Moderate speech pre-emphasis lifts weak high-frequency consonant energy.
+constexpr float preEmphasisAmount = 0.85f;
 }
 
 void VocoderEngine::prepare(double sampleRate)
@@ -45,6 +47,7 @@ void VocoderEngine::reset()
         filter.reset();
     noiseState = 0x6d2b79f5u;
     previousModulator = 0.0f;
+    previousPreEmphasisInput = 0.0f;
     zeroCrossingRate = 0.0f;
     carrierActivity = 0.0f;
     envelopes.fill(0.0f);
@@ -74,6 +77,15 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto unvoicedAmount = juce::jlimit(0.0f, 1.0f,
         (zeroCrossingRate - 0.035f) / 0.105f);
 
+    // Pre-emphasize the speech before analysis. Natural speech has a strong
+    // spectral tilt toward low frequencies; this moderate first-difference
+    // stage restores some high-frequency energy so fricatives and stop
+    // consonants are not masked by vowel-dominated bands. The carrier path is
+    // deliberately untouched. The zero-crossing detector above uses raw speech.
+    const auto emphasizedModulator = modulator
+        - preEmphasisAmount * previousPreEmphasisInput;
+    previousPreEmphasisInput = modulator;
+
     // Analyse speech as band-limited RMS energy, not a smoothed absolute peak.
     // RMS is more stable for voiced sounds and less dependent on waveform shape.
 
@@ -102,7 +114,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     for (int band = 0; band < bandCount; ++band)
     {
         const auto index = static_cast<size_t>(band);
-        const auto voiceBand = modulatorFilters[index].processSample(modulator);
+        const auto voiceBand = modulatorFilters[index].processSample(emphasizedModulator);
         const auto power = voiceBand * voiceBand;
         const auto coefficient = power > envelopePowers[index] ? attack : release;
         envelopePowers[index] = coefficient * envelopePowers[index] + (1.0f - coefficient) * power;
