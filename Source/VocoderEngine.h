@@ -37,8 +37,11 @@ private:
     float carrierActivity = 0.0f;
     float carrierActivityAttackCoefficient = 0.0f;
     float carrierActivityReleaseCoefficient = 0.0f;
+    float carrierLevelAttackCoefficient = 0.0f;
+    float carrierLevelReleaseCoefficient = 0.0f;
     std::array<float, bandCount> envelopes {};
     std::array<float, bandCount> envelopePowers {};
+    std::array<float, bandCount> carrierPowers {};
     std::array<float, bandCount> bandCentres {};
 
     double currentSampleRate = 44100.0;
