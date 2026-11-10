@@ -141,7 +141,15 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         const auto aboveGate = juce::jmax(0.0f,
             shiftedLevel - gateThreshold.load(std::memory_order_relaxed));
         const auto modulation = std::sqrt(juce::jlimit(0.0f, 1.0f, aboveGate * 24.0f));
-        wetOutput += carrierBands[index] * modulation;
+
+        // Speech intelligibility depends heavily on upper-mid and high-frequency
+        // consonant detail. Apply a gentle upward tilt after the hard gate so
+        // quiet room noise is not amplified enough to open otherwise-closed bands.
+        // The lift is 0 dB at 500 Hz and reaches about +3.5 dB at 8 kHz.
+        const auto articulationPosition = juce::jlimit(0.0f, 1.0f,
+            std::log2(juce::jmax(centre, 500.0f) / 500.0f) / 4.0f);
+        const auto articulationGain = 1.0f + 0.5f * articulationPosition;
+        wetOutput += carrierBands[index] * modulation * articulationGain;
     }
 
     // The compressed envelopes are much larger than the previous raw levels;
