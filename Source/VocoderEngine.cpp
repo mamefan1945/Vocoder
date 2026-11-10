@@ -31,6 +31,8 @@ void VocoderEngine::prepare(double sampleRate)
     voicingSmoothingCoefficient = std::exp(-1.0f / (0.010f * static_cast<float>(currentSampleRate)));
     carrierActivityAttackCoefficient = std::exp(-1.0f / (0.001f * static_cast<float>(currentSampleRate)));
     carrierActivityReleaseCoefficient = std::exp(-1.0f / (0.020f * static_cast<float>(currentSampleRate)));
+    carrierLevelAttackCoefficient = std::exp(-1.0f / (0.010f * static_cast<float>(currentSampleRate)));
+    carrierLevelReleaseCoefficient = std::exp(-1.0f / (0.060f * static_cast<float>(currentSampleRate)));
     updateEnvelopeTimes();
     reset();
 }
@@ -49,6 +51,7 @@ void VocoderEngine::reset()
     carrierActivity = 0.0f;
     envelopes.fill(0.0f);
     envelopePowers.fill(0.0f);
+    carrierPowers.fill(0.0f);
 }
 
 float VocoderEngine::processSample(float modulator, float externalCarrier, bool useExternalCarrier,
@@ -109,12 +112,24 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         envelopes[index] = std::sqrt(juce::jmax(0.0f, envelopePowers[index]));
 
         const auto tonalBand = carrierFilters[index].processSample(carrier);
+        const auto carrierPower = tonalBand * tonalBand;
+        const auto carrierCoefficient = carrierPower > carrierPowers[index]
+            ? carrierLevelAttackCoefficient : carrierLevelReleaseCoefficient;
+        carrierPowers[index] = carrierCoefficient * carrierPowers[index]
+                             + (1.0f - carrierCoefficient) * carrierPower;
+        const auto carrierRms = std::sqrt(juce::jmax(0.0f, carrierPowers[index]));
+        // The carrier's spectrum is rarely flat (especially with a sawtooth).
+        // Equalise each synthesis band gently so weak upper harmonics do not
+        // disappear beneath stronger low-frequency bands. The bounded gain
+        // avoids excessive amplification when a carrier has no energy in a band.
+        const auto carrierCompensation = juce::jlimit(0.65f, 4.0f,
+            0.035f / juce::jmax(carrierRms, 0.00875f));
         const auto noiseBand = sibilanceNoiseFilters[index].processSample(noiseSample);
         const auto highFrequencyWeight = juce::jlimit(0.0f, 1.0f,
             (bandCentres[index] - 900.0f) / 2600.0f);
         const auto noiseAmount = 0.18f * unvoicedAmount * highFrequencyWeight * carrierPresence;
-        carrierBands[index] = tonalBand * (1.0f - noiseAmount)
-                            + noiseBand * noiseAmount;
+        carrierBands[index] = (tonalBand * (1.0f - noiseAmount)
+                             + noiseBand * noiseAmount) * carrierCompensation;
     }
 
     // Convert each band level to a compressed modulation depth. This calibration
