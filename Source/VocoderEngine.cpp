@@ -99,6 +99,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         (carrierActivity - 0.0001f) / 0.0009f);
 
     std::array<float, bandCount> carrierBands {};
+    std::array<float, bandCount> noiseBands {};
     for (int band = 0; band < bandCount; ++band)
     {
         const auto index = static_cast<size_t>(band);
@@ -112,9 +113,11 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         const auto noiseBand = sibilanceNoiseFilters[index].processSample(noiseSample);
         const auto highFrequencyWeight = juce::jlimit(0.0f, 1.0f,
             (bandCentres[index] - 900.0f) / 2600.0f);
-        const auto noiseAmount = 0.18f * unvoicedAmount * highFrequencyWeight * carrierPresence;
-        carrierBands[index] = tonalBand * (1.0f - noiseAmount)
-                            + noiseBand * noiseAmount;
+        // Keep the harmonic carrier intact. Unvoiced consonants need their own
+        // noise excitation path; mixing noise into the tonal carrier can actually
+        // weaken useful harmonics and leave fricatives dependent on carrier pitch.
+        carrierBands[index] = tonalBand;
+        noiseBands[index] = noiseBand;
     }
 
     // Convert each band level to a compressed modulation depth. This calibration
@@ -150,6 +153,16 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
             std::log2(juce::jmax(centre, 500.0f) / 500.0f) / 4.0f);
         const auto articulationGain = 1.0f + 0.5f * articulationPosition;
         wetOutput += carrierBands[index] * modulation * articulationGain;
+
+        // Independent, band-shaped noise excitation restores the turbulent
+        // energy of F/S/SH/TH consonants even where the pitched carrier has no
+        // harmonic near a synthesis-band centre. It is only active for unvoiced
+        // speech, only in the upper bands, and only while a carrier note is held.
+        const auto highFrequencyWeight = juce::jlimit(0.0f, 1.0f,
+            (centre - 900.0f) / 2600.0f);
+        const auto sibilanceAmount = 0.45f * unvoicedAmount
+                                   * highFrequencyWeight * carrierPresence;
+        wetOutput += noiseBands[index] * modulation * sibilanceAmount;
     }
 
     // The compressed envelopes are much larger than the previous raw levels;
