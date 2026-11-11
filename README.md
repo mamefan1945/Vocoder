@@ -11,6 +11,8 @@ A real-time Windows vocoder application built with C++ and JUCE. The DSP engine 
 - 32-band voice-analysis and carrier filter banks
 - Attack/release envelope tracking
 - Polyphonic internal synthesizer carrier with on-screen and external MIDI input
+- SoundFont 2 playback through FluidSynth, including a bundled General MIDI bank
+- Selectable SoundFont instruments and user-loaded `.sf2` banks
 - Selectable sine, saw, square, triangle and noise waveforms
 - Carrier octave shift from -2 to +2
 - Optional external carrier from input channel 2
@@ -27,7 +29,7 @@ A real-time Windows vocoder application built with C++ and JUCE. The DSP engine 
 
 For an external carrier, the selected Windows audio device must expose at least two input channels. Virtual devices such as VB-CABLE or VoiceMeeter appear in the device lists when their drivers are installed.
 
-The internal carrier is a 16-voice polyphonic synthesizer. MIDI input devices can be selected in the MIDI input list; the on-screen keyboard is also available. Waveform and octave controls are provided.
+The internal carrier can be either the 16-voice oscillator synth or FluidSynth SoundFont playback. The bundled GeneralUser GS bank provides a General MIDI instrument set. Instrument names are read from the selected bank, so the list changes when a different `.sf2` file is loaded. MIDI input devices can be selected in the MIDI input list; the on-screen keyboard is also available.
 
 ## Build locally
 
@@ -37,14 +39,15 @@ Requirements:
 - CMake 3.22 or newer
 - Git
 
-From a Developer PowerShell:
+Install the FluidSynth dependency using the vcpkg installation included with Visual Studio (or your own vcpkg installation), then configure from a Developer PowerShell:
 
 ```powershell
-cmake -S . -B build -A x64
+& "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install fluidsynth:x64-windows-static-md --classic
+cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
 cmake --build build --config Release
 ```
 
-The first configure downloads the pinned JUCE dependency from GitHub. The standalone executable is produced under `build/Vocoder_artefacts/Release/`.
+The first configure downloads the pinned JUCE dependency and the bundled GeneralUser GS SoundFont. CMake verifies the SoundFont and licence file with SHA-256 hashes. The executable and `SoundFonts` folder are placed together under the build output directory.
 
 ## DSP design
 
@@ -55,6 +58,8 @@ This is an initial functional implementation. Band spacing, filter response, env
 ## Dependency and licensing
 
 JUCE is fetched at build time from its official GitHub repository and is pinned to JUCE 8.0.10. JUCE is available under the AGPLv3 or a commercial licence; review the [JUCE licensing terms](https://juce.com/legal/juce-licence/) before distributing binaries or source.
+
+FluidSynth is licensed under LGPL-2.1-or-later; its licence is included in [LICENSES/FluidSynth-LGPL-2.1.txt](LICENSES/FluidSynth-LGPL-2.1.txt). The bundled GeneralUser GS v2.0.3 SoundFont is by S. Christian Collins and is distributed under its own licence, copied beside the application as `SoundFonts/GeneralUser-GS-LICENSE.txt`. The bank is bundled as a separate data file, not embedded into the executable.
 
 ## Roadmap
 
