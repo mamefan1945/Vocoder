@@ -101,7 +101,7 @@ MainComponent::MainComponent()
     midiInput.onChange = [this] { selectMidiInput(); };
     addAndMakeVisible(midiInput);
 
-    waveformLabel.setText("Waveform", juce::dontSendNotification);
+    waveformLabel.setText("Carrier type", juce::dontSendNotification);
     addAndMakeVisible(waveformLabel);
     waveform.addItem("Sine", 1);
     waveform.addItem("Saw", 2);
@@ -110,9 +110,28 @@ MainComponent::MainComponent()
     waveform.addItem("Noise", 5);
     waveform.addItem("Rich (PWM)", 6);
     waveform.addItem("Angelic Choir", 7);
+    waveform.addItem("SoundFont (GM)", 8);
     waveform.setSelectedId(2);
-    waveform.onChange = [this] { carrierSynth.setWaveform(waveform.getSelectedId() - 1); };
+    waveform.onChange = [this]
+    {
+        const auto selected = waveform.getSelectedId();
+        useSoundFontCarrier.store(selected == 8, std::memory_order_relaxed);
+        if (selected != 8)
+            carrierSynth.setWaveform(selected - 1);
+        updateSoundFontControls();
+    };
     addAndMakeVisible(waveform);
+
+    soundFontInstrumentLabel.setText("Instrument", juce::dontSendNotification);
+    addAndMakeVisible(soundFontInstrumentLabel);
+    soundFontInstrument.onChange = [this]
+    {
+        soundFontEngine.selectPreset(soundFontInstrument.getSelectedId() - 1);
+    };
+    addAndMakeVisible(soundFontInstrument);
+    loadSoundFontButton.onClick = [this] { chooseSoundFont(); };
+    addAndMakeVisible(loadSoundFontButton);
+    updateSoundFontControls();
 
     octaveLabel.setText("Octave", juce::dontSendNotification);
     addAndMakeVisible(octaveLabel);
@@ -192,6 +211,16 @@ MainComponent::MainComponent()
     deviceViewport.setScrollOnDragEnabled(true);
     addAndMakeVisible(deviceViewport);
 
+    const auto defaultSoundFont = juce::File::getSpecialLocation(
+        juce::File::currentExecutableFile).getSiblingFile("SoundFonts")
+        .getChildFile("GeneralUser-GS.sf2");
+    juce::String soundFontError;
+    if (soundFontEngine.load(defaultSoundFont, soundFontError))
+        populateSoundFontInstruments();
+    else
+        statusLabel.setText("Default SoundFont unavailable: " + soundFontError,
+                            juce::dontSendNotification);
+
     const auto error = deviceManager.initialise(2, 2, nullptr, true);
     if (error.isNotEmpty())
         statusLabel.setText("Audio initialization: " + error, juce::dontSendNotification);
@@ -214,6 +243,62 @@ MainComponent::~MainComponent()
     gateThresholdSlider.removeListener(this);
     stopTimer();
     deviceManager.closeAudioDevice();
+}
+
+void MainComponent::updateSoundFontControls()
+{
+    const auto visible = waveform.getSelectedId() == 8;
+    soundFontInstrumentLabel.setVisible(visible);
+    soundFontInstrument.setVisible(visible);
+    loadSoundFontButton.setVisible(visible);
+    resized();
+}
+
+void MainComponent::populateSoundFontInstruments()
+{
+    soundFontInstrument.clear(juce::dontSendNotification);
+    const auto& presets = soundFontEngine.getPresets();
+    for (size_t i = 0; i < presets.size(); ++i)
+    {
+        const auto& preset = presets[i];
+        const auto label = preset.name + "  [Bank " + juce::String(preset.bank)
+            + ", Program " + juce::String(preset.program + 1) + "]";
+        soundFontInstrument.addItem(label, static_cast<int>(i) + 1);
+    }
+
+    if (!presets.empty())
+        soundFontInstrument.setSelectedId(1, juce::dontSendNotification);
+}
+
+void MainComponent::chooseSoundFont()
+{
+    soundFontFileChooser = std::make_unique<juce::FileChooser>(
+        "Load a SoundFont", juce::File{}, "*.sf2");
+    soundFontFileChooser->launchAsync(
+        juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [safeThis = juce::Component::SafePointer<MainComponent>(this)](const juce::FileChooser& chooser)
+        {
+            if (safeThis == nullptr)
+                return;
+
+            const auto file = chooser.getResult();
+            if (file == juce::File{})
+                return;
+
+            juce::String error;
+            if (safeThis->soundFontEngine.load(file, error))
+            {
+                safeThis->populateSoundFontInstruments();
+                safeThis->statusLabel.setText("Loaded SoundFont: "
+                    + safeThis->soundFontEngine.getLoadedFileName(),
+                    juce::dontSendNotification);
+            }
+            else
+            {
+                safeThis->statusLabel.setText("SoundFont load failed: " + error,
+                                              juce::dontSendNotification);
+            }
+        });
 }
 
 void MainComponent::selectMidiInput()
@@ -258,11 +343,25 @@ void MainComponent::resized()
 
     area.removeFromTop(12);
     row = area.removeFromTop(32);
-    waveformLabel.setBounds(row.removeFromLeft(70));
-    waveform.setBounds(row.removeFromLeft(130));
-    row.removeFromLeft(18);
+    waveformLabel.setBounds(row.removeFromLeft(82));
+    waveform.setBounds(row.removeFromLeft(150));
+    row.removeFromLeft(12);
     octaveLabel.setBounds(row.removeFromLeft(55));
     octave.setBounds(row.removeFromLeft(90));
+    if (waveform.getSelectedId() == 8)
+    {
+        row.removeFromLeft(12);
+        soundFontInstrumentLabel.setBounds(row.removeFromLeft(72));
+        soundFontInstrument.setBounds(row.removeFromLeft(300));
+        row.removeFromLeft(8);
+        loadSoundFontButton.setBounds(row.removeFromLeft(105));
+    }
+    else
+    {
+        soundFontInstrumentLabel.setBounds(0, 0, 0, 0);
+        soundFontInstrument.setBounds(0, 0, 0, 0);
+        loadSoundFontButton.setBounds(0, 0, 0, 0);
+    }
 
     area.removeFromTop(8);
     outputLevelLabel.setBounds(area.removeFromTop(22));
@@ -370,6 +469,8 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
         vocoder.prepare(device->getCurrentSampleRate());
         carrierSynth.setCurrentPlaybackSampleRate(device->getCurrentSampleRate());
         synthBuffer.setSize(1, juce::jmax(512, device->getCurrentBufferSizeSamples()), false, false, true);
+        soundFontEngine.prepare(device->getCurrentSampleRate(),
+                                juce::jmax(512, device->getCurrentBufferSizeSamples()));
     }
 
     juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<MainComponent>(this),
@@ -418,7 +519,10 @@ void MainComponent::audioDeviceIOCallbackWithContext(const float* const* inputCh
     synthBuffer.clear();
     midiBuffer.clear();
     keyboardState.processNextMidiBuffer(midiBuffer, 0, numSamples, true);
-    carrierSynth.renderNextBlock(synthBuffer, midiBuffer, 0, numSamples);
+    if (useSoundFontCarrier.load(std::memory_order_relaxed))
+        soundFontEngine.renderNextBlock(synthBuffer, midiBuffer);
+    else
+        carrierSynth.renderNextBlock(synthBuffer, midiBuffer, 0, numSamples);
 
     processAudio(inputChannelData, numInputChannels, outputChannelData, numOutputChannels,
                  numSamples, synthBuffer.getReadPointer(0));
