@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include "CarrierSynth.h"
 #include "VocoderEngine.h"
+#include "SoundFontEngine.h"
 
 class MainComponent final : public juce::Component,
                             public juce::AudioIODeviceCallback,
@@ -62,6 +63,9 @@ private:
     void sliderValueChanged(juce::Slider* slider) override;
     void timerCallback() override;
     void selectMidiInput();
+    void updateSoundFontControls();
+    void populateSoundFontInstruments();
+    void chooseSoundFont();
     void processAudio(const float* const* inputChannelData,
                       int numInputChannels,
                       float* const* outputChannelData,
@@ -82,6 +86,10 @@ private:
     juce::ComboBox midiInput;
     juce::ComboBox waveform;
     juce::ComboBox octave;
+    juce::ComboBox soundFontInstrument;
+    juce::Label soundFontInstrumentLabel;
+    juce::TextButton loadSoundFontButton { "Load SF2..." };
+    std::unique_ptr<juce::FileChooser> soundFontFileChooser;
     juce::Label modeLabel;
     juce::Label carrierLabel;
     juce::Label midiLabel;
@@ -111,6 +119,7 @@ private:
     juce::Label titleLabel;
 
     CarrierSynth carrierSynth;
+    SoundFontEngine soundFontEngine;
     juce::MidiBuffer midiBuffer;
     juce::AudioBuffer<float> synthBuffer;
     VocoderEngine vocoder;
@@ -121,6 +130,7 @@ private:
     std::atomic<float> outputPeak { 0.0f };
     std::atomic<int> selectedMode { 0 };
     std::atomic<int> selectedCarrier { 0 };
+    std::atomic<bool> useSoundFontCarrier { false };
     std::atomic<bool> monitorMicrophone { false };
     std::atomic<bool> previewCarrier { false };
 
