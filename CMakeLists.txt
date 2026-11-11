@@ -64,6 +64,8 @@ target_sources(Vocoder PRIVATE
     Source/CarrierSynth.h
     Source/CarrierSynth.cpp
     Source/SoundFontEngine.cpp
+    Source/HarmonizerEngine.h
+    Source/HarmonizerEngine.cpp
     Source/VocoderEngine.cpp
 )
 
