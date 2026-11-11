@@ -18,7 +18,11 @@ void HarmonizerEngine::reset() noexcept
         voice.phase = 0.0f;
         voice.envelope = 0.0f;
         voice.releasing = false;
+        voice.synthesisHistory.fill(0.0f);
     }
+    analysisHistory.fill(0.0f);
+    formantCoefficients.fill(0.0f);
+    smoothedFormants.fill(0.0f);
     pitchHistory.fill(0.0f);
     historyWrite = 0;
     pitchUpdateCounter = 0;
@@ -32,6 +36,7 @@ void HarmonizerEngine::PitchVoice::start(int midiNote, float noteVelocity) noexc
     velocity = noteVelocity;
     phase = 0.0f;
     envelope = 0.0f;
+    synthesisHistory.fill(0.0f);
     releasing = false;
 }
 
@@ -41,7 +46,8 @@ void HarmonizerEngine::PitchVoice::stop() noexcept
 }
 
 float HarmonizerEngine::PitchVoice::process(float input, float sourceHz,
-                                             double sampleRate) noexcept
+                                             double sampleRate,
+                                             const std::array<float, lpcOrder + 1>& formants) noexcept
 {
     delay[static_cast<size_t>(writePosition)] = input;
     writePosition = (writePosition + 1) % ringSize;
@@ -101,7 +107,16 @@ float HarmonizerEngine::PitchVoice::process(float input, float sourceHz,
     }
     else
         envelope += (1.0f - envelope) * 0.002f;
-    return shifted * velocity * envelope;
+    // Reconstruct the original vocal spectral envelope after pitch shifting.
+    // The input was LPC-whitened before entering the delay line.
+    auto reconstructed = shifted;
+    for (int k = 1; k <= lpcOrder; ++k)
+        reconstructed += formants[static_cast<size_t>(k)]
+                       * synthesisHistory[static_cast<size_t>(k - 1)];
+    for (int k = lpcOrder - 1; k > 0; --k)
+        synthesisHistory[static_cast<size_t>(k)] = synthesisHistory[static_cast<size_t>(k - 1)];
+    synthesisHistory[0] = juce::jlimit(-4.0f, 4.0f, reconstructed);
+    return synthesisHistory[0] * velocity * envelope;
 }
 
 float HarmonizerEngine::estimatePitch() const noexcept
@@ -167,6 +182,64 @@ float HarmonizerEngine::estimatePitch() const noexcept
     return static_cast<float>(currentSampleRate / (2.0 * refinedLag));
 }
 
+std::array<float, HarmonizerEngine::lpcOrder + 1>
+HarmonizerEngine::estimateFormants() const noexcept
+{
+    constexpr int frameSize = 256;
+    std::array<double, lpcOrder + 1> autocorrelation {};
+    std::array<double, lpcOrder + 1> coefficients {};
+    std::array<double, lpcOrder + 1> previous {};
+    constexpr double epsilon = 1.0e-9;
+
+    // A Hann-windowed, decimated frame gives a smooth vocal-tract envelope.
+    for (int lag = 0; lag <= lpcOrder; ++lag)
+    {
+        double sum = 0.0;
+        for (int n = lag; n < frameSize; ++n)
+        {
+            const auto windowA = 0.5 - 0.5 * std::cos(
+                juce::MathConstants<double>::twoPi * n / (frameSize - 1));
+            const auto windowB = 0.5 - 0.5 * std::cos(
+                juce::MathConstants<double>::twoPi * (n - lag) / (frameSize - 1));
+            const auto a = static_cast<double>(pitchHistory[static_cast<size_t>(
+                (historyWrite + n * 2) % 1024)]) * windowA;
+            const auto b = static_cast<double>(pitchHistory[static_cast<size_t>(
+                (historyWrite + (n - lag) * 2 + 1024) % 1024)]) * windowB;
+            sum += a * b;
+        }
+        autocorrelation[static_cast<size_t>(lag)] = sum;
+    }
+
+    if (autocorrelation[0] < epsilon)
+        return {};
+
+    double predictionError = autocorrelation[0];
+    for (int order = 1; order <= lpcOrder; ++order)
+    {
+        double reflection = autocorrelation[static_cast<size_t>(order)];
+        for (int j = 1; j < order; ++j)
+            reflection -= coefficients[static_cast<size_t>(j)]
+                        * autocorrelation[static_cast<size_t>(order - j)];
+        reflection /= juce::jmax(epsilon, predictionError);
+        reflection = juce::jlimit(-0.82, 0.82, reflection);
+
+        previous = coefficients;
+        coefficients[static_cast<size_t>(order)] = reflection;
+        for (int j = 1; j < order; ++j)
+            coefficients[static_cast<size_t>(j)] =
+                previous[static_cast<size_t>(j)]
+                - reflection * previous[static_cast<size_t>(order - j)];
+        predictionError *= 1.0 - reflection * reflection;
+        predictionError = juce::jmax(predictionError, epsilon);
+    }
+
+    std::array<float, lpcOrder + 1> result {};
+    for (int k = 1; k <= lpcOrder; ++k)
+        result[static_cast<size_t>(k)] =
+            static_cast<float>(coefficients[static_cast<size_t>(k)]);
+    return result;
+}
+
 void HarmonizerEngine::handleMidi(const juce::MidiBuffer& midi) noexcept
 {
     for (const auto metadata : midi)
@@ -222,6 +295,12 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             pitchUpdateCounter = 0;
             if (historySamples >= 1024)
                 {
+                const auto newFormants = estimateFormants();
+                for (int k = 1; k <= lpcOrder; ++k)
+                    smoothedFormants[static_cast<size_t>(k)] += 0.12f
+                        * (newFormants[static_cast<size_t>(k)]
+                           - smoothedFormants[static_cast<size_t>(k)]);
+                formantCoefficients = smoothedFormants;
                 const auto estimate = estimatePitch();
                 if (estimate > 0.0f)
                     detectedPitchHz = detectedPitchHz > 0.0f
@@ -230,12 +309,22 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             }
         }
 
+        // LPC analysis filter: remove the current vocal-tract envelope before
+        // pitch shifting so the shifted residual can be resynthesized with it.
+        float residual = sample;
+        for (int k = 1; k <= lpcOrder; ++k)
+            residual -= formantCoefficients[static_cast<size_t>(k)]
+                      * analysisHistory[static_cast<size_t>(k - 1)];
+        for (int k = lpcOrder - 1; k > 0; --k)
+            analysisHistory[static_cast<size_t>(k)] = analysisHistory[static_cast<size_t>(k - 1)];
+        analysisHistory[0] = sample;
+
         float harmony = 0.0f;
         int activeCount = 0;
         for (auto& voice : voices)
             if (voice.note >= 0)
             {
-                harmony += voice.process(sample, detectedPitchHz, currentSampleRate);
+                harmony += voice.process(residual, detectedPitchHz, currentSampleRate, formantCoefficients);
                 ++activeCount;
             }
         const auto normalization = activeCount > 0
