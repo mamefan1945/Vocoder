@@ -21,6 +21,7 @@ void HarmonizerEngine::reset() noexcept
     pitchHistory.fill(0.0f);
     historyWrite = 0;
     pitchUpdateCounter = 0;
+    historySamples = 0;
     detectedPitchHz = 0.0f;
 }
 
@@ -159,10 +160,12 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         const auto sample = input != nullptr ? input[i] : 0.0f;
         pitchHistory[static_cast<size_t>(historyWrite)] = sample;
         historyWrite = (historyWrite + 2) % 1024;
+        historySamples = juce::jmin(1024, historySamples + 2);
         if (++pitchUpdateCounter >= 256)
         {
             pitchUpdateCounter = 0;
-            detectedPitchHz = estimatePitch();
+            if (historySamples >= 1024)
+                detectedPitchHz = estimatePitch();
         }
 
         float harmony = 0.0f;
