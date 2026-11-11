@@ -6,11 +6,11 @@
 class CarrierSynth final : public juce::Synthesiser
 {
 public:
-    enum Waveform { sine = 0, saw, square, triangle, noise, rich };
+    enum Waveform { sine = 0, saw, square, triangle, noise, rich, choir };
 
     CarrierSynth();
 
-    void setWaveform(int value) noexcept { waveform.store(juce::jlimit(0, 5, value)); }
+    void setWaveform(int value) noexcept { waveform.store(juce::jlimit(0, 6, value)); }
     void setOctave(int value) noexcept { octave.store(juce::jlimit(-2, 2, value)); }
 
 private:
@@ -43,6 +43,8 @@ private:
             level = velocity * 0.22f;
             phase = 0.0;
             pwmPhase = 0.0;
+            choirPhases.fill(0.0);
+            choirVibratoPhases = { 0.0, 0.37, 0.73 };
             adsr.noteOn();
         }
 
@@ -132,6 +134,40 @@ private:
                         sample = 0.50f * saw + 0.35f * pulse + 0.15f * triangle;
                         break;
                     }
+                    case choir:
+                    {
+                        // Three gently detuned choir layers with independent vibrato.
+                        // A vowel-coloured harmonic stack keeps the carrier rich while
+                        // retaining a strong fundamental for stable pitch perception.
+                        constexpr double detune[] = { 0.9965, 1.0, 1.0035 };
+                        constexpr float harmonics[] = { 1.0f, 0.46f, 0.30f,
+                                                        0.18f, 0.11f, 0.065f };
+                        float choirSample = 0.0f;
+                        for (size_t layer = 0; layer < 3; ++layer)
+                        {
+                            const auto vibrato = 1.0
+                                + 0.0015 * std::sin(choirVibratoPhases[layer]);
+                            const auto layerIncrement = frequency * detune[layer]
+                                * vibrato / sampleRate;
+                            for (size_t harmonic = 0; harmonic < 6; ++harmonic)
+                            {
+                                const auto harmonicPhase = choirPhases[layer]
+                                    * static_cast<double>(harmonic + 1);
+                                choirSample += harmonics[harmonic]
+                                    * static_cast<float>(std::sin(
+                                        harmonicPhase * juce::MathConstants<double>::twoPi));
+                            }
+                            choirPhases[layer] += layerIncrement;
+                            choirPhases[layer] -= std::floor(choirPhases[layer]);
+                            choirVibratoPhases[layer] += juce::MathConstants<double>::twoPi
+                                * (4.7 + 0.13 * static_cast<double>(layer)) / sampleRate;
+                            choirVibratoPhases[layer] -= std::floor(
+                                choirVibratoPhases[layer] / juce::MathConstants<double>::twoPi)
+                                * juce::MathConstants<double>::twoPi;
+                        }
+                        sample = choirSample / 6.345f;
+                        break;
+                    }
                     case noise:    sample = random.nextFloat() * 2.0f - 1.0f; break;
                     default:       sample = std::sin(static_cast<float>(phase * juce::MathConstants<double>::twoPi)); break;
                 }
@@ -153,6 +189,8 @@ private:
         double frequency = 440.0;
         double phase = 0.0;
         double pwmPhase = 0.0;
+        std::array<double, 3> choirPhases {};
+        std::array<double, 3> choirVibratoPhases {};
         float level = 0.0f;
     };
 
