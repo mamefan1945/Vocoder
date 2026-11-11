@@ -42,5 +42,6 @@ jobs:
             build/**/SoundFonts/**
             build/**/fluidsynth*.dll
             build/**/libfluidsynth*.dll
+            build/**/FluidSynth-LGPL-2.1.txt
           if-no-files-found: error
           retention-days: 14
