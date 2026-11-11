@@ -65,6 +65,23 @@ private:
             adsr.setSampleRate(sampleRate);
         }
 
+        static float polyBlep(float phase01, float phaseIncrement) noexcept
+        {
+            if (phase01 < phaseIncrement)
+            {
+                const auto t = phase01 / phaseIncrement;
+                return t + t - t * t - 1.0f;
+            }
+
+            if (phase01 > 1.0f - phaseIncrement)
+            {
+                const auto t = (phase01 - 1.0f) / phaseIncrement;
+                return t * t + t + t + 1.0f;
+            }
+
+            return 0.0f;
+        }
+
         void renderNextBlock(juce::AudioBuffer<float>& output, int startSample,
                              int numSamples) override
         {
@@ -81,18 +98,27 @@ private:
                 }
 
                 const auto phase01 = static_cast<float>(phase);
+                const auto phaseIncrement = static_cast<float>(frequency / sampleRate);
                 float sample = 0.0f;
                 switch (waveform.load())
                 {
-                    case saw:      sample = 2.0f * phase01 - 1.0f; break;
-                    case square:   sample = phase01 < 0.5f ? 1.0f : -1.0f; break;
+                    // PolyBLEP removes the discontinuity's aliased high-frequency
+                    // energy while retaining the dense harmonic spectrum a vocoder needs.
+                    case saw:
+                        sample = 2.0f * phase01 - 1.0f - polyBlep(phase01, phaseIncrement);
+                        break;
+                    case square:
+                        sample = phase01 < 0.5f ? 1.0f : -1.0f;
+                        sample += polyBlep(phase01, phaseIncrement);
+                        sample -= polyBlep(std::fmod(phase01 + 0.5f, 1.0f), phaseIncrement);
+                        break;
                     case triangle: sample = 1.0f - 4.0f * std::abs(phase01 - 0.5f); break;
                     case noise:    sample = random.nextFloat() * 2.0f - 1.0f; break;
                     default:       sample = std::sin(static_cast<float>(phase * juce::MathConstants<double>::twoPi)); break;
                 }
 
                 destination[i] += sample * level * adsr.getNextSample();
-                phase += frequency / sampleRate;
+                phase += phaseIncrement;
                 phase -= std::floor(phase);
             }
         }
@@ -108,6 +134,6 @@ private:
         float level = 0.0f;
     };
 
-    std::atomic<int> waveform { sine };
+    std::atomic<int> waveform { saw };
     std::atomic<int> octave { 0 };
 };
