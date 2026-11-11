@@ -4,7 +4,7 @@ int MainComponent::LockableMidiKeyboard::noteAt(juce::Point<float> position) con
 {
     // Black keys overlap the white-key rectangles, so test them first.
     for (int pass = 0; pass < 2; ++pass)
-        for (int note = 84; note >= 48; --note)
+        for (int note = 96; note >= 48; --note)
             if (isBlackKey(note) == (pass == 0)
                 && getRectangleForKey(note).contains(position))
                 return note;
@@ -201,7 +201,7 @@ MainComponent::MainComponent()
 
     startTimerHz(20);
 
-    keyboardComponent.setAvailableRange(48, 84);
+    keyboardComponent.setAvailableRange(48, 96);
     keyboardComponent.setKeyWidth(24.0f);
     addAndMakeVisible(keyboardComponent);
 
