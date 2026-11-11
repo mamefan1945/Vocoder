@@ -31,6 +31,7 @@ private:
     std::array<float, 1024> pitchHistory {};
     int historyWrite = 0;
     int pitchUpdateCounter = 0;
+    int historySamples = 0;
     float detectedPitchHz = 0.0f;
     double currentSampleRate = 44100.0;
     float estimatePitch() const noexcept;
