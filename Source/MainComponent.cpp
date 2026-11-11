@@ -68,11 +68,11 @@ MainComponent::MainComponent()
     modeLabel.setText("Processing", juce::dontSendNotification);
     addAndMakeVisible(modeLabel);
     processingMode.addItem("Pass-through", 1);
-    processingMode.addItem("Vocoder", 2);
+    processingMode.addItem("Vocoder", 2);\n    processingMode.addItem("Harmonizer", 3);
     processingMode.setSelectedId(1);
     processingMode.onChange = [this]
     {
-        selectedMode.store(processingMode.getSelectedId() == 2 ? 1 : 0);
+        selectedMode.store(processingMode.getSelectedId() - 1);
     };
     addAndMakeVisible(processingMode);
 
@@ -492,7 +492,7 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
 
 void MainComponent::audioDeviceStopped()
 {
-    vocoder.reset();
+    vocoder.reset();\n    harmonizer.reset();
     juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<MainComponent>(this)]
     {
         if (safeThis != nullptr)
@@ -526,7 +526,7 @@ void MainComponent::audioDeviceIOCallbackWithContext(const float* const* inputCh
         carrierSynth.renderNextBlock(synthBuffer, midiBuffer, 0, numSamples);
 
     processAudio(inputChannelData, numInputChannels, outputChannelData, numOutputChannels,
-                 numSamples, synthBuffer.getReadPointer(0));
+                 numSamples, synthBuffer.getReadPointer(0), midiBuffer);
 }
 
 void MainComponent::processAudio(const float* const* inputChannelData,
@@ -534,10 +534,10 @@ void MainComponent::processAudio(const float* const* inputChannelData,
                                  float* const* outputChannelData,
                                  int numOutputChannels,
                                  int numSamples,
-                                 const float* internalCarrier)
+                                 const float* internalCarrier,\n                                 const juce::MidiBuffer& midi)
 {
     const auto gain = outputGain.load();
-    const auto vocoderEnabled = selectedMode.load() == 1;
+    const auto mode = selectedMode.load();\n    const auto vocoderEnabled = mode == 1;\n    const auto harmonizerEnabled = mode == 2;\n    if (harmonizerEnabled && harmonizerBuffer.getNumSamples() >= numSamples)\n        harmonizer.processBlock(numInputChannels > 0 ? inputChannelData[0] : nullptr,\n                                harmonizerBuffer.getWritePointer(0), numSamples, midi,\n                                static_cast<float>(dryWetMix.getValue() / 100.0), gain);
     const auto externalCarrier = selectedCarrier.load() == 1;
     const auto monitorMic = monitorMicrophone.load(std::memory_order_relaxed);
     const auto preview = previewCarrier.load(std::memory_order_relaxed);
