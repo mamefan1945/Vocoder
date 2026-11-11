@@ -68,7 +68,8 @@ MainComponent::MainComponent()
     modeLabel.setText("Processing", juce::dontSendNotification);
     addAndMakeVisible(modeLabel);
     processingMode.addItem("Pass-through", 1);
-    processingMode.addItem("Vocoder", 2);\n    processingMode.addItem("Harmonizer", 3);
+    processingMode.addItem("Vocoder", 2);
+    processingMode.addItem("Harmonizer", 3);
     processingMode.setSelectedId(1);
     processingMode.onChange = [this]
     {
@@ -492,7 +493,8 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
 
 void MainComponent::audioDeviceStopped()
 {
-    vocoder.reset();\n    harmonizer.reset();
+    vocoder.reset();
+    harmonizer.reset();
     juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<MainComponent>(this)]
     {
         if (safeThis != nullptr)
@@ -534,10 +536,17 @@ void MainComponent::processAudio(const float* const* inputChannelData,
                                  float* const* outputChannelData,
                                  int numOutputChannels,
                                  int numSamples,
-                                 const float* internalCarrier,\n                                 const juce::MidiBuffer& midi)
+                                 const float* internalCarrier,
+                                 const juce::MidiBuffer& midi)
 {
     const auto gain = outputGain.load();
-    const auto mode = selectedMode.load();\n    const auto vocoderEnabled = mode == 1;\n    const auto harmonizerEnabled = mode == 2;\n    if (harmonizerEnabled && harmonizerBuffer.getNumSamples() >= numSamples)\n        harmonizer.processBlock(numInputChannels > 0 ? inputChannelData[0] : nullptr,\n                                harmonizerBuffer.getWritePointer(0), numSamples, midi,\n                                static_cast<float>(dryWetMix.getValue() / 100.0), gain);
+    const auto mode = selectedMode.load();
+    const auto vocoderEnabled = mode == 1;
+    const auto harmonizerEnabled = mode == 2;
+    if (harmonizerEnabled && harmonizerBuffer.getNumSamples() >= numSamples)
+        harmonizer.processBlock(numInputChannels > 0 ? inputChannelData[0] : nullptr,
+                                harmonizerBuffer.getWritePointer(0), numSamples, midi,
+                                harmonizerMix.load(std::memory_order_relaxed), gain);
     const auto externalCarrier = selectedCarrier.load() == 1;
     const auto monitorMic = monitorMicrophone.load(std::memory_order_relaxed);
     const auto preview = previewCarrier.load(std::memory_order_relaxed);
@@ -558,7 +567,7 @@ void MainComponent::processAudio(const float* const* inputChannelData,
             : voice * gain;
         const auto microphoneOutput = monitorMic && vocoderEnabled ? voice * gain : 0.0f;
         const auto carrierSignal = externalCarrier ? external : synth;
-        const auto carrierOutput = preview ? carrierSignal * gain : 0.0f;
+        const auto carrierOutput = preview && !harmonizerEnabled ? carrierSignal * gain : 0.0f;
         const auto output = vocoderOutput + microphoneOutput + carrierOutput;
 
         blockOutputPeak = juce::jmax(blockOutputPeak, std::abs(output));
