@@ -4,6 +4,7 @@
 #include "CarrierSynth.h"
 #include "VocoderEngine.h"
 #include "SoundFontEngine.h"
+#include "HarmonizerEngine.h"
 
 class MainComponent final : public juce::Component,
                             public juce::AudioIODeviceCallback,
@@ -71,7 +72,7 @@ private:
                       float* const* outputChannelData,
                       int numOutputChannels,
                       int numSamples,
-                      const float* internalCarrier);
+                      const float* internalCarrier,\n                      const juce::MidiBuffer& midi);
 
     juce::AudioDeviceManager deviceManager;
     juce::AudioDeviceSelectorComponent deviceSelector;
@@ -122,7 +123,7 @@ private:
     SoundFontEngine soundFontEngine;
     juce::MidiBuffer midiBuffer;
     juce::AudioBuffer<float> synthBuffer;
-    VocoderEngine vocoder;
+    VocoderEngine vocoder;\n    HarmonizerEngine harmonizer;\n    juce::AudioBuffer<float> harmonizerBuffer;
     juce::String activeMidiIdentifier;
 
     std::atomic<float> outputGain { 1.0f };
