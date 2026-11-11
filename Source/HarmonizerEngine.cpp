@@ -106,35 +106,65 @@ float HarmonizerEngine::PitchVoice::process(float input, float sourceHz,
 
 float HarmonizerEngine::estimatePitch() const noexcept
 {
+    // YIN difference/CMND on a 2:1 decimated history. This is substantially
+    // less prone to octave errors than selecting the largest autocorrelation.
     constexpr int count = 512;
-    constexpr int minLag = 20;
-    constexpr int maxLag = 400;
-    float bestCorrelation = 0.0f;
-    int bestLag = 0;
+    constexpr int minLag = 18;   // about 612 Hz at 22.05 kHz
+    constexpr int maxLag = 400;  // about 27.6 Hz at 22.05 kHz
+    std::array<float, maxLag + 1> difference {};
+
     for (int lag = minLag; lag <= maxLag; ++lag)
     {
-        float cross = 0.0f;
-        float energyA = 0.0f;
-        float energyB = 0.0f;
-        for (int i = 0; i < count - lag; ++i)
+        float sum = 0.0f;
+        for (int i = 0; i < count - maxLag; ++i)
         {
             const auto a = pitchHistory[static_cast<size_t>((historyWrite + i * 2) % 1024)];
             const auto b = pitchHistory[static_cast<size_t>((historyWrite + (i + lag) * 2) % 1024)];
-            cross += a * b;
-            energyA += a * a;
-            energyB += b * b;
+            const auto delta = a - b;
+            sum += delta * delta;
         }
-        const auto normalizer = std::sqrt(energyA * energyB);
-        const auto correlation = normalizer > 1.0e-9f ? cross / normalizer : 0.0f;
-        if (correlation > bestCorrelation)
+        difference[static_cast<size_t>(lag)] = sum;
+    }
+
+    float runningSum = 0.0f;
+    std::array<float, maxLag + 1> normalized {};
+    for (int lag = 1; lag <= maxLag; ++lag)
+    {
+        runningSum += difference[static_cast<size_t>(lag)];
+        normalized[static_cast<size_t>(lag)] = runningSum > 1.0e-12f
+            ? difference[static_cast<size_t>(lag)] * static_cast<float>(lag) / runningSum
+            : 1.0f;
+    }
+
+    int bestLag = 0;
+    constexpr float yinThreshold = 0.18f;
+    for (int lag = minLag; lag <= maxLag; ++lag)
+    {
+        if (normalized[static_cast<size_t>(lag)] < yinThreshold)
         {
-            bestCorrelation = correlation;
+            while (lag < maxLag
+                   && normalized[static_cast<size_t>(lag + 1)]
+                        < normalized[static_cast<size_t>(lag)])
+                ++lag;
             bestLag = lag;
+            break;
         }
     }
-    if (bestCorrelation < 0.55f || bestLag == 0)
+
+    if (bestLag == 0)
         return 0.0f;
-    return static_cast<float>(currentSampleRate / (2.0 * bestLag));
+
+    // Parabolic interpolation reduces quantization/jitter between lag bins.
+    const auto left = normalized[static_cast<size_t>(juce::jmax(minLag, bestLag - 1))];
+    const auto centre = normalized[static_cast<size_t>(bestLag)];
+    const auto right = normalized[static_cast<size_t>(juce::jmin(maxLag, bestLag + 1))];
+    const auto denominator = left - 2.0f * centre + right;
+    const auto offset = std::abs(denominator) > 1.0e-9f
+        ? 0.5f * (left - right) / denominator : 0.0f;
+    const auto refinedLag = static_cast<float>(bestLag) + juce::jlimit(-0.5f, 0.5f, offset);
+
+    // The history is decimated by two, so its effective sample rate is Fs / 2.
+    return static_cast<float>(currentSampleRate / (2.0 * refinedLag));
 }
 
 void HarmonizerEngine::handleMidi(const juce::MidiBuffer& midi) noexcept
@@ -187,11 +217,17 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         pitchHistory[static_cast<size_t>(historyWrite)] = sample;
         historyWrite = (historyWrite + 2) % 1024;
         historySamples = juce::jmin(1024, historySamples + 2);
-        if (++pitchUpdateCounter >= 256)
+        if (++pitchUpdateCounter >= 512)
         {
             pitchUpdateCounter = 0;
             if (historySamples >= 1024)
-                detectedPitchHz = estimatePitch();
+                {
+                const auto estimate = estimatePitch();
+                if (estimate > 0.0f)
+                    detectedPitchHz = detectedPitchHz > 0.0f
+                        ? detectedPitchHz + 0.35f * (estimate - detectedPitchHz)
+                        : estimate;
+            }
         }
 
         float harmony = 0.0f;
