@@ -445,7 +445,11 @@ void MainComponent::sliderValueChanged(juce::Slider* slider)
         vocoder.setFrequencyRange(static_cast<float>(lowFrequency.getValue()), high);
     }
     else if (slider == &dryWetMix)
-        vocoder.setDryWet(static_cast<float>(dryWetMix.getValue() / 100.0));
+    {
+        const auto mix = static_cast<float>(dryWetMix.getValue() / 100.0);
+        vocoder.setDryWet(mix);
+        harmonizerMix.store(mix, std::memory_order_relaxed);
+    }
     else if (slider == &formantShiftSlider)
         vocoder.setFormantShift(static_cast<float>(formantShiftSlider.getValue()));
     else if (slider == &gateThresholdSlider)
