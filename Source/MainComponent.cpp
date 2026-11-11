@@ -267,7 +267,8 @@ void MainComponent::populateSoundFontInstruments()
     }
 
     if (!presets.empty())
-        soundFontInstrument.setSelectedId(1, juce::dontSendNotification);
+        soundFontInstrument.setSelectedId(soundFontEngine.getSelectedPresetIndex() + 1,
+                                          juce::dontSendNotification);
 }
 
 void MainComponent::chooseSoundFont()
