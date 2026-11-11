@@ -568,13 +568,21 @@ void MainComponent::processAudio(const float* const* inputChannelData,
         const auto synth = internalCarrier != nullptr ? internalCarrier[sample] : 0.0f;
         blockInputPeak = juce::jmax(blockInputPeak, std::abs(voice));
 
+        // Each processing mode must use its own engine output. In particular,
+        // do not fall back to the dry microphone in Harmonizer mode: the
+        // harmonizer buffer already contains the dry/wet mix and output gain.
         const auto vocoderOutput = vocoderEnabled
             ? vocoder.processSample(voice, external, externalCarrier, synth)
-            : voice * gain;
+            : 0.0f;
+        const auto harmonizerOutput = harmonizerEnabled
+            ? harmonizerBuffer.getReadPointer(0)[sample]
+            : 0.0f;
+        const auto passThroughOutput = mode == 0 ? voice * gain : 0.0f;
         const auto microphoneOutput = monitorMic && vocoderEnabled ? voice * gain : 0.0f;
         const auto carrierSignal = externalCarrier ? external : synth;
         const auto carrierOutput = preview && !harmonizerEnabled ? carrierSignal * gain : 0.0f;
-        const auto output = vocoderOutput + microphoneOutput + carrierOutput;
+        const auto output = passThroughOutput + vocoderOutput + harmonizerOutput
+                          + microphoneOutput + carrierOutput;
 
         blockOutputPeak = juce::jmax(blockOutputPeak, std::abs(output));
         for (int channel = 0; channel < numOutputChannels; ++channel)
