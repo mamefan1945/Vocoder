@@ -6,11 +6,11 @@
 class CarrierSynth final : public juce::Synthesiser
 {
 public:
-    enum Waveform { sine = 0, saw, square, triangle, noise };
+    enum Waveform { sine = 0, saw, square, triangle, noise, rich };
 
     CarrierSynth();
 
-    void setWaveform(int value) noexcept { waveform.store(juce::jlimit(0, 4, value)); }
+    void setWaveform(int value) noexcept { waveform.store(juce::jlimit(0, 5, value)); }
     void setOctave(int value) noexcept { octave.store(juce::jlimit(-2, 2, value)); }
 
 private:
@@ -42,6 +42,7 @@ private:
             frequency = juce::MidiMessage::getMidiNoteInHertz(shiftedNote);
             level = velocity * 0.22f;
             phase = 0.0;
+            pwmPhase = 0.0;
             adsr.noteOn();
         }
 
@@ -113,6 +114,24 @@ private:
                         sample -= polyBlep(std::fmod(phase01 + 0.5f, 1.0f), phaseIncrement);
                         break;
                     case triangle: sample = 1.0f - 4.0f * std::abs(phase01 - 0.5f); break;
+                    case rich:
+                    {
+                        // A richer but still stable carrier: a band-limited saw,
+                        // a band-limited pulse with slow per-voice PWM, and a
+                        // quieter triangle to fill out the lower harmonics.
+                        const auto pulseWidth = 0.35f + 0.12f
+                            * std::sin(static_cast<float>(pwmPhase
+                                * juce::MathConstants<double>::twoPi));
+                        auto pulse = phase01 < pulseWidth ? 1.0f : -1.0f;
+                        pulse += polyBlep(phase01, phaseIncrement);
+                        pulse -= polyBlep(std::fmod(phase01 - pulseWidth + 1.0f, 1.0f),
+                                          phaseIncrement);
+                        const auto saw = 2.0f * phase01 - 1.0f
+                            - polyBlep(phase01, phaseIncrement);
+                        const auto triangle = 1.0f - 4.0f * std::abs(phase01 - 0.5f);
+                        sample = 0.50f * saw + 0.35f * pulse + 0.15f * triangle;
+                        break;
+                    }
                     case noise:    sample = random.nextFloat() * 2.0f - 1.0f; break;
                     default:       sample = std::sin(static_cast<float>(phase * juce::MathConstants<double>::twoPi)); break;
                 }
@@ -120,6 +139,8 @@ private:
                 destination[i] += sample * level * adsr.getNextSample();
                 phase += phaseIncrement;
                 phase -= std::floor(phase);
+                pwmPhase += 0.23 / sampleRate;
+                pwmPhase -= std::floor(pwmPhase);
             }
         }
 
@@ -131,6 +152,7 @@ private:
         double sampleRate = 44100.0;
         double frequency = 440.0;
         double phase = 0.0;
+        double pwmPhase = 0.0;
         float level = 0.0f;
     };
 
