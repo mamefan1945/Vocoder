@@ -120,6 +120,12 @@ void SoundFontEngine::selectPreset(int presetIndex)
     selectedPreset = presetIndex;
 }
 
+int SoundFontEngine::getSelectedPresetIndex() const
+{
+    const juce::ScopedLock guard(lock);
+    return selectedPreset;
+}
+
 void SoundFontEngine::handleMidiMessage(const juce::MidiMessage& message)
 {
     if (synth == nullptr)
