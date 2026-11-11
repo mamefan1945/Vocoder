@@ -108,7 +108,7 @@ MainComponent::MainComponent()
     waveform.addItem("Square", 3);
     waveform.addItem("Triangle", 4);
     waveform.addItem("Noise", 5);
-    waveform.setSelectedId(1);
+    waveform.setSelectedId(2);
     waveform.onChange = [this] { carrierSynth.setWaveform(waveform.getSelectedId() - 1); };
     addAndMakeVisible(waveform);
 
