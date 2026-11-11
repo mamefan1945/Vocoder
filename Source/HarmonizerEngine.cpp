@@ -116,7 +116,7 @@ float HarmonizerEngine::estimatePitch() const noexcept
     for (int lag = minLag; lag <= maxLag; ++lag)
     {
         float sum = 0.0f;
-        for (int i = 0; i < count - maxLag; ++i)
+        for (int i = 0; i < count - lag; ++i)
         {
             const auto a = pitchHistory[static_cast<size_t>((historyWrite + i * 2) % 1024)];
             const auto b = pitchHistory[static_cast<size_t>((historyWrite + (i + lag) * 2) % 1024)];
