@@ -202,9 +202,9 @@ HarmonizerEngine::estimateFormants() const noexcept
             const auto windowB = 0.5 - 0.5 * std::cos(
                 juce::MathConstants<double>::twoPi * (n - lag) / (frameSize - 1));
             const auto a = static_cast<double>(pitchHistory[static_cast<size_t>(
-                (historyWrite + n * 2) % 1024)]) * windowA;
+                (historyWrite + (n + 256) * 2) % 1024)]) * windowA;
             const auto b = static_cast<double>(pitchHistory[static_cast<size_t>(
-                (historyWrite + (n - lag) * 2 + 1024) % 1024)]) * windowB;
+                (historyWrite + (n - lag + 256) * 2 + 1024) % 1024)]) * windowB;
             sum += a * b;
         }
         autocorrelation[static_cast<size_t>(lag)] = sum;
