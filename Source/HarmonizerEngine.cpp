@@ -69,7 +69,7 @@ float HarmonizerEngine::PitchVoice::process(float input, float sourceHz,
     }
 
     const auto targetHz = juce::MidiMessage::getMidiNoteInHertz(note);
-    const auto ratio = juce::jlimit(0.5f, 2.0f, static_cast<float>(targetHz / sourceHz));
+    const auto ratio = juce::jlimit(0.125f, 8.0f, static_cast<float>(targetHz / sourceHz));
     const auto maxDelay = static_cast<float>(sampleRate * 0.030);
     const auto phaseRate = std::abs(1.0f - ratio) / juce::jmax(1.0f, maxDelay);
     phase += phaseRate;
