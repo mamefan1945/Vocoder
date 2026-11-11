@@ -22,6 +22,7 @@ public:
     void renderNextBlock(juce::AudioBuffer<float>& monoOutput,
                          const juce::MidiBuffer& midiMessages);
     void selectPreset(int presetIndex);
+    int getSelectedPresetIndex() const;
 
     const std::vector<Preset>& getPresets() const noexcept { return presets; }
     juce::String getLoadedFileName() const { return loadedFileName; }
