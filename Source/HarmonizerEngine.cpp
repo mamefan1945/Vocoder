@@ -17,6 +17,7 @@ void HarmonizerEngine::reset() noexcept
         voice.velocity = 0.0f;
         voice.phase = 0.0f;
         voice.envelope = 0.0f;
+        voice.releasing = false;
     }
     pitchHistory.fill(0.0f);
     historyWrite = 0;
