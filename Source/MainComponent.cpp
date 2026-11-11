@@ -477,6 +477,8 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
         synthBuffer.setSize(1, juce::jmax(512, device->getCurrentBufferSizeSamples()), false, false, true);
         soundFontEngine.prepare(device->getCurrentSampleRate(),
                                 juce::jmax(512, device->getCurrentBufferSizeSamples()));
+        harmonizer.prepare(device->getCurrentSampleRate());
+        harmonizerBuffer.setSize(1, juce::jmax(512, device->getCurrentBufferSizeSamples()), false, false, true);
     }
 
     juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<MainComponent>(this),
