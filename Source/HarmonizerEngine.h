@@ -22,6 +22,7 @@ private:
         float velocity = 0.0f;
         float phase = 0.0f;
         float envelope = 0.0f;
+        bool releasing = false;
         void start(int midiNote, float noteVelocity) noexcept;
         void stop() noexcept;
         float process(float input, float sourceHz, double sampleRate) noexcept;
