@@ -45,8 +45,22 @@ float HarmonizerEngine::PitchVoice::process(float input, float sourceHz,
 {
     delay[static_cast<size_t>(writePosition)] = input;
     writePosition = (writePosition + 1) % ringSize;
-    if (note < 0 || sourceHz < 35.0f || sourceHz > 1200.0f)
+    if (note < 0)
         return 0.0f;
+    if (sourceHz < 35.0f || sourceHz > 1200.0f)
+    {
+        if (releasing)
+        {
+            envelope *= 0.9979f;
+            if (envelope < 0.001f)
+            {
+                note = -1;
+                velocity = 0.0f;
+                releasing = false;
+            }
+        }
+        return 0.0f;
+    }
 
     const auto targetHz = juce::MidiMessage::getMidiNoteInHertz(note);
     const auto ratio = juce::jlimit(0.5f, 2.0f, static_cast<float>(targetHz / sourceHz));
