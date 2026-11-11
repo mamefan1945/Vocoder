@@ -24,11 +24,11 @@ jobs:
 
       - name: Install FluidSynth
         shell: pwsh
-        run: '& "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install fluidsynth:x64-windows-static-md --classic'
+        run: '& "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install fluidsynth:x64-windows --classic'
 
       - name: Configure CMake
         shell: pwsh
-        run: cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
+        run: cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows
 
       - name: Build Release
         run: cmake --build build --config Release --parallel
@@ -40,5 +40,7 @@ jobs:
           path: |
             build/**/Vocoder.exe
             build/**/SoundFonts/**
+            build/**/fluidsynth*.dll
+            build/**/libfluidsynth*.dll
           if-no-files-found: error
           retention-days: 14
