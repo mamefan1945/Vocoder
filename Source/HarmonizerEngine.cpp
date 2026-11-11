@@ -31,12 +31,12 @@ void HarmonizerEngine::PitchVoice::start(int midiNote, float noteVelocity) noexc
     velocity = noteVelocity;
     phase = 0.0f;
     envelope = 0.0f;
+    releasing = false;
 }
 
 void HarmonizerEngine::PitchVoice::stop() noexcept
 {
-    note = -1;
-    velocity = 0.0f;
+    releasing = true;
 }
 
 float HarmonizerEngine::PitchVoice::process(float input, float sourceHz,
@@ -74,7 +74,18 @@ float HarmonizerEngine::PitchVoice::process(float input, float sourceHz,
     const auto tapA = readTap(ratio >= 1.0f ? 1.0f - phaseA : phaseA);
     const auto tapB = readTap(ratio >= 1.0f ? 1.0f - phaseB : phaseB);
     const auto shifted = tapA * gainA + tapB * gainB;
-    envelope += (1.0f - envelope) * 0.002f;
+    if (releasing)
+    {
+        envelope *= 0.9979f;
+        if (envelope < 0.001f)
+        {
+            note = -1;
+            velocity = 0.0f;
+            releasing = false;
+        }
+    }
+    else
+        envelope += (1.0f - envelope) * 0.002f;
     return shifted * velocity * envelope;
 }
 
