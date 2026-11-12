@@ -18,7 +18,7 @@ private:
     static constexpr size_t outputRingSize = 32768;
     static constexpr size_t inputRingMask = inputRingSize - 1;
     static constexpr size_t outputRingMask = outputRingSize - 1;
-    static constexpr int pitchWindowSize = 768;
+    static constexpr int pitchWindowSize = 1024;
 
     struct PitchVoice
     {
