@@ -17,9 +17,10 @@ void HarmonizerEngine::PitchVoice::prepare()
     weights.assign(outputRingSize, 0.0f);
 }
 
-void HarmonizerEngine::PitchVoice::start(int midiNote, float noteVelocity) noexcept
+void HarmonizerEngine::PitchVoice::start(int midiNote, int originalMidiNote, float noteVelocity) noexcept
 {
     note = midiNote;
+    sourceNote = originalMidiNote;
     velocity = noteVelocity;
     envelope = 0.0f;
     nextSynthesisMark = 0.0;
@@ -50,6 +51,7 @@ void HarmonizerEngine::reset() noexcept
         std::fill(voice.overlap.begin(), voice.overlap.end(), 0.0f);
         std::fill(voice.weights.begin(), voice.weights.end(), 0.0f);
         voice.note = -1;
+        voice.sourceNote = -1;
         voice.velocity = 0.0f;
         voice.envelope = 0.0f;
         voice.nextSynthesisMark = 0.0;
@@ -263,11 +265,12 @@ void HarmonizerEngine::handleMidi(const juce::MidiBuffer& midi, int octaveShift)
         const auto message = metadata.getMessage();
         if (message.isNoteOn())
         {
-            const auto note = message.getNoteNumber();
+            const auto sourceNote = message.getNoteNumber();
+            const auto note = juce::jlimit(0, 127, sourceNote + octaveShift);
             bool found = false;
             for (auto& voice : voices)
             {
-                if (voice.note == note)
+                if (voice.sourceNote == sourceNote)
                 {
                     voice.start(note, sourceNote, message.getFloatVelocity());
                     found = true;
@@ -294,7 +297,7 @@ void HarmonizerEngine::handleMidi(const juce::MidiBuffer& midi, int octaveShift)
         else if (message.isNoteOff())
         {
             for (auto& voice : voices)
-                if (voice.note == message.getNoteNumber())
+                if (voice.sourceNote == message.getNoteNumber())
                     voice.stop();
         }
         else if (message.isAllNotesOff() || message.isAllSoundOff())
@@ -307,7 +310,7 @@ void HarmonizerEngine::handleMidi(const juce::MidiBuffer& midi, int octaveShift)
 
 void HarmonizerEngine::processBlock(const float* input, float* output, int numSamples,
                                     const juce::MidiBuffer& midi, float dryWet,
-                                    float outputGain) noexcept
+                                    float outputGain, int octaveShift) noexcept
 {
     if (numSamples <= 0 || numSamples > maximumBlockSize || output == nullptr)
     {
@@ -376,6 +379,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                 if (voice.envelope < envelopeFloor)
                 {
                     voice.note = -1;
+                    voice.sourceNote = -1;
                     voice.velocity = 0.0f;
                     voice.envelope = 0.0f;
                     voice.releasing = false;
