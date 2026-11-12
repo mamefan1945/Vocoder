@@ -10,7 +10,7 @@ public:
     void prepare(double sampleRate, int maximumBlockSize = 2048) noexcept;
     void reset() noexcept;
     void processBlock(const float* input, float* output, int numSamples,
-                      const juce::MidiBuffer& midi, float dryWet, float outputGain) noexcept;
+                      const juce::MidiBuffer& midi, float dryWet, float outputGain,\n                      int octaveShift = 0) noexcept;
 
 private:
     static constexpr int voiceCount = 8;
@@ -24,7 +24,7 @@ private:
     {
         std::vector<float> overlap;
         std::vector<float> weights;
-        int note = -1;
+        int note = -1;\n        int sourceNote = -1;
         float velocity = 0.0f;
         float envelope = 0.0f;
         double nextSynthesisMark = 0.0;
@@ -32,7 +32,7 @@ private:
         bool releasing = false;
 
         void prepare();
-        void start(int midiNote, float noteVelocity) noexcept;
+        void start(int midiNote, int originalMidiNote, float noteVelocity) noexcept;
         void stop() noexcept;
     };
 
@@ -56,5 +56,5 @@ private:
     void scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
                        double sourcePeriod, int64_t synthesisCentre,
                        double targetPeriod) noexcept;
-    void handleMidi(const juce::MidiBuffer& midi) noexcept;
+    void handleMidi(const juce::MidiBuffer& midi, int octaveShift) noexcept;
 };
