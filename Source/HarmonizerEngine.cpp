@@ -27,6 +27,7 @@ void HarmonizerEngine::reset() noexcept
     historyWrite = 0;
     pitchUpdateCounter = 0;
     historySamples = 0;
+    unvoicedFrames = 0;
     detectedPitchHz = 0.0f;
 }
 
@@ -303,9 +304,22 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                 formantCoefficients = smoothedFormants;
                 const auto estimate = estimatePitch();
                 if (estimate > 0.0f)
+                {
+                    unvoicedFrames = 0;
                     detectedPitchHz = detectedPitchHz > 0.0f
                         ? detectedPitchHz + 0.35f * (estimate - detectedPitchHz)
                         : estimate;
+                }
+                else
+                {
+                    // Do not keep harmonizing at the last detected pitch after
+                    // the singer stops or the input becomes unvoiced. A short
+                    // hold bridges brief consonants; then the pitch fades out.
+                    ++unvoicedFrames;
+                    detectedPitchHz *= 0.82f;
+                    if (unvoicedFrames > 8 || detectedPitchHz < 40.0f)
+                        detectedPitchHz = 0.0f;
+                }
             }
         }
 
@@ -322,11 +336,20 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         float harmony = 0.0f;
         int activeCount = 0;
         for (auto& voice : voices)
+        {
             if (voice.note >= 0)
             {
                 harmony += voice.process(residual, detectedPitchHz, currentSampleRate, formantCoefficients);
                 ++activeCount;
             }
+            else
+            {
+                // Keep inactive voice delay lines primed with the live vocal.
+                // A newly pressed MIDI key can then produce a harmony from
+                // the current syllable instead of starting with an empty buffer.
+                voice.process(residual, detectedPitchHz, currentSampleRate, formantCoefficients);
+            }
+        }
         const auto normalization = activeCount > 0
             ? 1.0f / std::sqrt(static_cast<float>(activeCount)) : 0.0f;
         output[i] = (sample * (1.0f - mix) + harmony * normalization * mix) * outputGain;
