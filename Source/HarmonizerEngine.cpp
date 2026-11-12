@@ -5,8 +5,8 @@
 namespace
 {
     constexpr float pi = 3.14159265358979323846f;
-    constexpr float minimumPitchHz = 60.0f;
-    constexpr float maximumPitchHz = 600.0f;
+    constexpr float minimumPitchHz = 50.0f;
+    constexpr float maximumPitchHz = 700.0f;
     constexpr float minimumCorrelation = 0.58f;
     constexpr float envelopeFloor = 0.001f;
 }
