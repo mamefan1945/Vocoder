@@ -1,43 +1,23 @@
 #include "HarmonizerEngine.h"
 #include <cmath>
 
-void HarmonizerEngine::prepare(double sampleRate) noexcept
+void HarmonizerEngine::PitchVoice::prepare(double sampleRate, int maximumBlockSize)
 {
-    currentSampleRate = juce::jmax(8000.0, sampleRate);
-    reset();
-}
-
-void HarmonizerEngine::reset() noexcept
-{
-    for (auto& voice : voices)
-    {
-        voice.delay.fill(0.0f);
-        voice.writePosition = 0;
-        voice.note = -1;
-        voice.velocity = 0.0f;
-        voice.phase = 0.0f;
-        voice.envelope = 0.0f;
-        voice.releasing = false;
-        voice.synthesisHistory.fill(0.0f);
-    }
-    analysisHistory.fill(0.0f);
-    formantCoefficients.fill(0.0f);
-    smoothedFormants.fill(0.0f);
-    pitchHistory.fill(0.0f);
-    historyWrite = 0;
-    pitchUpdateCounter = 0;
-    historySamples = 0;
-    unvoicedFrames = 0;
-    detectedPitchHz = 0.0f;
+    // A 100 ms analysis window with a 20 ms hop gives a useful quality/latency
+    // compromise for live vocals. Split computation avoids large callback spikes.
+    const auto block = juce::jmax(1024, static_cast<int>(sampleRate * 0.10));
+    const auto interval = juce::jmax(256, static_cast<int>(sampleRate * 0.02));
+    shifter.configure(1, block, interval, true);
+    shifter.setFormantFactor(1.0f, true);
+    shifter.setFormantBase(0.0f);
+    shifted.assign(static_cast<size_t>(maximumBlockSize), 0.0f);
 }
 
 void HarmonizerEngine::PitchVoice::start(int midiNote, float noteVelocity) noexcept
 {
     note = midiNote;
     velocity = noteVelocity;
-    phase = 0.0f;
     envelope = 0.0f;
-    synthesisHistory.fill(0.0f);
     releasing = false;
 }
 
@@ -46,87 +26,41 @@ void HarmonizerEngine::PitchVoice::stop() noexcept
     releasing = true;
 }
 
-float HarmonizerEngine::PitchVoice::process(float input, float sourceHz,
-                                             double sampleRate,
-                                             const std::array<float, lpcOrder + 1>& formants) noexcept
+void HarmonizerEngine::prepare(double sampleRate, int blockSize) noexcept
 {
-    delay[static_cast<size_t>(writePosition)] = input;
-    writePosition = (writePosition + 1) % ringSize;
-    if (note < 0)
-        return 0.0f;
-    if (sourceHz < 35.0f || sourceHz > 1200.0f)
+    currentSampleRate = juce::jmax(8000.0, sampleRate);
+    maximumBlockSize = juce::jmax(64, blockSize);
+    silence.assign(static_cast<size_t>(maximumBlockSize), 0.0f);
+    for (auto& voice : voices)
+        voice.prepare(currentSampleRate, maximumBlockSize);
+    reset();
+}
+
+void HarmonizerEngine::reset() noexcept
+{
+    for (auto& voice : voices)
     {
-        if (releasing)
-        {
-            envelope *= 0.9979f;
-            if (envelope < 0.001f)
-            {
-                note = -1;
-                velocity = 0.0f;
-                releasing = false;
-            }
-        }
-        return 0.0f;
+        voice.shifter.reset();
+        voice.note = -1;
+        voice.velocity = 0.0f;
+        voice.envelope = 0.0f;
+        voice.releasing = false;
+        std::fill(voice.shifted.begin(), voice.shifted.end(), 0.0f);
     }
-
-    const auto targetHz = juce::MidiMessage::getMidiNoteInHertz(note);
-    const auto ratio = juce::jlimit(0.125f, 8.0f, static_cast<float>(targetHz / sourceHz));
-    const auto maxDelay = static_cast<float>(sampleRate * 0.030);
-    const auto phaseRate = std::abs(1.0f - ratio) / juce::jmax(1.0f, maxDelay);
-    phase += phaseRate;
-    phase -= std::floor(phase);
-
-    const auto readTap = [this, maxDelay](float p)
-    {
-        const auto delaySamples = 8.0f + p * maxDelay;
-        auto position = static_cast<float>(writePosition) - delaySamples;
-        while (position < 0.0f)
-            position += static_cast<float>(ringSize);
-        const auto index0 = static_cast<int>(position) % ringSize;
-        const auto index1 = (index0 + 1) % ringSize;
-        const auto fraction = position - std::floor(position);
-        return delay[static_cast<size_t>(index0)] * (1.0f - fraction)
-             + delay[static_cast<size_t>(index1)] * fraction;
-    };
-
-    const auto phaseA = phase;
-    const auto phaseB = phase < 0.5f ? phase + 0.5f : phase - 0.5f;
-    const auto gainA = 0.5f - 0.5f * std::cos(juce::MathConstants<float>::twoPi * phaseA);
-    const auto gainB = 1.0f - gainA;
-    const auto tapA = readTap(ratio >= 1.0f ? 1.0f - phaseA : phaseA);
-    const auto tapB = readTap(ratio >= 1.0f ? 1.0f - phaseB : phaseB);
-    const auto shifted = tapA * gainA + tapB * gainB;
-    if (releasing)
-    {
-        envelope *= 0.9979f;
-        if (envelope < 0.001f)
-        {
-            note = -1;
-            velocity = 0.0f;
-            releasing = false;
-        }
-    }
-    else
-        envelope += (1.0f - envelope) * 0.002f;
-    // Reconstruct the original vocal spectral envelope after pitch shifting.
-    // The input was LPC-whitened before entering the delay line.
-    auto reconstructed = shifted;
-    for (int k = 1; k <= lpcOrder; ++k)
-        reconstructed += formants[static_cast<size_t>(k)]
-                       * synthesisHistory[static_cast<size_t>(k - 1)];
-    for (int k = lpcOrder - 1; k > 0; --k)
-        synthesisHistory[static_cast<size_t>(k)] = synthesisHistory[static_cast<size_t>(k - 1)];
-    synthesisHistory[0] = juce::jlimit(-4.0f, 4.0f, reconstructed);
-    return synthesisHistory[0] * velocity * envelope;
+    std::fill(pitchHistory.begin(), pitchHistory.end(), 0.0f);
+    std::fill(silence.begin(), silence.end(), 0.0f);
+    historyWrite = 0;
+    pitchUpdateCounter = 0;
+    historySamples = 0;
+    detectedPitchHz = 0.0f;
 }
 
 float HarmonizerEngine::estimatePitch() const noexcept
 {
-    // YIN difference/CMND on a 2:1 decimated history. This is substantially
-    // less prone to octave errors than selecting the largest autocorrelation.
+    // YIN difference/CMND on a 2:1 decimated history.
     constexpr int count = 512;
-    constexpr int minLag = 18;   // about 612 Hz at 22.05 kHz
-    constexpr int maxLag = 400;  // about 27.6 Hz at 22.05 kHz
+    constexpr int minLag = 18;
+    constexpr int maxLag = 400;
     std::array<float, maxLag + 1> difference {};
 
     for (int lag = minLag; lag <= maxLag; ++lag)
@@ -159,86 +93,24 @@ float HarmonizerEngine::estimatePitch() const noexcept
         if (normalized[static_cast<size_t>(lag)] < yinThreshold)
         {
             while (lag < maxLag
-                   && normalized[static_cast<size_t>(lag + 1)]
-                        < normalized[static_cast<size_t>(lag)])
+                   && normalized[static_cast<size_t>(lag + 1)] < normalized[static_cast<size_t>(lag)])
                 ++lag;
             bestLag = lag;
             break;
         }
     }
-
     if (bestLag == 0)
         return 0.0f;
 
-    // Parabolic interpolation reduces quantization/jitter between lag bins.
     const auto left = normalized[static_cast<size_t>(juce::jmax(minLag, bestLag - 1))];
     const auto centre = normalized[static_cast<size_t>(bestLag)];
     const auto right = normalized[static_cast<size_t>(juce::jmin(maxLag, bestLag + 1))];
     const auto denominator = left - 2.0f * centre + right;
     const auto offset = std::abs(denominator) > 1.0e-9f
         ? 0.5f * (left - right) / denominator : 0.0f;
-    const auto refinedLag = static_cast<float>(bestLag) + juce::jlimit(-0.5f, 0.5f, offset);
-
-    // The history is decimated by two, so its effective sample rate is Fs / 2.
+    const auto refinedLag = static_cast<float>(bestLag)
+        + juce::jlimit(-0.5f, 0.5f, offset);
     return static_cast<float>(currentSampleRate / (2.0 * refinedLag));
-}
-
-std::array<float, HarmonizerEngine::lpcOrder + 1>
-HarmonizerEngine::estimateFormants() const noexcept
-{
-    constexpr int frameSize = 256;
-    std::array<double, lpcOrder + 1> autocorrelation {};
-    std::array<double, lpcOrder + 1> coefficients {};
-    std::array<double, lpcOrder + 1> previous {};
-    constexpr double epsilon = 1.0e-9;
-
-    // A Hann-windowed, decimated frame gives a smooth vocal-tract envelope.
-    for (int lag = 0; lag <= lpcOrder; ++lag)
-    {
-        double sum = 0.0;
-        for (int n = lag; n < frameSize; ++n)
-        {
-            const auto windowA = 0.5 - 0.5 * std::cos(
-                juce::MathConstants<double>::twoPi * n / (frameSize - 1));
-            const auto windowB = 0.5 - 0.5 * std::cos(
-                juce::MathConstants<double>::twoPi * (n - lag) / (frameSize - 1));
-            const auto a = static_cast<double>(pitchHistory[static_cast<size_t>(
-                (historyWrite + (n + 256) * 2) % 1024)]) * windowA;
-            const auto b = static_cast<double>(pitchHistory[static_cast<size_t>(
-                (historyWrite + (n - lag + 256) * 2 + 1024) % 1024)]) * windowB;
-            sum += a * b;
-        }
-        autocorrelation[static_cast<size_t>(lag)] = sum;
-    }
-
-    if (autocorrelation[0] < epsilon)
-        return {};
-
-    double predictionError = autocorrelation[0];
-    for (int order = 1; order <= lpcOrder; ++order)
-    {
-        double reflection = autocorrelation[static_cast<size_t>(order)];
-        for (int j = 1; j < order; ++j)
-            reflection -= coefficients[static_cast<size_t>(j)]
-                        * autocorrelation[static_cast<size_t>(order - j)];
-        reflection /= juce::jmax(epsilon, predictionError);
-        reflection = juce::jlimit(-0.82, 0.82, reflection);
-
-        previous = coefficients;
-        coefficients[static_cast<size_t>(order)] = reflection;
-        for (int j = 1; j < order; ++j)
-            coefficients[static_cast<size_t>(j)] =
-                previous[static_cast<size_t>(j)]
-                - reflection * previous[static_cast<size_t>(order - j)];
-        predictionError *= 1.0 - reflection * reflection;
-        predictionError = juce::jmax(predictionError, epsilon);
-    }
-
-    std::array<float, lpcOrder + 1> result {};
-    for (int k = 1; k <= lpcOrder; ++k)
-        result[static_cast<size_t>(k)] =
-            static_cast<float>(coefficients[static_cast<size_t>(k)]);
-    return result;
 }
 
 void HarmonizerEngine::handleMidi(const juce::MidiBuffer& midi) noexcept
@@ -283,75 +155,101 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                                     const juce::MidiBuffer& midi, float dryWet,
                                     float outputGain) noexcept
 {
-    handleMidi(midi);
-    const auto mix = juce::jlimit(0.0f, 1.0f, dryWet);
-    for (int i = 0; i < numSamples; ++i)
+    if (numSamples <= 0 || numSamples > maximumBlockSize)
     {
-        const auto sample = input != nullptr ? input[i] : 0.0f;
-        pitchHistory[static_cast<size_t>(historyWrite)] = sample;
-        historyWrite = (historyWrite + 2) % 1024;
-        historySamples = juce::jmin(1024, historySamples + 2);
+        if (output != nullptr && numSamples > 0)
+            juce::FloatVectorOperations::clear(output, numSamples);
+        return;
+    }
+
+    handleMidi(midi);
+    const auto* source = input != nullptr ? input : silence.data();
+
+    // Keep every shifter fed continuously, including currently unused voices.
+    // This lets a newly pressed MIDI key join the live phrase without a cold start.
+    for (auto& voice : voices)
+    {
         if (++pitchUpdateCounter >= 512)
         {
             pitchUpdateCounter = 0;
             if (historySamples >= 1024)
-                {
-                const auto newFormants = estimateFormants();
-                for (int k = 1; k <= lpcOrder; ++k)
-                    smoothedFormants[static_cast<size_t>(k)] += 0.12f
-                        * (newFormants[static_cast<size_t>(k)]
-                           - smoothedFormants[static_cast<size_t>(k)]);
-                formantCoefficients = smoothedFormants;
+            {
                 const auto estimate = estimatePitch();
                 if (estimate > 0.0f)
-                {
-                    unvoicedFrames = 0;
                     detectedPitchHz = detectedPitchHz > 0.0f
                         ? detectedPitchHz + 0.35f * (estimate - detectedPitchHz)
                         : estimate;
-                }
                 else
-                {
-                    // Do not keep harmonizing at the last detected pitch after
-                    // the singer stops or the input becomes unvoiced. A short
-                    // hold bridges brief consonants; then the pitch fades out.
-                    ++unvoicedFrames;
-                    detectedPitchHz *= 0.82f;
-                    if (unvoicedFrames > 8 || detectedPitchHz < 40.0f)
-                        detectedPitchHz = 0.0f;
-                }
+                    detectedPitchHz *= 0.72f;
+                if (detectedPitchHz < 35.0f)
+                    detectedPitchHz = 0.0f;
             }
         }
+        break;
+    }
 
-        // LPC analysis filter: remove the current vocal-tract envelope before
-        // pitch shifting so the shifted residual can be resynthesized with it.
-        float residual = sample;
-        for (int k = 1; k <= lpcOrder; ++k)
-            residual -= formantCoefficients[static_cast<size_t>(k)]
-                      * analysisHistory[static_cast<size_t>(k - 1)];
-        for (int k = lpcOrder - 1; k > 0; --k)
-            analysisHistory[static_cast<size_t>(k)] = analysisHistory[static_cast<size_t>(k - 1)];
-        analysisHistory[0] = sample;
+    for (int i = 0; i < numSamples; ++i)
+    {
+        pitchHistory[static_cast<size_t>(historyWrite)] = source[i];
+        historyWrite = (historyWrite + 2) % 1024;
+        historySamples = juce::jmin(1024, historySamples + 2);
+    }
 
+    const auto validPitch = detectedPitchHz >= 35.0f && detectedPitchHz <= 1200.0f;
+    const auto sourceMidi = validPitch
+        ? 69.0f + 12.0f * std::log2(detectedPitchHz / 440.0f) : 69.0f;
+    float* inputChannels[1] = { const_cast<float*>(source) };
+
+    for (auto& voice : voices)
+    {
+        const auto active = voice.note >= 0;
+        if (active && validPitch)
+        {
+            const auto semitones = juce::jlimit(-48.0f, 48.0f,
+                static_cast<float>(voice.note) - sourceMidi);
+            voice.shifter.setTransposeSemitones(semitones);
+            voice.shifter.setFormantBase(static_cast<float>(detectedPitchHz / currentSampleRate));
+        }
+        else
+        {
+            voice.shifter.setTransposeSemitones(0.0f);
+            voice.shifter.setFormantBase(0.0f);
+        }
+
+        float* outputChannels[1] = { voice.shifted.data() };
+        voice.shifter.process(inputChannels, numSamples, outputChannels, numSamples);
+    }
+
+    const auto mix = juce::jlimit(0.0f, 1.0f, dryWet);
+    for (int i = 0; i < numSamples; ++i)
+    {
         float harmony = 0.0f;
         int activeCount = 0;
         for (auto& voice : voices)
         {
-            if (voice.note >= 0)
+            if (voice.note < 0)
+                continue;
+
+            if (voice.releasing)
             {
-                harmony += voice.process(residual, detectedPitchHz, currentSampleRate, formantCoefficients);
-                ++activeCount;
+                voice.envelope *= 0.9970f;
+                if (voice.envelope < 0.001f)
+                {
+                    voice.note = -1;
+                    voice.velocity = 0.0f;
+                    voice.releasing = false;
+                    continue;
+                }
             }
             else
-            {
-                // Keep inactive voice delay lines primed with the live vocal.
-                // A newly pressed MIDI key can then produce a harmony from
-                // the current syllable instead of starting with an empty buffer.
-                voice.process(residual, detectedPitchHz, currentSampleRate, formantCoefficients);
-            }
+                voice.envelope += (1.0f - voice.envelope) * 0.003f;
+
+            harmony += voice.shifted[static_cast<size_t>(i)] * voice.velocity * voice.envelope;
+            ++activeCount;
         }
+
         const auto normalization = activeCount > 0
             ? 1.0f / std::sqrt(static_cast<float>(activeCount)) : 0.0f;
-        output[i] = (sample * (1.0f - mix) + harmony * normalization * mix) * outputGain;
+        output[i] = (source[i] * (1.0f - mix) + harmony * normalization * mix) * outputGain;
     }
 }
