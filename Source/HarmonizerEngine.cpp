@@ -167,32 +167,29 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
 
     // Keep every shifter fed continuously, including currently unused voices.
     // This lets a newly pressed MIDI key join the live phrase without a cold start.
-    for (auto& voice : voices)
-    {
-        if (++pitchUpdateCounter >= 512)
-        {
-            pitchUpdateCounter = 0;
-            if (historySamples >= 1024)
-            {
-                const auto estimate = estimatePitch();
-                if (estimate > 0.0f)
-                    detectedPitchHz = detectedPitchHz > 0.0f
-                        ? detectedPitchHz + 0.35f * (estimate - detectedPitchHz)
-                        : estimate;
-                else
-                    detectedPitchHz *= 0.72f;
-                if (detectedPitchHz < 35.0f)
-                    detectedPitchHz = 0.0f;
-            }
-        }
-        break;
-    }
-
     for (int i = 0; i < numSamples; ++i)
     {
         pitchHistory[static_cast<size_t>(historyWrite)] = source[i];
         historyWrite = (historyWrite + 2) % 1024;
         historySamples = juce::jmin(1024, historySamples + 2);
+    }
+
+    pitchUpdateCounter += numSamples;
+    if (pitchUpdateCounter >= 512)
+    {
+        pitchUpdateCounter %= 512;
+        if (historySamples >= 1024)
+        {
+            const auto estimate = estimatePitch();
+            if (estimate > 0.0f)
+                detectedPitchHz = detectedPitchHz > 0.0f
+                    ? detectedPitchHz + 0.35f * (estimate - detectedPitchHz)
+                    : estimate;
+            else
+                detectedPitchHz *= 0.72f;
+            if (detectedPitchHz < 35.0f)
+                detectedPitchHz = 0.0f;
+        }
     }
 
     const auto validPitch = detectedPitchHz >= 35.0f && detectedPitchHz <= 1200.0f;
