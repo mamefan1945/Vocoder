@@ -107,4 +107,8 @@ add_custom_command(TARGET Vocoder POST_BUILD
         "${GENERALUSER_LICENSE}" "$<TARGET_FILE_DIR:Vocoder>/SoundFonts/GeneralUser-GS-LICENSE.txt"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/LICENSES/FluidSynth-LGPL-2.1.txt" "$<TARGET_FILE_DIR:Vocoder>/FluidSynth-LGPL-2.1.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSES/Signalsmith-Stretch-MIT.txt" "$<TARGET_FILE_DIR:Vocoder>/Signalsmith-Stretch-MIT.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSES/Signalsmith-Linear-MIT.txt" "$<TARGET_FILE_DIR:Vocoder>/Signalsmith-Linear-MIT.txt"
 )
