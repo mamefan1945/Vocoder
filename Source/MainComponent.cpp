@@ -553,7 +553,8 @@ void MainComponent::processAudio(const float* const* inputChannelData,
     if (harmonizerEnabled && harmonizerBuffer.getNumSamples() >= numSamples)
         harmonizer.processBlock(numInputChannels > 0 ? inputChannelData[0] : nullptr,
                                 harmonizerBuffer.getWritePointer(0), numSamples, midi,
-                                harmonizerMix.load(std::memory_order_relaxed), gain);
+                                harmonizerMix.load(std::memory_order_relaxed), gain,
+                                harmonizerOctaveShift.load(std::memory_order_relaxed));
     const auto externalCarrier = selectedCarrier.load() == 1;
     const auto monitorMic = monitorMicrophone.load(std::memory_order_relaxed);
     const auto preview = previewCarrier.load(std::memory_order_relaxed);
