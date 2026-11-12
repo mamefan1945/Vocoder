@@ -24,7 +24,8 @@ private:
     {
         std::vector<float> overlap;
         std::vector<float> weights;
-        int note = -1;\n        int sourceNote = -1;
+        int note = -1;
+        int sourceNote = -1;\n        int sourceNote = -1;
         float velocity = 0.0f;
         float envelope = 0.0f;
         double nextSynthesisMark = 0.0;
