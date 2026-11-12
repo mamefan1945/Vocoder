@@ -256,7 +256,7 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
     nextExpectedPitchMark = static_cast<double>(bestMark) + period;
 }
 
-void HarmonizerEngine::handleMidi(const juce::MidiBuffer& midi) noexcept
+void HarmonizerEngine::handleMidi(const juce::MidiBuffer& midi, int octaveShift) noexcept
 {
     for (const auto metadata : midi)
     {
@@ -269,7 +269,7 @@ void HarmonizerEngine::handleMidi(const juce::MidiBuffer& midi) noexcept
             {
                 if (voice.note == note)
                 {
-                    voice.start(note, message.getFloatVelocity());
+                    voice.start(note, sourceNote, message.getFloatVelocity());
                     found = true;
                     break;
                 }
@@ -288,7 +288,7 @@ void HarmonizerEngine::handleMidi(const juce::MidiBuffer& midi) noexcept
                     if (voice.releasing && voice.envelope < slot->envelope)
                         slot = &voice;
                 }
-                slot->start(note, message.getFloatVelocity());
+                slot->start(note, sourceNote, message.getFloatVelocity());
             }
         }
         else if (message.isNoteOff())
@@ -316,7 +316,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         return;
     }
 
-    handleMidi(midi);
+    handleMidi(midi, juce::jlimit(-2, 2, octaveShift) * 12);
     const auto mix = juce::jlimit(0.0f, 1.0f, dryWet);
     const auto sampleRate = static_cast<float>(currentSampleRate);
     const auto attackCoefficient = 1.0f - std::exp(-1.0f / (0.008f * sampleRate));
