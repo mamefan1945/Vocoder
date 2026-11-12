@@ -17,6 +17,15 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(JUCE)
 
+# High-quality streaming pitch shifting with spectral formant compensation.
+FetchContent_Declare(
+    signalsmith-stretch
+    GIT_REPOSITORY https://github.com/Signalsmith-Audio/signalsmith-stretch.git
+    GIT_TAG 88061fd4eda56a2353c5d65c74aa3f4ccf76f9da
+    GIT_SHALLOW FALSE
+)
+FetchContent_MakeAvailable(signalsmith-stretch)
+
 find_package(FluidSynth CONFIG REQUIRED)
 
 set(SOUNDFONT_DIR "${CMAKE_BINARY_DIR}/SoundFonts")
@@ -78,6 +87,7 @@ target_link_libraries(Vocoder PRIVATE
     juce::juce_gui_extra
     juce::juce_audio_utils
     juce::juce_dsp
+    signalsmith-stretch
     FluidSynth::libfluidsynth
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags
