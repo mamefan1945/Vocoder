@@ -74,7 +74,9 @@ void HarmonizerEngine::reset() noexcept
 
 float HarmonizerEngine::estimatePitch() const noexcept
 {
-    // Normalised autocorrelation over a 32 ms decimated window.
+    // YIN-style difference analysis over a decimated ~43 ms window at 48 kHz.
+    // The cumulative-mean normalized difference is less likely than a raw
+    // autocorrelation maximum to lock onto a strong octave/subharmonic.
     if (totalSamples < static_cast<uint64_t>(pitchWindowSize * 2))
         return 0.0f;
 
@@ -84,8 +86,8 @@ float HarmonizerEngine::estimatePitch() const noexcept
     for (int i = 0; i < pitchWindowSize; ++i)
     {
         const auto absolute = newest - static_cast<int64_t>(pitchWindowSize - 1 - i) * 2;
-        const auto index = static_cast<size_t>(absolute) & inputRingMask;
-        samples[static_cast<size_t>(i)] = inputHistory[index];
+        samples[static_cast<size_t>(i)] =
+            inputHistory[static_cast<size_t>(absolute) & inputRingMask];
         mean += samples[static_cast<size_t>(i)];
     }
     mean /= static_cast<double>(pitchWindowSize);
@@ -103,44 +105,65 @@ float HarmonizerEngine::estimatePitch() const noexcept
     const auto minLag = juce::jmax(2, static_cast<int>(decimatedRate / maximumPitchHz));
     const auto maxLag = juce::jmin(pitchWindowSize / 2,
                                   static_cast<int>(decimatedRate / minimumPitchHz));
-    std::array<float, pitchWindowSize / 2 + 1> correlations {};
-    float bestCorrelation = 0.0f;
-    int bestLag = 0;
+    std::array<float, pitchWindowSize / 2 + 1> difference {};
+    std::array<float, pitchWindowSize / 2 + 1> normalizedDifference {};
 
-    for (int lag = minLag; lag <= maxLag; ++lag)
+    double cumulativeDifference = 0.0;
+    for (int lag = 1; lag <= maxLag; ++lag)
     {
-        double cross = 0.0;
-        double energyA = 0.0;
-        double energyB = 0.0;
-        for (int i = lag; i < pitchWindowSize; ++i)
+        double sum = 0.0;
+        for (int i = 0; i < pitchWindowSize - lag; ++i)
         {
-            const auto a = samples[static_cast<size_t>(i)];
-            const auto b = samples[static_cast<size_t>(i - lag)];
-            cross += static_cast<double>(a) * b;
-            energyA += static_cast<double>(a) * a;
-            energyB += static_cast<double>(b) * b;
+            const auto delta = static_cast<double>(samples[static_cast<size_t>(i)])
+                             - samples[static_cast<size_t>(i + lag)];
+            sum += delta * delta;
         }
+        difference[static_cast<size_t>(lag)] = static_cast<float>(sum);
+        cumulativeDifference += sum;
+        normalizedDifference[static_cast<size_t>(lag)] =
+            cumulativeDifference > 1.0e-12
+                ? static_cast<float>(sum * lag / cumulativeDifference) : 1.0f;
+    }
 
-        const auto denominator = std::sqrt(energyA * energyB);
-        const auto correlation = denominator > 1.0e-12
-            ? static_cast<float>(cross / denominator) : 0.0f;
-        correlations[static_cast<size_t>(lag)] = correlation;
-        if (correlation > bestCorrelation)
+    // Select the first convincing local trough. Choosing the global trough
+    // alone often favours a multiple of the true period for harmonic voices.
+    constexpr float yinThreshold = 0.18f;
+    int bestLag = 0;
+    for (int lag = minLag; lag < maxLag; ++lag)
+    {
+        const auto value = normalizedDifference[static_cast<size_t>(lag)];
+        if (value < yinThreshold
+            && value <= normalizedDifference[static_cast<size_t>(lag + 1)])
         {
-            bestCorrelation = correlation;
             bestLag = lag;
+            break;
         }
     }
 
-    if (bestLag == 0 || bestCorrelation < minimumCorrelation)
-        return 0.0f;
+    // Some breathy/noisy voices never cross the strict threshold. Permit the
+    // best trough only when it still has reasonable periodicity confidence.
+    if (bestLag == 0)
+    {
+        float bestValue = 1.0f;
+        for (int lag = minLag; lag <= maxLag; ++lag)
+        {
+            const auto value = normalizedDifference[static_cast<size_t>(lag)];
+            if (value < bestValue)
+            {
+                bestValue = value;
+                bestLag = lag;
+            }
+        }
+        if (bestValue > 0.35f)
+            return 0.0f;
+    }
 
-    const auto left = correlations[static_cast<size_t>(juce::jmax(minLag, bestLag - 1))];
-    const auto centre = correlations[static_cast<size_t>(bestLag)];
-    const auto right = correlations[static_cast<size_t>(juce::jmin(maxLag, bestLag + 1))];
-    const auto denominator = left - 2.0f * centre + right;
-    const auto offset = std::abs(denominator) > 1.0e-8f
-        ? 0.5f * (left - right) / denominator : 0.0f;
+    const auto left = normalizedDifference[static_cast<size_t>(juce::jmax(minLag, bestLag - 1))];
+    const auto centre = normalizedDifference[static_cast<size_t>(bestLag)];
+    const auto right = normalizedDifference[static_cast<size_t>(juce::jmin(maxLag, bestLag + 1))];
+    const auto curvature = left - 2.0f * centre + right;
+    const auto offset = std::abs(curvature) > 1.0e-8f
+        ? 0.5f * (left - right) / curvature : 0.0f;
     const auto refinedLag = static_cast<float>(bestLag)
         + juce::jlimit(-0.5f, 0.5f, offset);
     return static_cast<float>(decimatedRate / refinedLag);
@@ -220,8 +243,9 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
         return;
     }
 
-    const auto period = currentSampleRate / detectedPitchHz;
-    const auto searchRadius = juce::jmax(2, static_cast<int>(std::ceil(period * 0.22)));
+    const auto estimatedPeriod = currentSampleRate / detectedPitchHz;
+    const auto searchRadius = juce::jmax(2,
+        static_cast<int>(std::ceil(estimatedPeriod * 0.22)));
     if (!havePitchMark)
     {
         nextExpectedPitchMark = static_cast<double>(totalSamples - 1)
@@ -240,43 +264,52 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
     auto bestMark = expected;
     float bestPeak = -std::numeric_limits<float>::max();
 
-    // Keep pitch marks on the same waveform polarity. Selecting the largest
-    // absolute sample can alternate between positive and negative peaks,
-    // effectively flipping individual PSOLA grains and causing cancellation.
+    // Keep marks on one waveform polarity. This avoids alternating between
+    // positive and negative peaks, which can invert adjacent PSOLA grains.
     for (auto candidate = first; candidate <= last; ++candidate)
     {
-        const auto index = static_cast<size_t>(candidate) & inputRingMask;
-        const auto alignedSample = inputHistory[index] * pitchMarkPolarity;
-        if (alignedSample > bestPeak)
+        const auto sample = inputHistory[static_cast<size_t>(candidate) & inputRingMask]
+                          * pitchMarkPolarity;
+        if (sample > bestPeak)
         {
-            bestPeak = alignedSample;
+            bestPeak = sample;
             bestMark = candidate;
         }
     }
 
-    // If the selected polarity is absent in this search window, switch once
-    // and retain that polarity for subsequent marks.
     if (bestPeak <= 1.0e-6f)
     {
         pitchMarkPolarity = -pitchMarkPolarity;
         bestPeak = -std::numeric_limits<float>::max();
         for (auto candidate = first; candidate <= last; ++candidate)
         {
-            const auto index = static_cast<size_t>(candidate) & inputRingMask;
-            const auto alignedSample = inputHistory[index] * pitchMarkPolarity;
-            if (alignedSample > bestPeak)
+            const auto sample = inputHistory[static_cast<size_t>(candidate) & inputRingMask]
+                              * pitchMarkPolarity;
+            if (sample > bestPeak)
             {
-                bestPeak = alignedSample;
+                bestPeak = sample;
                 bestMark = candidate;
             }
         }
     }
 
-    if (previousPitchMark >= 0 && bestMark <= previousPitchMark)
-        bestMark = previousPitchMark + juce::jmax(1, static_cast<int>(std::llround(period)));
+    auto sourcePeriod = estimatedPeriod;
+    if (previousPitchMark >= 0 && bestMark > previousPitchMark)
+    {
+        const auto measuredPeriod = static_cast<double>(bestMark - previousPitchMark);
+        // Reject implausible half/double-cycle jumps, but let actual mark
+        // spacing gently correct the analysis estimate between pitch updates.
+        if (measuredPeriod >= estimatedPeriod * 0.70
+            && measuredPeriod <= estimatedPeriod * 1.30)
+            sourcePeriod = 0.70 * estimatedPeriod + 0.30 * measuredPeriod;
+    }
 
-    processPitchMark(bestMark, period);
-    nextExpectedPitchMark = static_cast<double>(bestMark) + period;
+    if (previousPitchMark >= 0 && bestMark <= previousPitchMark)
+        bestMark = previousPitchMark
+                 + juce::jmax(1, static_cast<int>(std::llround(estimatedPeriod)));
+
+    processPitchMark(bestMark, sourcePeriod);
+    nextExpectedPitchMark = static_cast<double>(bestMark) + sourcePeriod;
 }
 
 void HarmonizerEngine::handleMidi(const juce::MidiBuffer& midi, int octaveShift) noexcept
