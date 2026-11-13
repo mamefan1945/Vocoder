@@ -105,7 +105,6 @@ float HarmonizerEngine::estimatePitch() const noexcept
     const auto minLag = juce::jmax(2, static_cast<int>(decimatedRate / maximumPitchHz));
     const auto maxLag = juce::jmin(pitchWindowSize / 2,
                                   static_cast<int>(decimatedRate / minimumPitchHz));
-    std::array<float, pitchWindowSize / 2 + 1> difference {};
     std::array<float, pitchWindowSize / 2 + 1> normalizedDifference {};
 
     double cumulativeDifference = 0.0;
@@ -118,7 +117,6 @@ float HarmonizerEngine::estimatePitch() const noexcept
                              - samples[static_cast<size_t>(i + lag)];
             sum += delta * delta;
         }
-        difference[static_cast<size_t>(lag)] = static_cast<float>(sum);
         cumulativeDifference += sum;
         normalizedDifference[static_cast<size_t>(lag)] =
             cumulativeDifference > 1.0e-12
