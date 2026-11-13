@@ -126,9 +126,12 @@ The lock feature is useful for holding a chord while speaking or singing into th
 
 ### Using an external MIDI controller
 
-1. Connect and power on the MIDI controller before launching the application.
-2. Choose it from **MIDI input**.
-3. Play notes while the application is running.
+1. Connect the controller to the computer with its USB-MIDI connection (or a standard MIDI interface) and power it on.
+2. Click **Refresh** beside **MIDI input** if the controller was connected after the application started.
+3. Choose the controller from **MIDI input**.
+4. Select **Harmonizer** and play notes. Hold multiple keys for a chord; release keys to stop their harmony voices.
+
+For an Alesis Recital, connect its USB port directly to the computer with a USB data cable. Windows should enumerate it as a MIDI input device; it does not send audio to the application over USB. If it does not appear, check Windows Device Manager, verify that the cable supports data (not charging only), reconnect the keyboard, and click **Refresh**.
 
 Incoming MIDI note-on and note-off messages are routed into the same keyboard/MIDI state used by the on-screen keyboard. The harmonizer supports up to eight simultaneous note voices. The internal vocoder carrier synthesizer has 16 voices.
 
