@@ -10,7 +10,8 @@ public:
     void prepare(double sampleRate, int maximumBlockSize = 2048) noexcept;
     void reset() noexcept;
     void processBlock(const float* input, float* output, int numSamples,
-                      const juce::MidiBuffer& midi, float dryWet, float outputGain,\n                      int octaveShift = 0) noexcept;
+                      const juce::MidiBuffer& midi, float dryWet, float outputGain,
+                      int octaveShift = 0) noexcept;
 
 private:
     static constexpr int voiceCount = 8;
@@ -25,7 +26,7 @@ private:
         std::vector<float> overlap;
         std::vector<float> weights;
         int note = -1;
-        int sourceNote = -1;\n        int sourceNote = -1;
+        int sourceNote = -1;
         float velocity = 0.0f;
         float envelope = 0.0f;
         double nextSynthesisMark = 0.0;
