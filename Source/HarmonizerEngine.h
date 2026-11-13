@@ -20,6 +20,8 @@ private:
     static constexpr size_t inputRingMask = inputRingSize - 1;
     static constexpr size_t outputRingMask = outputRingSize - 1;
     static constexpr int pitchWindowSize = 1024;
+    static constexpr int lpcOrder = 20;
+    static constexpr int lpcFrameSize = 1024;
 
     struct PitchVoice
     {
@@ -32,6 +34,7 @@ private:
         double nextSynthesisMark = 0.0;
         bool synthesisMarkInitialized = false;
         bool releasing = false;
+        std::array<float, lpcOrder> formantState {};
 
         void prepare();
         void start(int midiNote, int originalMidiNote, float noteVelocity) noexcept;
@@ -40,10 +43,15 @@ private:
 
     std::array<PitchVoice, voiceCount> voices {};
     std::array<float, inputRingSize> inputHistory {};
+    std::array<float, inputRingSize> residualHistory {};
+    std::array<std::array<float, inputRingSize>, lpcOrder> formantCoefficientHistory {};
+    std::array<float, lpcOrder> formantCoefficients {};
+    std::array<float, lpcOrder> targetFormantCoefficients {};
     int maximumBlockSize = 2048;
     double currentSampleRate = 44100.0;
     uint64_t totalSamples = 0;
     int pitchUpdateCounter = 0;
+    int formantUpdateCounter = 0;
     int64_t previousPitchMark = -1;
     double previousPitchPeriod = 0.0;
     double nextExpectedPitchMark = 0.0;
@@ -51,11 +59,18 @@ private:
     float voicedMix = 0.0f;
     bool havePitchMark = false;
     float pitchMarkPolarity = 1.0f;
+    float fastEnergy = 0.0f;
+    float slowEnergy = 0.0f;
+    float slopeEnergy = 0.0f;
+    float previousInputSample = 0.0f;
+    float transientMix = 0.0f;
+    int transientHoldSamples = 0;
     float pitchBendSemitones = 0.0f;
     float targetPitchBendSemitones = 0.0f;
     int latencySamples = 0;
 
     float estimatePitch() const noexcept;
+    void estimateFormantEnvelope() noexcept;
     void detectAndProcessPitchMark() noexcept;
     void processPitchMark(int64_t mark, double sourcePeriod) noexcept;
     void scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
