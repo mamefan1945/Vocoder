@@ -133,7 +133,7 @@ The lock feature is useful for holding a chord while speaking or singing into th
 
 For an Alesis Recital, connect its USB port directly to the computer with a USB data cable. Windows should enumerate it as a MIDI input device; it does not send audio to the application over USB. If it does not appear, check Windows Device Manager, verify that the cable supports data (not charging only), reconnect the keyboard, and click **Refresh**.
 
-Incoming MIDI note-on and note-off messages are routed into the same keyboard/MIDI state used by the on-screen keyboard. The harmonizer supports up to eight simultaneous note voices. The internal vocoder carrier synthesizer has 16 voices.
+Incoming MIDI note-on and note-off messages are routed into the same keyboard/MIDI state used by the on-screen keyboard. Note velocity controls the level of each harmonizer voice and the internal/SoundFont carrier note. MIDI pitch bend is supported with a ±2-semitone range; in Harmonizer mode it smoothly bends all active harmony voices, and in carrier-synth mode it bends active oscillator voices. The harmonizer supports up to eight simultaneous note voices. The internal vocoder carrier synthesizer has 16 voices.
 
 ### SoundFont instruments
 
