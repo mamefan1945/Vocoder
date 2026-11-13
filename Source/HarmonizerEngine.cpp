@@ -1,6 +1,7 @@
 #include "HarmonizerEngine.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace
 {
@@ -146,8 +147,7 @@ float HarmonizerEngine::estimatePitch() const noexcept
 }
 
 void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
-                                     double sourcePeriod, int64_t synthesisCentre,
-                                     double targetPeriod) noexcept
+                                     double sourcePeriod, int64_t synthesisCentre) noexcept
 {
     // TD-PSOLA grains span two source periods. Their centres are spaced at
     // the target period; changing the window to the target period as well
@@ -203,8 +203,7 @@ void HarmonizerEngine::processPitchMark(int64_t mark, double sourcePeriod) noexc
                 ? previousPitchPeriod : sourcePeriod;
 
             scheduleGrain(voice, selectedCentre, selectedPeriod,
-                          static_cast<int64_t>(std::llround(voice.nextSynthesisMark)),
-                          targetPeriod);
+                          static_cast<int64_t>(std::llround(voice.nextSynthesisMark)));
             voice.nextSynthesisMark += targetPeriod;
         }
     }
