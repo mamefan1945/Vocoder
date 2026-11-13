@@ -359,7 +359,7 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
     // positive and negative peaks, which can invert adjacent PSOLA grains.
     for (auto candidate = first; candidate <= last; ++candidate)
     {
-        const auto sample = inputHistory[static_cast<size_t>(candidate) & inputRingMask]
+        const auto sample = residualHistory[static_cast<size_t>(candidate) & inputRingMask]
                           * pitchMarkPolarity;
         if (sample > bestPeak)
         {
@@ -374,7 +374,7 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
         bestPeak = -std::numeric_limits<float>::max();
         for (auto candidate = first; candidate <= last; ++candidate)
         {
-            const auto sample = inputHistory[static_cast<size_t>(candidate) & inputRingMask]
+            const auto sample = residualHistory[static_cast<size_t>(candidate) & inputRingMask]
                               * pitchMarkPolarity;
             if (sample > bestPeak)
             {
