@@ -132,7 +132,6 @@ private:
     std::atomic<float> outputGain { 1.0f };
     std::atomic<float> harmonizerMix { 1.0f };
     std::atomic<int> harmonizerOctaveShift { 0 };
-    std::atomic<int> harmonizerOctaveShift { 0 };
     std::atomic<float> inputPeak { 0.0f };
     std::atomic<float> outputPeak { 0.0f };
     std::atomic<int> selectedMode { 0 };
