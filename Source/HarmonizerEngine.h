@@ -50,6 +50,7 @@ private:
     float detectedPitchHz = 0.0f;
     float voicedMix = 0.0f;
     bool havePitchMark = false;
+    float pitchMarkPolarity = 1.0f;
     int latencySamples = 0;
 
     float estimatePitch() const noexcept;
