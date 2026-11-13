@@ -229,6 +229,14 @@ The engine estimates pitch with a YIN-style cumulative-mean normalized differenc
 
 Each held MIDI note owns an independent harmony voice with its own synthesis-mark schedule, overlap buffer, note velocity, and release envelope. The current engine supports eight simultaneous harmony voices. Octave shift is applied to the target MIDI notes.
 
+### Formant preservation and transient protection
+
+The harmonizer now separates the input into an LPC residual and a time-varying vocal-tract spectral envelope. A windowed, autocorrelation-based LPC analysis estimates a stable all-pole envelope; the residual is pitch-shifted with TD-PSOLA, then each harmony voice is reconstructed through the delayed envelope coefficients. Coefficients are bandwidth-expanded and smoothed to reduce unstable resonances and zippering. The coefficient history is aligned to the same 40 ms delayed timeline as the PSOLA grains.
+
+This is an always-on formant-preservation stage, not a formant-shift control. It is intended to retain the singer's vowel character when target notes differ substantially from the source pitch. LPC is an approximation: difficult input (strong breathiness, distortion, room resonances, very low level, or overlapping sources) can still produce coloration, and listening tests are required before treating it as transparent.
+
+A transient detector also monitors short-term energy rise and waveform slope. During detected attacks it temporarily stops scheduling periodic grains and crossfades toward the latency-aligned direct signal. This is intended to keep plosive consonants and sharp onsets from being stretched or smeared by the periodic grain train. The detector is deliberately short and adaptive; it is not a general-purpose transient shaper and may need tuning against real vocal recordings.
+
 The engine uses approximately 40 ms of lookahead to give the pitch-mark detector access to samples around the expected mark. This contributes to audible latency. The actual end-to-end latency also depends on the audio device, driver, and selected buffer size.
 
 Unvoiced sounds do not have a stable fundamental period to transpose. The current implementation blends a delayed copy of the microphone input into the output when the pitch detector considers the signal unvoiced. That shared consonant path avoids duplicating the same S/SH/F noise once per harmony voice.
@@ -431,7 +439,7 @@ Check the licence terms of any user-supplied SoundFont or other asset before red
 - A VST3 target is a possible future direction, not a current build product.
 - The vocoder is a developing 32-band implementation; it is not intended to be a transparent or reference-grade speech processor.
 - Formant shifting is performed by shifting envelope-band lookup positions and is therefore approximate.
-- The harmonizer is a custom, experimental eight-voice TD-PSOLA engine. Its tracking, transient handling, grain scheduling, polyphonic stability, and latency still need listening-based refinement.
+- The harmonizer is a custom, experimental eight-voice TD-PSOLA engine with LPC-based formant preservation and transient-aware grain suppression. Its pitch tracking, LPC envelope quality, transient decisions, grain scheduling, polyphonic stability, and latency still need listening-based refinement.
 - No automated regression suite currently measures pitch accuracy, harmonic distortion, intelligibility, crackle/dropout rate, or subjective sound quality.
 - The best way to contribute useful test information is to include the exact build/commit, audio device and sample rate, buffer size, mode, relevant control settings, MIDI notes held, and a short reproducible audio example.
 
