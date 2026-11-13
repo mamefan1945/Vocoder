@@ -39,7 +39,8 @@ private:
                        int) override
         {
             const auto shiftedNote = juce::jlimit(0, 127, midiNoteNumber + 12 * octave.load());
-            frequency = juce::MidiMessage::getMidiNoteInHertz(shiftedNote);
+            baseFrequency = juce::MidiMessage::getMidiNoteInHertz(shiftedNote);
+            updatePitchBend();
             level = velocity * 0.22f;
             phase = 0.0;
             pwmPhase = 0.0;
@@ -59,8 +60,18 @@ private:
             }
         }
 
-        void pitchWheelMoved(int) override {}
+        void pitchWheelMoved(int newValue) override
+        {
+            pitchWheel = juce::jlimit(0, 16383, newValue);
+            updatePitchBend();
+        }
         void controllerMoved(int, int) override {}
+
+        void updatePitchBend() noexcept
+        {
+            const auto semitones = (static_cast<double>(pitchWheel) - 8192.0) * (2.0 / 8192.0);
+            frequency = baseFrequency * std::pow(2.0, semitones / 12.0);
+        }
 
         void setCurrentPlaybackSampleRate(double newRate) override
         {
@@ -187,6 +198,8 @@ private:
         juce::Random random;
         double sampleRate = 44100.0;
         double frequency = 440.0;
+        double baseFrequency = 440.0;
+        int pitchWheel = 8192;
         double phase = 0.0;
         double pwmPhase = 0.0;
         std::array<double, 3> choirPhases {};
