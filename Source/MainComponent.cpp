@@ -56,7 +56,7 @@ void MainComponent::LockableMidiKeyboard::mouseUp(const juce::MouseEvent& event)
 
 MainComponent::MainComponent()
     : deviceSelector(deviceManager, 1, 2, 0, 2, false, false, true, false),
-      midiInputRouter(keyboardState),
+      midiInputRouter(keyboardState, externalMidiCollector),
       keyboardComponent(keyboardState)
 {
     setSize(1080, 740);
@@ -521,6 +521,7 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
 {
     if (device != nullptr)
     {
+        externalMidiCollector.reset(device->getCurrentSampleRate());
         vocoder.prepare(device->getCurrentSampleRate());
         carrierSynth.setCurrentPlaybackSampleRate(device->getCurrentSampleRate());
         synthBuffer.setSize(1, juce::jmax(512, device->getCurrentBufferSizeSamples()), false, false, true);
@@ -577,6 +578,7 @@ void MainComponent::audioDeviceIOCallbackWithContext(const float* const* inputCh
 
     synthBuffer.clear();
     midiBuffer.clear();
+    externalMidiCollector.removeNextBlockOfMessages(midiBuffer, numSamples);
     keyboardState.processNextMidiBuffer(midiBuffer, 0, numSamples, true);
     if (useSoundFontCarrier.load(std::memory_order_relaxed))
         soundFontEngine.renderNextBlock(synthBuffer, midiBuffer);
