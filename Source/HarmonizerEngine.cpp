@@ -59,6 +59,7 @@ void HarmonizerEngine::reset() noexcept
         voice.nextSynthesisMark = 0.0;
         voice.synthesisMarkInitialized = false;
         voice.releasing = false;
+        voice.formantState.fill(0.0f);
     }
 
     inputHistory.fill(0.0f);
