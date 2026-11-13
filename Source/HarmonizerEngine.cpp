@@ -76,6 +76,7 @@ void HarmonizerEngine::reset() noexcept
     previousInputSample = 0.0f;
     transientMix = 0.0f;
     transientHoldSamples = 0;
+    transientCooldownSamples = 0;
     previousPitchMark = -1;
     previousPitchPeriod = 0.0;
     nextExpectedPitchMark = 0.0;
@@ -532,11 +533,17 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         fastEnergy += fastEnergyCoefficient * (source * source - fastEnergy);
         slowEnergy += slowEnergyCoefficient * (source * source - slowEnergy);
         slopeEnergy += fastEnergyCoefficient * (slope * slope - slopeEnergy);
-        if (fastEnergy > slowEnergy * 3.5f
+        if (transientCooldownSamples > 0)
+            --transientCooldownSamples;
+        if (transientCooldownSamples == 0
+            && fastEnergy > slowEnergy * 3.5f
             && slopeEnergy > fastEnergy * 0.12f
             && fastEnergy > 1.0e-5f)
+        {
             transientHoldSamples = juce::jmax(transientHoldSamples,
                 static_cast<int>(currentSampleRate * 0.012));
+            transientCooldownSamples = static_cast<int>(currentSampleRate * 0.030);
+        }
         const auto transientDetected = transientHoldSamples > 0;
         if (transientHoldSamples > 0)
             --transientHoldSamples;
