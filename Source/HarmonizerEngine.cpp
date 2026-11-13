@@ -70,6 +70,8 @@ void HarmonizerEngine::reset() noexcept
     voicedMix = 0.0f;
     havePitchMark = false;
     pitchMarkPolarity = 1.0f;
+    pitchBendSemitones = 0.0f;
+    targetPitchBendSemitones = 0.0f;
 }
 
 float HarmonizerEngine::estimatePitch() const noexcept
@@ -205,7 +207,8 @@ void HarmonizerEngine::processPitchMark(int64_t mark, double sourcePeriod) noexc
         if (voice.note < 0 || voice.releasing)
             continue;
 
-        const auto targetHz = 440.0 * std::pow(2.0, (voice.note - 69) / 12.0);
+        const auto targetHz = 440.0 * std::pow(2.0,
+            (static_cast<double>(voice.note - 69) + pitchBendSemitones) / 12.0);
         const auto targetPeriod = currentSampleRate / targetHz;
         if (!voice.synthesisMarkInitialized)
         {
@@ -352,6 +355,12 @@ void HarmonizerEngine::handleMidi(const juce::MidiBuffer& midi, int octaveShift)
                 if (voice.sourceNote == message.getNoteNumber())
                     voice.stop();
         }
+        else if (message.isPitchWheel())
+        {
+            // Standard two-semitone bend range, centred at MIDI value 8192.
+            targetPitchBendSemitones = (static_cast<float>(message.getPitchWheelValue())
+                                      - 8192.0f) * (2.0f / 8192.0f);
+        }
         else if (message.isAllNotesOff() || message.isAllSoundOff())
         {
             for (auto& voice : voices)
@@ -379,9 +388,11 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
     const auto voicedAttack = 1.0f - std::exp(-1.0f / (0.006f * sampleRate));
     const auto voicedRelease = 1.0f - std::exp(-1.0f / (0.008f * sampleRate));
     const auto updateInterval = juce::jmax(1, static_cast<int>(currentSampleRate * 0.010));
+    const auto bendSmoothing = 1.0f - std::exp(-1.0f / (0.010f * sampleRate));
 
     for (int i = 0; i < numSamples; ++i)
     {
+        pitchBendSemitones += (targetPitchBendSemitones - pitchBendSemitones) * bendSmoothing;
         const auto absolute = static_cast<int64_t>(totalSamples);
         const auto source = input != nullptr ? input[i] : 0.0f;
         inputHistory[static_cast<size_t>(totalSamples) & inputRingMask] = source;
