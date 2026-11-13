@@ -52,13 +52,19 @@ private:
     class MidiInputRouter final : public juce::MidiInputCallback
     {
     public:
-        explicit MidiInputRouter(juce::MidiKeyboardState& state) : keyboardState(state) {}
+        MidiInputRouter(juce::MidiKeyboardState& state, juce::MidiMessageCollector& collector)
+            : keyboardState(state), midiCollector(collector) {}
         void handleIncomingMidiMessage(juce::MidiInput*, const juce::MidiMessage& message) override
         {
             keyboardState.processNextMidiEvent(message);
+            // MidiKeyboardState tracks note keys, not continuous controller data.
+            // Queue pitch wheel separately so it reaches the audio thread and DSP.
+            if (message.isPitchWheel())
+                midiCollector.addMessageToQueue(message);
         }
     private:
         juce::MidiKeyboardState& keyboardState;
+        juce::MidiMessageCollector& midiCollector;
     };
 
     void sliderValueChanged(juce::Slider* slider) override;
@@ -80,6 +86,7 @@ private:
     juce::AudioDeviceSelectorComponent deviceSelector;
     juce::Viewport deviceViewport;
     juce::MidiKeyboardState keyboardState;
+    juce::MidiMessageCollector externalMidiCollector;
     MidiInputRouter midiInputRouter;
     LockableMidiKeyboard keyboardComponent;
     juce::StringArray midiInputIdentifiers;
