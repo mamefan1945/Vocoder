@@ -68,6 +68,7 @@ void HarmonizerEngine::reset() noexcept
     detectedPitchHz = 0.0f;
     voicedMix = 0.0f;
     havePitchMark = false;
+    pitchMarkPolarity = 1.0f;
 }
 
 float HarmonizerEngine::estimatePitch() const noexcept
@@ -148,8 +149,12 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
                                      double sourcePeriod, int64_t synthesisCentre,
                                      double targetPeriod) noexcept
 {
+    // TD-PSOLA grains span two source periods. Their centres are spaced at
+    // the target period; changing the window to the target period as well
+    // changes the source waveform segment and creates avoidable timbral
+    // modulation during large pitch shifts.
     const auto halfWindow = juce::jlimit(8, 1024,
-        static_cast<int>(std::ceil(juce::jmax(sourcePeriod, targetPeriod))));
+        static_cast<int>(std::ceil(sourcePeriod)));
     const auto inverseHalf = 1.0f / static_cast<float>(halfWindow);
 
     for (int offset = -halfWindow; offset <= halfWindow; ++offset)
@@ -238,16 +243,37 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
     const auto last = juce::jmin<int64_t>(static_cast<int64_t>(totalSamples) - 1,
                                           expected + searchRadius);
     auto bestMark = expected;
-    float bestMagnitude = -1.0f;
+    float bestPeak = -std::numeric_limits<float>::max();
 
+    // Keep pitch marks on the same waveform polarity. Selecting the largest
+    // absolute sample can alternate between positive and negative peaks,
+    // effectively flipping individual PSOLA grains and causing cancellation.
     for (auto candidate = first; candidate <= last; ++candidate)
     {
         const auto index = static_cast<size_t>(candidate) & inputRingMask;
-        const auto magnitude = std::abs(inputHistory[index]);
-        if (magnitude > bestMagnitude)
+        const auto alignedSample = inputHistory[index] * pitchMarkPolarity;
+        if (alignedSample > bestPeak)
         {
-            bestMagnitude = magnitude;
+            bestPeak = alignedSample;
             bestMark = candidate;
+        }
+    }
+
+    // If the selected polarity is absent in this search window, switch once
+    // and retain that polarity for subsequent marks.
+    if (bestPeak <= 1.0e-6f)
+    {
+        pitchMarkPolarity = -pitchMarkPolarity;
+        bestPeak = -std::numeric_limits<float>::max();
+        for (auto candidate = first; candidate <= last; ++candidate)
+        {
+            const auto index = static_cast<size_t>(candidate) & inputRingMask;
+            const auto alignedSample = inputHistory[index] * pitchMarkPolarity;
+            if (alignedSample > bestPeak)
+            {
+                bestPeak = alignedSample;
+                bestMark = candidate;
+            }
         }
     }
 
@@ -358,7 +384,8 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         const auto delayedAbsolute = absolute - latencySamples;
         const auto delayedInput = delayedAbsolute >= 0
             ? inputHistory[static_cast<size_t>(delayedAbsolute) & inputRingMask] : 0.0f;
-        float harmony = 0.0f;
+        float voicedHarmony = 0.0f;
+        float unvoicedGain = 0.0f;
         int activeCount = 0;
 
         for (auto& voice : voices)
@@ -390,14 +417,20 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             else
                 voice.envelope += (1.0f - voice.envelope) * attackCoefficient;
 
-            const auto voiceSignal = psola * voicedMix + delayedInput * (1.0f - voicedMix);
-            harmony += voiceSignal * voice.velocity * voice.envelope;
+            const auto voiceLevel = voice.velocity * voice.envelope;
+            voicedHarmony += psola * voiceLevel;
+            unvoicedGain = juce::jmax(unvoicedGain, voiceLevel);
             ++activeCount;
         }
 
+        // Unvoiced consonants contain no stable pitch to transpose. Route them
+        // once, shared by the active chord, instead of summing an identical dry
+        // consonant through every voice (which boosts S/SH/F levels by sqrt(N)).
         const auto normalization = activeCount > 0
             ? 1.0f / std::sqrt(static_cast<float>(activeCount)) : 0.0f;
+        const auto harmony = voicedHarmony * normalization * voicedMix
+                           + delayedInput * (1.0f - voicedMix) * unvoicedGain;
         output[i] = (delayedInput * (1.0f - mix)
-                   + harmony * normalization * mix) * outputGain;
+                   + harmony * mix) * outputGain;
     }
 }
