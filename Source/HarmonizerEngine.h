@@ -57,7 +57,6 @@ private:
     void detectAndProcessPitchMark() noexcept;
     void processPitchMark(int64_t mark, double sourcePeriod) noexcept;
     void scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
-                       double sourcePeriod, int64_t synthesisCentre,
-                       double targetPeriod) noexcept;
+                       double sourcePeriod, int64_t synthesisCentre) noexcept;
     void handleMidi(const juce::MidiBuffer& midi, int octaveShift) noexcept;
 };
