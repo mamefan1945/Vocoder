@@ -90,17 +90,12 @@ MainComponent::MainComponent()
 
     midiLabel.setText("MIDI input", juce::dontSendNotification);
     addAndMakeVisible(midiLabel);
-    midiInput.addItem("No MIDI input", 1);
-    const auto midiDevices = juce::MidiInput::getAvailableDevices();
-    midiInputIdentifiers.clear();
-    for (int i = 0; i < midiDevices.size(); ++i)
-    {
-        midiInputIdentifiers.add(midiDevices.getReference(i).identifier);
-        midiInput.addItem(midiDevices.getReference(i).name, i + 2);
-    }
-    midiInput.setSelectedId(1);
     midiInput.onChange = [this] { selectMidiInput(); };
     addAndMakeVisible(midiInput);
+    refreshMidiButton.setTooltip("Rescan Windows MIDI inputs. Connect the keyboard first, then refresh if it is not listed.");
+    refreshMidiButton.onClick = [this] { refreshMidiInputs(); };
+    addAndMakeVisible(refreshMidiButton);
+    refreshMidiInputs();
 
     waveformLabel.setText("Carrier type", juce::dontSendNotification);
     addAndMakeVisible(waveformLabel);
@@ -308,21 +303,68 @@ void MainComponent::chooseSoundFont()
         });
 }
 
+void MainComponent::refreshMidiInputs()
+{
+    const auto previousIdentifier = activeMidiIdentifier;
+    const auto devices = juce::MidiInput::getAvailableDevices();
+    midiInput.clear(juce::dontSendNotification);
+    midiInput.addItem("No MIDI input", 1);
+    midiInputIdentifiers.clear();
+
+    int selectedId = 1;
+    for (int i = 0; i < devices.size(); ++i)
+    {
+        const auto& device = devices.getReference(i);
+        midiInputIdentifiers.add(device.identifier);
+        midiInput.addItem(device.name, i + 2);
+        if (device.identifier == previousIdentifier)
+            selectedId = i + 2;
+    }
+
+    if (previousIdentifier.isNotEmpty() && selectedId == 1)
+    {
+        deviceManager.removeMidiInputDeviceCallback(previousIdentifier, &midiInputRouter);
+        deviceManager.setMidiInputDeviceEnabled(previousIdentifier, false);
+        activeMidiIdentifier.clear();
+        for (int channel = 1; channel <= 16; ++channel)
+            keyboardState.allNotesOff(channel);
+        statusLabel.setText("MIDI device disconnected. Select another input or refresh.",
+                            juce::dontSendNotification);
+    }
+
+    midiInput.setSelectedId(selectedId, juce::dontSendNotification);
+    if (selectedId == 1 && devices.isEmpty())
+        midiInput.setTextWhenNothingSelected("No MIDI devices found");
+}
+
 void MainComponent::selectMidiInput()
 {
     if (activeMidiIdentifier.isNotEmpty())
     {
         deviceManager.removeMidiInputDeviceCallback(activeMidiIdentifier, &midiInputRouter);
+        deviceManager.setMidiInputDeviceEnabled(activeMidiIdentifier, false);
         activeMidiIdentifier.clear();
     }
 
+    for (int channel = 1; channel <= 16; ++channel)
+        keyboardState.allNotesOff(channel);
+
     const auto selectedIndex = midiInput.getSelectedId() - 2;
     if (!juce::isPositiveAndBelow(selectedIndex, midiInputIdentifiers.size()))
+    {
+        statusLabel.setText("MIDI input: on-screen keyboard only",
+                            juce::dontSendNotification);
         return;
+    }
 
     activeMidiIdentifier = midiInputIdentifiers[selectedIndex];
     deviceManager.setMidiInputDeviceEnabled(activeMidiIdentifier, true);
     deviceManager.addMidiInputDeviceCallback(activeMidiIdentifier, &midiInputRouter);
+
+    const auto selectedName = midiInput.getText();
+    statusLabel.setText("MIDI input selected: " + selectedName
+                            + " | Play keys to send notes",
+                        juce::dontSendNotification);
 }
 
 void MainComponent::paint(juce::Graphics& graphics)
@@ -347,6 +389,8 @@ void MainComponent::resized()
     row.removeFromLeft(14);
     midiLabel.setBounds(row.removeFromLeft(72));
     midiInput.setBounds(row.removeFromLeft(190));
+    row.removeFromLeft(8);
+    refreshMidiButton.setBounds(row.removeFromLeft(82));
 
     area.removeFromTop(12);
     row = area.removeFromTop(32);
