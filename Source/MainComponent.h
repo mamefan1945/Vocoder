@@ -64,6 +64,7 @@ private:
     void sliderValueChanged(juce::Slider* slider) override;
     void timerCallback() override;
     void selectMidiInput();
+    void refreshMidiInputs();
     void updateSoundFontControls();
     void populateSoundFontInstruments();
     void chooseSoundFont();
@@ -86,6 +87,7 @@ private:
     juce::ComboBox processingMode;
     juce::ComboBox carrierSource;
     juce::ComboBox midiInput;
+    juce::TextButton refreshMidiButton { "Refresh" };
     juce::ComboBox waveform;
     juce::ComboBox octave;
     juce::ComboBox soundFontInstrument;
