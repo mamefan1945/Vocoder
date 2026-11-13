@@ -222,7 +222,7 @@ PSOLA changes pitch by cutting a voiced waveform into short overlapping segments
 - The grain waveform comes from the original voice, preserving much of its natural spectral character.
 - Overlapping grains are combined with a window and normalized by their accumulated window weights.
 
-The engine estimates pitch using normalized autocorrelation over a decimated analysis window. Pitch estimation is updated periodically, smoothed over time, and used to predict where the next pitch mark should occur. The pitch-mark search selects peaks with consistent waveform polarity to reduce grain-to-grain polarity flips.
+The engine estimates pitch with a YIN-style cumulative-mean normalized difference function over a decimated analysis window. It selects the first sufficiently confident period trough rather than simply choosing the strongest autocorrelation peak, reducing octave/subharmonic errors on harmonic voices. Pitch estimation is updated periodically and smoothed over time. Pitch-mark timing is then refined from the measured spacing between successive same-polarity waveform peaks, with implausible half/double-cycle jumps rejected. This phase-locked timing helps keep grain placement aligned with the actual input waveform.
 
 Each held MIDI note owns an independent harmony voice with its own synthesis-mark schedule, overlap buffer, note velocity, and release envelope. The current engine supports eight simultaneous harmony voices. Octave shift is applied to the target MIDI notes.
 
