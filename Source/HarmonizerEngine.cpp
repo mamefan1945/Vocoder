@@ -192,20 +192,16 @@ void HarmonizerEngine::processPitchMark(int64_t mark, double sourcePeriod) noexc
             voice.synthesisMarkInitialized = true;
         }
 
-        const auto interval = juce::jmax(1.0, static_cast<double>(mark - previousPitchMark));
-        while (voice.nextSynthesisMark <= static_cast<double>(delayedMark))
-        {
-            const auto sourcePosition = voice.nextSynthesisMark - latencySamples;
-            const auto usePrevious = previousPitchMark >= 0
-                && sourcePosition < static_cast<double>(previousPitchMark) + interval * 0.5;
-            const auto selectedCentre = usePrevious ? previousPitchMark : mark;
-            const auto selectedPeriod = usePrevious && previousPitchPeriod > 0.0
-                ? previousPitchPeriod : sourcePeriod;
-
-            scheduleGrain(voice, selectedCentre, selectedPeriod,
-                          static_cast<int64_t>(std::llround(voice.nextSynthesisMark)));
-            voice.nextSynthesisMark += targetPeriod;
-        }
+        // Classic TD-PSOLA correspondence: every detected input pitch mark
+        // contributes exactly one source grain to each active harmony voice.
+        // The source marks therefore remain sequential and the synthesis marks
+        // are spaced at the requested target period. Scheduling grains by
+        // comparing the output clock with the input clock can reuse or skip
+        // source marks during large transpositions, creating roughness and
+        // crackling that becomes more obvious in chords.
+        scheduleGrain(voice, mark, sourcePeriod,
+                      static_cast<int64_t>(std::llround(voice.nextSynthesisMark)));
+        voice.nextSynthesisMark += targetPeriod;
     }
 
     previousPitchMark = mark;
