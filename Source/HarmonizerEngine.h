@@ -21,7 +21,7 @@ private:
     static constexpr size_t outputRingMask = outputRingSize - 1;
     static constexpr int pitchWindowSize = 1024;
     static constexpr int lpcOrder = 20;
-    static constexpr int lpcFrameSize = 1024;
+    static constexpr int lpcFrameSize = 2048;
 
     struct PitchVoice
     {
@@ -65,6 +65,7 @@ private:
     float previousInputSample = 0.0f;
     float transientMix = 0.0f;
     int transientHoldSamples = 0;
+    int transientCooldownSamples = 0;
     float pitchBendSemitones = 0.0f;
     float targetPitchBendSemitones = 0.0f;
     int latencySamples = 0;
