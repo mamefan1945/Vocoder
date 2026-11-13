@@ -142,7 +142,12 @@ MainComponent::MainComponent()
     octave.addItem("+1", 4);
     octave.addItem("+2", 5);
     octave.setSelectedId(3);
-    octave.onChange = [this]\n    {\n        const auto shift = octave.getSelectedId() - 3;\n        carrierSynth.setOctave(shift);\n        harmonizerOctaveShift.store(shift, std::memory_order_relaxed);\n    };
+    octave.onChange = [this]
+    {
+        const auto shift = octave.getSelectedId() - 3;
+        carrierSynth.setOctave(shift);
+        harmonizerOctaveShift.store(shift, std::memory_order_relaxed);
+    };
     addAndMakeVisible(octave);
 
     outputLevelLabel.setText("Output level", juce::dontSendNotification);
