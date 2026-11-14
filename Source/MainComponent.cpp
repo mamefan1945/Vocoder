@@ -636,6 +636,7 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
 
     juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<MainComponent>(this),
                                      deviceName = device != nullptr ? device->getName() : juce::String{},
+                                     driverType = device != nullptr ? device->getTypeName() : juce::String{},
                                      sampleRate = device != nullptr ? device->getCurrentSampleRate() : 0.0,
                                      bufferSize = device != nullptr ? device->getCurrentBufferSizeSamples() : 0,
                                      inputLatency = device != nullptr ? device->getInputLatencyInSamples() : 0,
@@ -644,7 +645,7 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
         if (safeThis != nullptr)
         {
             const auto message = deviceName.isNotEmpty()
-                ? "Audio active: " + deviceName + " | " + juce::String(sampleRate, 0) + " Hz | "
+                ? "Audio active: " + driverType + " / " + deviceName + " | " + juce::String(sampleRate, 0) + " Hz | "
                     + juce::String(bufferSize) + " samples | device-reported I/O "
                     + juce::String(1000.0 * static_cast<double>(inputLatency + outputLatency)
                                    / juce::jmax(1.0, sampleRate), 1) + " ms"
