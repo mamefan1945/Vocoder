@@ -248,6 +248,10 @@ MainComponent::~MainComponent()
     dryWetMix.removeListener(this);
     formantShiftSlider.removeListener(this);
     gateThresholdSlider.removeListener(this);
+    articulationLiftSlider.removeListener(this);
+    unvoicedNoiseSlider.removeListener(this);
+    formantPreservationSlider.removeListener(this);
+    transientProtectionSlider.removeListener(this);
     stopTimer();
     deviceManager.closeAudioDevice();
 }
