@@ -72,6 +72,7 @@ private:
     void selectMidiInput();
     void refreshMidiInputs();
     void updateSoundFontControls();
+    void updateModeControls();
     void populateSoundFontInstruments();
     void chooseSoundFont();
     void processAudio(const float* const* inputChannelData,
