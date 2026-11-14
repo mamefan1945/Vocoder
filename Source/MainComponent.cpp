@@ -179,6 +179,10 @@ MainComponent::MainComponent()
     configureControl(dryWetMix, dryWetLabel, "Dry / wet", 0.0, 100.0, 1.0, 100.0, " %");
     configureControl(formantShiftSlider, formantShiftLabel, "Formant", -12.0, 12.0, 0.5, 0.0, " st");
     configureControl(gateThresholdSlider, gateThresholdLabel, "Noise gate", 0.0, 0.02, 0.0005, 0.003, " RMS");
+    configureControl(articulationLiftSlider, articulationLiftLabel, "Articulation", 0.0, 200.0, 1.0, 100.0, " %");
+    configureControl(unvoicedNoiseSlider, unvoicedNoiseLabel, "Unvoiced noise", 0.0, 200.0, 1.0, 100.0, " %");
+    configureControl(formantPreservationSlider, formantPreservationLabel, "Formant preserve", 0.0, 100.0, 1.0, 100.0, " %");
+    configureControl(transientProtectionSlider, transientProtectionLabel, "Transient protect", 0.0, 100.0, 1.0, 100.0, " %");
     inputMeterLabel.setText("Input: -120.0 dBFS", juce::dontSendNotification);
     outputMeterLabel.setText("Output: -120.0 dBFS", juce::dontSendNotification);
     addAndMakeVisible(inputMeterLabel);
@@ -290,6 +294,14 @@ void MainComponent::updateModeControls()
     show(formantShiftSlider, vocoderMode);
     show(gateThresholdLabel, vocoderMode);
     show(gateThresholdSlider, vocoderMode);
+    show(articulationLiftLabel, vocoderMode);
+    show(articulationLiftSlider, vocoderMode);
+    show(unvoicedNoiseLabel, vocoderMode);
+    show(unvoicedNoiseSlider, vocoderMode);
+    show(formantPreservationLabel, harmonizerMode);
+    show(formantPreservationSlider, harmonizerMode);
+    show(transientProtectionLabel, harmonizerMode);
+    show(transientProtectionSlider, harmonizerMode);
     show(microphoneMonitor, vocoderMode);
     show(carrierPreview, vocoderMode);
     const auto showMix = vocoderMode || harmonizerMode;
@@ -503,6 +515,23 @@ void MainComponent::resized()
         formantShiftSlider.setBounds(row.removeFromLeft(210));
         gateThresholdLabel.setBounds(row.removeFromLeft(86));
         gateThresholdSlider.setBounds(row.removeFromLeft(220));
+        area.removeFromTop(6);
+        row = area.removeFromTop(30);
+        articulationLiftLabel.setBounds(row.removeFromLeft(86));
+        articulationLiftSlider.setBounds(row.removeFromLeft(210));
+        row.removeFromLeft(12);
+        unvoicedNoiseLabel.setBounds(row.removeFromLeft(100));
+        unvoicedNoiseSlider.setBounds(row.removeFromLeft(210));
+    }
+    else if (harmonizerMode)
+    {
+        area.removeFromTop(6);
+        row = area.removeFromTop(30);
+        formantPreservationLabel.setBounds(row.removeFromLeft(126));
+        formantPreservationSlider.setBounds(row.removeFromLeft(260));
+        row.removeFromLeft(12);
+        transientProtectionLabel.setBounds(row.removeFromLeft(126));
+        transientProtectionSlider.setBounds(row.removeFromLeft(260));
     }
     row = area.removeFromTop(24);
     inputMeterLabel.setBounds(row.removeFromLeft(180));
@@ -564,6 +593,14 @@ void MainComponent::sliderValueChanged(juce::Slider* slider)
         vocoder.setFormantShift(static_cast<float>(formantShiftSlider.getValue()));
     else if (slider == &gateThresholdSlider)
         vocoder.setGateThreshold(static_cast<float>(gateThresholdSlider.getValue()));
+    else if (slider == &articulationLiftSlider)
+        vocoder.setArticulationLift(static_cast<float>(articulationLiftSlider.getValue() / 100.0));
+    else if (slider == &unvoicedNoiseSlider)
+        vocoder.setUnvoicedNoise(static_cast<float>(unvoicedNoiseSlider.getValue() / 100.0));
+    else if (slider == &formantPreservationSlider)
+        harmonizer.setFormantPreservation(static_cast<float>(formantPreservationSlider.getValue() / 100.0));
+    else if (slider == &transientProtectionSlider)
+        harmonizer.setTransientProtection(static_cast<float>(transientProtectionSlider.getValue() / 100.0));
 }
 
 void MainComponent::timerCallback()
@@ -596,13 +633,18 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
     juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<MainComponent>(this),
                                      deviceName = device != nullptr ? device->getName() : juce::String{},
                                      sampleRate = device != nullptr ? device->getCurrentSampleRate() : 0.0,
-                                     bufferSize = device != nullptr ? device->getCurrentBufferSizeSamples() : 0]
+                                     bufferSize = device != nullptr ? device->getCurrentBufferSizeSamples() : 0,
+                                     inputLatency = device != nullptr ? device->getInputLatencyInSamples() : 0,
+                                     outputLatency = device != nullptr ? device->getOutputLatencyInSamples() : 0]
     {
         if (safeThis != nullptr)
         {
             const auto message = deviceName.isNotEmpty()
                 ? "Audio active: " + deviceName + " | " + juce::String(sampleRate, 0) + " Hz | "
-                    + juce::String(bufferSize) + " samples"
+                    + juce::String(bufferSize) + " samples | device-reported I/O "
+                    + juce::String(1000.0 * static_cast<double>(inputLatency + outputLatency)
+                                   / juce::jmax(1.0, sampleRate), 1) + " ms"
+                    + " | Harmonizer lookahead ~40 ms"
                 : "No audio device active";
             safeThis->statusLabel.setText(message, juce::dontSendNotification);
         }
