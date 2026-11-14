@@ -162,7 +162,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         // speech, only in the upper bands, and only while a carrier note is held.
         const auto highFrequencyWeight = juce::jlimit(0.0f, 1.0f,
             (centre - 900.0f) / 2600.0f);
-        const auto sibilanceAmount = 0.45f * unvoicedAmount
+        const auto sibilanceAmount = 0.20f * unvoicedAmount
                                    * highFrequencyWeight * carrierPresence * noiseAmount;
         wetOutput += noiseBands[index] * modulation * sibilanceAmount;
     }
