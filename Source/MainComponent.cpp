@@ -181,6 +181,7 @@ MainComponent::MainComponent()
     configureControl(gateThresholdSlider, gateThresholdLabel, "Noise gate", 0.0, 0.02, 0.0005, 0.003, " RMS");
     configureControl(articulationLiftSlider, articulationLiftLabel, "Articulation", 0.0, 200.0, 1.0, 100.0, " %");
     configureControl(unvoicedNoiseSlider, unvoicedNoiseLabel, "Unvoiced noise", 0.0, 200.0, 1.0, 100.0, " %");
+    configureControl(sibilanceSlider, sibilanceLabel, "Sibilance", 0.0, 200.0, 1.0, 100.0, " %");
     configureControl(formantPreservationSlider, formantPreservationLabel, "Formant preserve", 0.0, 100.0, 1.0, 100.0, " %");
     configureControl(transientProtectionSlider, transientProtectionLabel, "Transient protect", 0.0, 100.0, 1.0, 100.0, " %");
     inputMeterLabel.setText("Input: -120.0 dBFS", juce::dontSendNotification);
@@ -250,6 +251,7 @@ MainComponent::~MainComponent()
     gateThresholdSlider.removeListener(this);
     articulationLiftSlider.removeListener(this);
     unvoicedNoiseSlider.removeListener(this);
+    sibilanceSlider.removeListener(this);
     formantPreservationSlider.removeListener(this);
     transientProtectionSlider.removeListener(this);
     stopTimer();
@@ -302,6 +304,8 @@ void MainComponent::updateModeControls()
     show(articulationLiftSlider, vocoderMode);
     show(unvoicedNoiseLabel, vocoderMode);
     show(unvoicedNoiseSlider, vocoderMode);
+    show(sibilanceLabel, vocoderMode);
+    show(sibilanceSlider, vocoderMode);
     show(formantPreservationLabel, harmonizerMode);
     show(formantPreservationSlider, harmonizerMode);
     show(transientProtectionLabel, harmonizerMode);
@@ -526,6 +530,10 @@ void MainComponent::resized()
         row.removeFromLeft(12);
         unvoicedNoiseLabel.setBounds(row.removeFromLeft(100));
         unvoicedNoiseSlider.setBounds(row.removeFromLeft(210));
+        area.removeFromTop(6);
+        row = area.removeFromTop(30);
+        sibilanceLabel.setBounds(row.removeFromLeft(86));
+        sibilanceSlider.setBounds(row.removeFromLeft(210));
     }
     else if (harmonizerMode)
     {
@@ -601,6 +609,8 @@ void MainComponent::sliderValueChanged(juce::Slider* slider)
         vocoder.setArticulationLift(static_cast<float>(articulationLiftSlider.getValue() / 100.0));
     else if (slider == &unvoicedNoiseSlider)
         vocoder.setUnvoicedNoise(static_cast<float>(unvoicedNoiseSlider.getValue() / 100.0));
+    else if (slider == &sibilanceSlider)
+        vocoder.setSibilanceAmount(static_cast<float>(sibilanceSlider.getValue() / 100.0));
     else if (slider == &formantPreservationSlider)
         harmonizer.setFormantPreservation(static_cast<float>(formantPreservationSlider.getValue() / 100.0));
     else if (slider == &transientProtectionSlider)
