@@ -116,8 +116,16 @@ private:
     juce::Slider dryWetMix;
     juce::Slider formantShiftSlider;
     juce::Slider gateThresholdSlider;
+    juce::Slider articulationLiftSlider;
+    juce::Slider unvoicedNoiseSlider;
+    juce::Slider formantPreservationSlider;
+    juce::Slider transientProtectionSlider;
     juce::Label formantShiftLabel;
     juce::Label gateThresholdLabel;
+    juce::Label articulationLiftLabel;
+    juce::Label unvoicedNoiseLabel;
+    juce::Label formantPreservationLabel;
+    juce::Label transientProtectionLabel;
     juce::Label inputMeterLabel;
     juce::Label outputMeterLabel;
     juce::ToggleButton microphoneMonitor;
