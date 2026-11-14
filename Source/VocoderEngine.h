@@ -25,6 +25,7 @@ public:
     void setGateThreshold(float level) noexcept;
     void setArticulationLift(float amount) noexcept;
     void setUnvoicedNoise(float amount) noexcept;
+    void setSibilanceAmount(float amount) noexcept;
 
 private:
     using Filter = juce::dsp::IIR::Filter<float>;
@@ -54,6 +55,7 @@ private:
     std::atomic<float> gateThreshold { 0.003f };
     std::atomic<float> articulationLift { 1.0f };
     std::atomic<float> unvoicedNoise { 1.0f };
+    std::atomic<float> sibilanceAmount { 1.0f };
     std::atomic<float> attackMs { 1.0f };
     std::atomic<float> releaseMs { 10.0f };
 
