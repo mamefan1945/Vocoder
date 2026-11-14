@@ -40,7 +40,7 @@ void HarmonizerEngine::prepare(double sampleRate, int blockSize) noexcept
 {
     currentSampleRate = juce::jmax(8000.0, sampleRate);
     maximumBlockSize = juce::jmax(64, blockSize);
-    latencySamples = static_cast<int>(std::ceil(currentSampleRate * 0.040));
+    latencySamples = static_cast<int>(std::ceil(currentSampleRate * 0.045));
     for (auto& voice : voices)
         voice.prepare();
     reset();
@@ -408,6 +408,14 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
     if (previousPitchMark >= 0 && bestMark <= previousPitchMark)
         bestMark = previousPitchMark
                  + juce::jmax(1, static_cast<int>(std::llround(estimatedPeriod)));
+
+    // A PSOLA grain reads residual samples on both sides of its source centre.
+    // Wait until the complete right half has actually arrived before scheduling
+    // it; otherwise scheduleGrain() consumes unwritten/stale ring-buffer data,
+    // which creates truncated grains and audible dropouts.
+    const auto sourceHalfWindow = static_cast<int64_t>(std::ceil(sourcePeriod));
+    if (static_cast<int64_t>(totalSamples) - 1 < bestMark + sourceHalfWindow)
+        return;
 
     processPitchMark(bestMark, sourcePeriod);
     nextExpectedPitchMark = static_cast<double>(bestMark) + sourcePeriod;
