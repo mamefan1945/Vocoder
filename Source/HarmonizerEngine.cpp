@@ -40,7 +40,7 @@ void HarmonizerEngine::prepare(double sampleRate, int blockSize) noexcept
 {
     currentSampleRate = juce::jmax(8000.0, sampleRate);
     maximumBlockSize = juce::jmax(64, blockSize);
-    latencySamples = static_cast<int>(std::ceil(currentSampleRate * 0.045));
+    latencySamples = static_cast<int>(std::ceil(currentSampleRate * 0.070));
     for (auto& voice : voices)
         voice.prepare();
     reset();
@@ -300,9 +300,15 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
     }
 }
 
-void HarmonizerEngine::processPitchMark(int64_t mark, double sourcePeriod) noexcept
+void HarmonizerEngine::processPitchMark(int64_t mark, double sourcePeriod,
+                                            int64_t nextMark) noexcept
 {
-    const auto delayedMark = mark + latencySamples;
+    // TD-PSOLA needs an output mark train independent of the input mark train.
+    // For each output mark, use the nearest available analysis mark. This
+    // naturally reuses source grains when shifting upward and skips source
+    // grains when shifting downward, while preserving the input's duration.
+    const auto midpoint = 0.5 * (static_cast<double>(mark)
+                               + static_cast<double>(nextMark));
     for (auto& voice : voices)
     {
         if (voice.note < 0 || voice.releasing)
@@ -313,24 +319,21 @@ void HarmonizerEngine::processPitchMark(int64_t mark, double sourcePeriod) noexc
         const auto targetPeriod = currentSampleRate / targetHz;
         if (!voice.synthesisMarkInitialized)
         {
-            voice.nextSynthesisMark = static_cast<double>(delayedMark);
+            voice.nextSynthesisMark = static_cast<double>(mark + latencySamples);
             voice.synthesisMarkInitialized = true;
         }
 
-        // Classic TD-PSOLA correspondence: every detected input pitch mark
-        // contributes exactly one source grain to each active harmony voice.
-        // The source marks therefore remain sequential and the synthesis marks
-        // are spaced at the requested target period. Scheduling grains by
-        // comparing the output clock with the input clock can reuse or skip
-        // source marks during large transpositions, creating roughness and
-        // crackling that becomes more obvious in chords.
-        scheduleGrain(voice, mark, sourcePeriod,
-                      static_cast<int64_t>(std::llround(voice.nextSynthesisMark)));
-        voice.nextSynthesisMark += targetPeriod;
+        // Limit the loop defensively; the supported MIDI range and pitch range
+        // keep the normal count well below this ceiling.
+        int scheduled = 0;
+        while (voice.nextSynthesisMark - latencySamples <= midpoint
+               && scheduled++ < 256)
+        {
+            scheduleGrain(voice, mark, sourcePeriod,
+                static_cast<int64_t>(std::llround(voice.nextSynthesisMark)));
+            voice.nextSynthesisMark += targetPeriod;
+        }
     }
-
-    previousPitchMark = mark;
-    previousPitchPeriod = sourcePeriod;
 }
 
 void HarmonizerEngine::detectAndProcessPitchMark() noexcept
@@ -418,7 +421,15 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
     if (static_cast<int64_t>(totalSamples) - 1 < bestMark + sourceHalfWindow)
         return;
 
-    processPitchMark(bestMark, sourcePeriod);
+    // Wait for the following analysis mark before assigning the pending
+    // source grain. That lets each synthesis mark select its nearest source
+    // grain instead of forcing a one-to-one source/output cycle mapping.
+    if (previousPitchMark >= 0 && bestMark > previousPitchMark)
+        processPitchMark(previousPitchMark,
+                         previousPitchPeriod > 0.0 ? previousPitchPeriod : sourcePeriod,
+                         bestMark);
+    previousPitchMark = bestMark;
+    previousPitchPeriod = sourcePeriod;
     nextExpectedPitchMark = static_cast<double>(bestMark) + sourcePeriod;
 }
 
