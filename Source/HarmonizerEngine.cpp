@@ -46,6 +46,16 @@ void HarmonizerEngine::prepare(double sampleRate, int blockSize) noexcept
     reset();
 }
 
+void HarmonizerEngine::setFormantPreservation(float amount) noexcept
+{
+    formantPreservation.store(juce::jlimit(0.0f, 1.0f, amount), std::memory_order_relaxed);
+}
+
+void HarmonizerEngine::setTransientProtection(float amount) noexcept
+{
+    transientProtection.store(juce::jlimit(0.0f, 1.0f, amount), std::memory_order_relaxed);
+}
+
 void HarmonizerEngine::reset() noexcept
 {
     for (auto& voice : voices)
@@ -484,6 +494,8 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
     const auto fastEnergyCoefficient = 1.0f - std::exp(-1.0f / (0.0015f * sampleRate));
     const auto slowEnergyCoefficient = 1.0f - std::exp(-1.0f / (0.050f * sampleRate));
     const auto bendSmoothing = 1.0f - std::exp(-1.0f / (0.010f * sampleRate));
+    const auto formantBlend = formantPreservation.load(std::memory_order_relaxed);
+    const auto transientAmount = transientProtection.load(std::memory_order_relaxed);
 
     for (int i = 0; i < numSamples; ++i)
     {
@@ -556,7 +568,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         voicedMix += ((voiced ? 1.0f : 0.0f) - voicedMix)
                    * (voiced ? voicedAttack : voicedRelease);
 
-        if (transientDetected)
+        if (transientDetected && transientAmount > 0.5f)
         {
             // Keep broadband attacks and consonant onsets out of the periodic
             // grain train; they are passed through on the aligned dry path.
@@ -608,20 +620,21 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             // Reconstruct the source vocal-tract spectral envelope after
             // pitch-shifting the LPC residual. Coefficients are read from the
             // matching delayed input time so formant motion stays aligned.
-            auto formantOutput = psola;
+            auto reconstructed = psola;
             if (delayedAbsolute >= 0)
             {
                 const auto coefficientIndex =
                     static_cast<size_t>(delayedAbsolute) & inputRingMask;
                 for (int coefficient = 0; coefficient < lpcOrder; ++coefficient)
-                    formantOutput -=
+                    reconstructed -=
                         formantCoefficientHistory[static_cast<size_t>(coefficient)][coefficientIndex]
                         * voice.formantState[static_cast<size_t>(coefficient)];
             }
             for (int coefficient = lpcOrder - 1; coefficient > 0; --coefficient)
                 voice.formantState[static_cast<size_t>(coefficient)] =
                     voice.formantState[static_cast<size_t>(coefficient - 1)];
-            voice.formantState[0] = formantOutput;
+            voice.formantState[0] = reconstructed;
+            const auto formantOutput = psola + (reconstructed - psola) * formantBlend;
 
             const auto voiceLevel = voice.velocity * voice.envelope;
             voicedHarmony += formantOutput * voiceLevel;
@@ -638,7 +651,8 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                      + delayedInput * (1.0f - voicedMix) * unvoicedGain;
         // Briefly favour the latency-aligned direct signal at detected attacks.
         // This avoids smearing plosives and sharp consonant onsets across PSOLA grains.
-        harmony += transientMix * (delayedInput * unvoicedGain - harmony);
+        harmony += transientMix * transientAmount
+                 * (delayedInput * unvoicedGain - harmony);
         output[i] = (delayedInput * (1.0f - mix)
                    + harmony * mix) * outputGain;
     }
