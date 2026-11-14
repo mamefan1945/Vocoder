@@ -35,6 +35,8 @@ private:
             : juce::MidiKeyboardComponent(state, juce::MidiKeyboardComponent::horizontalKeyboard),
               keyboardState(state)
         {
+            // Let the on-screen MIDI keyboard regain keyboard focus when clicked.
+            setWantsKeyboardFocus(true);
         }
 
         void mouseDown(const juce::MouseEvent& event) override;
