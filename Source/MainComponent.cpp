@@ -73,7 +73,8 @@ MainComponent::MainComponent()
     processingMode.setSelectedId(1);
     processingMode.onChange = [this]
     {
-        selectedMode.store(processingMode.getSelectedId() - 1);
+        selectedMode.store(processingMode.getSelectedId() - 1, std::memory_order_relaxed);
+        updateModeControls();
     };
     addAndMakeVisible(processingMode);
 
@@ -227,6 +228,7 @@ MainComponent::MainComponent()
         statusLabel.setText("Audio initialization: " + error, juce::dontSendNotification);
 
     deviceManager.addAudioCallback(this);
+    updateModeControls();
 }
 
 MainComponent::~MainComponent()
@@ -255,6 +257,50 @@ void MainComponent::updateSoundFontControls()
     resized();
 }
 
+void MainComponent::updateModeControls()
+{
+    const auto mode = processingMode.getSelectedId();
+    const auto vocoderMode = mode == 2;
+    const auto harmonizerMode = mode == 3;
+    const auto hasKeyboard = vocoderMode || harmonizerMode;
+    const auto show = [](juce::Component& component, bool visible) { component.setVisible(visible); };
+    show(carrierLabel, vocoderMode);
+    show(carrierSource, vocoderMode);
+    show(waveformLabel, vocoderMode);
+    show(waveform, vocoderMode);
+    const auto showSoundFont = vocoderMode && waveform.getSelectedId() == 8;
+    show(soundFontInstrumentLabel, showSoundFont);
+    show(soundFontInstrument, showSoundFont);
+    show(loadSoundFontButton, showSoundFont);
+    show(midiLabel, hasKeyboard);
+    show(midiInput, hasKeyboard);
+    show(refreshMidiButton, hasKeyboard);
+    show(octaveLabel, hasKeyboard);
+    show(octave, hasKeyboard);
+    show(keyboardComponent, hasKeyboard);
+    show(attackLabel, vocoderMode);
+    show(attackTime, vocoderMode);
+    show(releaseLabel, vocoderMode);
+    show(releaseTime, vocoderMode);
+    show(lowFrequencyLabel, vocoderMode);
+    show(lowFrequency, vocoderMode);
+    show(highFrequencyLabel, vocoderMode);
+    show(highFrequency, vocoderMode);
+    show(formantShiftLabel, vocoderMode);
+    show(formantShiftSlider, vocoderMode);
+    show(gateThresholdLabel, vocoderMode);
+    show(gateThresholdSlider, vocoderMode);
+    show(microphoneMonitor, vocoderMode);
+    show(carrierPreview, vocoderMode);
+    const auto showMix = vocoderMode || harmonizerMode;
+    show(dryWetLabel, showMix);
+    show(dryWetMix, showMix);
+    show(outputLevelLabel, true);
+    show(outputLevel, true);
+    show(inputMeterLabel, true);
+    show(outputMeterLabel, true);
+    resized();
+}
 void MainComponent::populateSoundFontInstruments()
 {
     soundFontInstrument.clear(juce::dontSendNotification);
@@ -379,92 +425,107 @@ void MainComponent::resized()
     auto area = getLocalBounds().reduced(28);
     titleLabel.setBounds(area.removeFromTop(42));
     area.removeFromTop(10);
-
     auto row = area.removeFromTop(32);
     modeLabel.setBounds(row.removeFromLeft(82));
-    processingMode.setBounds(row.removeFromLeft(150));
-    row.removeFromLeft(14);
-    carrierLabel.setBounds(row.removeFromLeft(58));
-    carrierSource.setBounds(row.removeFromLeft(170));
-    row.removeFromLeft(14);
-    midiLabel.setBounds(row.removeFromLeft(72));
-    midiInput.setBounds(row.removeFromLeft(190));
-    row.removeFromLeft(8);
-    refreshMidiButton.setBounds(row.removeFromLeft(82));
-
-    area.removeFromTop(12);
-    row = area.removeFromTop(32);
-    waveformLabel.setBounds(row.removeFromLeft(82));
-    waveform.setBounds(row.removeFromLeft(150));
-    row.removeFromLeft(12);
-    octaveLabel.setBounds(row.removeFromLeft(55));
-    octave.setBounds(row.removeFromLeft(90));
-    if (waveform.getSelectedId() == 8)
+    processingMode.setBounds(row.removeFromLeft(180));
+    const auto mode = processingMode.getSelectedId();
+    const auto vocoderMode = mode == 2;
+    const auto harmonizerMode = mode == 3;
+    const auto hasKeyboard = vocoderMode || harmonizerMode;
+    area.removeFromTop(10);
+    if (hasKeyboard)
     {
-        row.removeFromLeft(12);
-        soundFontInstrumentLabel.setBounds(row.removeFromLeft(72));
-        soundFontInstrument.setBounds(row.removeFromLeft(300));
+        row = area.removeFromTop(32);
+        midiLabel.setBounds(row.removeFromLeft(72));
+        midiInput.setBounds(row.removeFromLeft(240));
         row.removeFromLeft(8);
-        loadSoundFontButton.setBounds(row.removeFromLeft(105));
+        refreshMidiButton.setBounds(row.removeFromLeft(82));
     }
-    else
+    if (vocoderMode)
     {
-        soundFontInstrumentLabel.setBounds(0, 0, 0, 0);
-        soundFontInstrument.setBounds(0, 0, 0, 0);
-        loadSoundFontButton.setBounds(0, 0, 0, 0);
+        area.removeFromTop(8);
+        row = area.removeFromTop(32);
+        carrierLabel.setBounds(row.removeFromLeft(58));
+        carrierSource.setBounds(row.removeFromLeft(170));
+        row.removeFromLeft(14);
+        waveformLabel.setBounds(row.removeFromLeft(82));
+        waveform.setBounds(row.removeFromLeft(150));
+        row.removeFromLeft(12);
+        octaveLabel.setBounds(row.removeFromLeft(55));
+        octave.setBounds(row.removeFromLeft(90));
+        if (waveform.getSelectedId() == 8)
+        {
+            row.removeFromLeft(8);
+            soundFontInstrumentLabel.setBounds(row.removeFromLeft(72));
+            soundFontInstrument.setBounds(row.removeFromLeft(260));
+            row.removeFromLeft(6);
+            loadSoundFontButton.setBounds(row.removeFromLeft(105));
+        }
     }
-
+    else if (harmonizerMode)
+    {
+        area.removeFromTop(8);
+        row = area.removeFromTop(32);
+        octaveLabel.setBounds(row.removeFromLeft(55));
+        octave.setBounds(row.removeFromLeft(90));
+    }
     area.removeFromTop(8);
     outputLevelLabel.setBounds(area.removeFromTop(22));
     outputLevel.setBounds(area.removeFromTop(34));
-    area.removeFromTop(8);
-
-    row = area.removeFromTop(30);
-    attackLabel.setBounds(row.removeFromLeft(52));
-    attackTime.setBounds(row.removeFromLeft(150));
-    row.removeFromLeft(12);
-    releaseLabel.setBounds(row.removeFromLeft(58));
-    releaseTime.setBounds(row.removeFromLeft(170));
-    row.removeFromLeft(12);
-    dryWetLabel.setBounds(row.removeFromLeft(64));
-    dryWetMix.setBounds(row);
-
-    area.removeFromTop(6);
-    row = area.removeFromTop(30);
-    lowFrequencyLabel.setBounds(row.removeFromLeft(64));
-    lowFrequency.setBounds(row.removeFromLeft(180));
-    row.removeFromLeft(12);
-    highFrequencyLabel.setBounds(row.removeFromLeft(70));
-    highFrequency.setBounds(row.removeFromLeft(190));
-
-    area.removeFromTop(6);
-    row = area.removeFromTop(30);
-    formantShiftLabel.setBounds(row.removeFromLeft(64));
-    formantShiftSlider.setBounds(row.removeFromLeft(210));
-    gateThresholdLabel.setBounds(row.removeFromLeft(86));
-    gateThresholdSlider.setBounds(row.removeFromLeft(220));
+    if (vocoderMode || harmonizerMode)
+    {
+        area.removeFromTop(8);
+        row = area.removeFromTop(30);
+        if (vocoderMode)
+        {
+            attackLabel.setBounds(row.removeFromLeft(52));
+            attackTime.setBounds(row.removeFromLeft(150));
+            row.removeFromLeft(12);
+            releaseLabel.setBounds(row.removeFromLeft(58));
+            releaseTime.setBounds(row.removeFromLeft(170));
+            row.removeFromLeft(12);
+        }
+        dryWetLabel.setBounds(row.removeFromLeft(64));
+        dryWetMix.setBounds(row);
+    }
+    if (vocoderMode)
+    {
+        area.removeFromTop(6);
+        row = area.removeFromTop(30);
+        lowFrequencyLabel.setBounds(row.removeFromLeft(64));
+        lowFrequency.setBounds(row.removeFromLeft(180));
+        row.removeFromLeft(12);
+        highFrequencyLabel.setBounds(row.removeFromLeft(70));
+        highFrequency.setBounds(row.removeFromLeft(190));
+        area.removeFromTop(6);
+        row = area.removeFromTop(30);
+        formantShiftLabel.setBounds(row.removeFromLeft(64));
+        formantShiftSlider.setBounds(row.removeFromLeft(210));
+        gateThresholdLabel.setBounds(row.removeFromLeft(86));
+        gateThresholdSlider.setBounds(row.removeFromLeft(220));
+    }
+    row = area.removeFromTop(24);
     inputMeterLabel.setBounds(row.removeFromLeft(180));
     outputMeterLabel.setBounds(row);
-
-    area.removeFromTop(6);
-    row = area.removeFromTop(28);
-    microphoneMonitor.setBounds(row.removeFromLeft(150));
-    carrierPreview.setBounds(row.removeFromLeft(170));
-
-    area.removeFromTop(8);
-    keyboardComponent.setBounds(area.removeFromTop(88));
+    if (vocoderMode)
+    {
+        area.removeFromTop(6);
+        row = area.removeFromTop(28);
+        microphoneMonitor.setBounds(row.removeFromLeft(150));
+        carrierPreview.setBounds(row.removeFromLeft(170));
+    }
+    if (hasKeyboard)
+    {
+        area.removeFromTop(8);
+        keyboardComponent.setBounds(area.removeFromTop(88));
+    }
     area.removeFromTop(8);
     statusLabel.setBounds(area.removeFromTop(24));
     area.removeFromTop(8);
-    // Let the device settings use all remaining space. The viewport grows
-    // with the window; the viewed component grows with it and only scrolls
-    // when the available height is genuinely smaller than its content.
     deviceViewport.setBounds(area);
-    deviceSelector.setBounds(0, 0,
-                             juce::jmax(320, deviceViewport.getWidth() - 18),
+    deviceSelector.setBounds(0, 0, juce::jmax(320, deviceViewport.getWidth() - 18),
                              juce::jmax(300, deviceViewport.getHeight()));
 }
-
 void MainComponent::sliderValueChanged(juce::Slider* slider)
 {
     if (slider == &outputLevel)
