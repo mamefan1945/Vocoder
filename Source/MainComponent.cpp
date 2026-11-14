@@ -649,7 +649,7 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
                     + juce::String(bufferSize) + " samples | device-reported I/O "
                     + juce::String(1000.0 * static_cast<double>(inputLatency + outputLatency)
                                    / juce::jmax(1.0, sampleRate), 1) + " ms"
-                    + " | Harmonizer lookahead ~40 ms"
+                    + " | Harmonizer lookahead ~45 ms"
                 : "No audio device active";
             safeThis->statusLabel.setText(message, juce::dontSendNotification);
         }
