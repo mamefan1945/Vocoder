@@ -601,18 +601,12 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         voicedMix += ((voiced ? 1.0f : 0.0f) - voicedMix)
                    * (voiced ? voicedAttack : voicedRelease);
 
-        if (transientDetected && transientAmount > 0.5f)
-        {
-            // Keep broadband attacks and consonant onsets out of the periodic
-            // grain train; they are passed through on the aligned dry path.
-            havePitchMark = false;
-            previousPitchMark = -1;
-            previousPitchPeriod = 0.0;
-            for (auto& voice : voices)
-                voice.synthesisMarkInitialized = false;
-        }
-        else
-            detectAndProcessPitchMark();
+        // Keep the pitch-mark timeline running through short plosive bursts.
+        // Transient protection is handled by the latency-aligned direct blend
+        // below; resetting PSOLA timing here forces a fresh phase acquisition
+        // after every T/K/P burst and can create an audible gap on the vowel
+        // immediately following the consonant.
+        detectAndProcessPitchMark();
 
         const auto delayedAbsolute = absolute - latencySamples;
         const auto delayedInput = delayedAbsolute >= 0
