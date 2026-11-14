@@ -60,6 +60,8 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto attack = attackCoefficient.load(std::memory_order_relaxed);
     const auto release = releaseCoefficient.load(std::memory_order_relaxed);
     const auto shift = formantShift.load(std::memory_order_relaxed);
+    const auto articulationAmount = articulationLift.load(std::memory_order_relaxed);
+    const auto noiseAmount = unvoicedNoise.load(std::memory_order_relaxed);
     const auto bandsPerOctave = static_cast<float>(bandCount - 1) / std::log2(highestBandHz / lowestBandHz);
     const auto bandOffset = shift * (bandsPerOctave / 12.0f);
 
@@ -151,7 +153,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         // The lift is 0 dB at 500 Hz and reaches about +3.5 dB at 8 kHz.
         const auto articulationPosition = juce::jlimit(0.0f, 1.0f,
             std::log2(juce::jmax(centre, 500.0f) / 500.0f) / 4.0f);
-        const auto articulationGain = 1.0f + 0.5f * articulationPosition;
+        const auto articulationGain = 1.0f + 0.5f * articulationPosition * articulationAmount;
         wetOutput += carrierBands[index] * modulation * articulationGain;
 
         // Independent, band-shaped noise excitation restores the turbulent
@@ -161,7 +163,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         const auto highFrequencyWeight = juce::jlimit(0.0f, 1.0f,
             (centre - 900.0f) / 2600.0f);
         const auto sibilanceAmount = 0.45f * unvoicedAmount
-                                   * highFrequencyWeight * carrierPresence;
+                                   * highFrequencyWeight * carrierPresence * noiseAmount;
         wetOutput += noiseBands[index] * modulation * sibilanceAmount;
     }
 
@@ -210,6 +212,16 @@ void VocoderEngine::setFormantShift(float semitones) noexcept
 void VocoderEngine::setGateThreshold(float level) noexcept
 {
     gateThreshold.store(juce::jlimit(0.0f, 0.02f, level), std::memory_order_relaxed);
+}
+
+void VocoderEngine::setArticulationLift(float amount) noexcept
+{
+    articulationLift.store(juce::jlimit(0.0f, 2.0f, amount), std::memory_order_relaxed);
+}
+
+void VocoderEngine::setUnvoicedNoise(float amount) noexcept
+{
+    unvoicedNoise.store(juce::jlimit(0.0f, 2.0f, amount), std::memory_order_relaxed);
 }
 
 void VocoderEngine::updateEnvelopeTimes() noexcept
