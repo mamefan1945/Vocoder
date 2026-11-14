@@ -62,6 +62,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto shift = formantShift.load(std::memory_order_relaxed);
     const auto articulationAmount = articulationLift.load(std::memory_order_relaxed);
     const auto noiseAmount = unvoicedNoise.load(std::memory_order_relaxed);
+    const auto sibilanceGain = sibilanceAmount.load(std::memory_order_relaxed);
     const auto bandsPerOctave = static_cast<float>(bandCount - 1) / std::log2(highestBandHz / lowestBandHz);
     const auto bandOffset = shift * (bandsPerOctave / 12.0f);
 
@@ -162,9 +163,9 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         // speech, only in the upper bands, and only while a carrier note is held.
         const auto highFrequencyWeight = juce::jlimit(0.0f, 1.0f,
             (centre - 900.0f) / 2600.0f);
-        const auto sibilanceAmount = 0.20f * unvoicedAmount
-                                   * highFrequencyWeight * carrierPresence * noiseAmount;
-        wetOutput += noiseBands[index] * modulation * sibilanceAmount;
+        const auto sibilance = 0.20f * sibilanceGain * unvoicedAmount
+                             * highFrequencyWeight * carrierPresence * noiseAmount;
+        wetOutput += noiseBands[index] * modulation * sibilance;
     }
 
     // The compressed envelopes are much larger than the previous raw levels;
@@ -222,6 +223,11 @@ void VocoderEngine::setArticulationLift(float amount) noexcept
 void VocoderEngine::setUnvoicedNoise(float amount) noexcept
 {
     unvoicedNoise.store(juce::jlimit(0.0f, 2.0f, amount), std::memory_order_relaxed);
+}
+
+void VocoderEngine::setSibilanceAmount(float amount) noexcept
+{
+    sibilanceAmount.store(juce::jlimit(0.0f, 2.0f, amount), std::memory_order_relaxed);
 }
 
 void VocoderEngine::updateEnvelopeTimes() noexcept
