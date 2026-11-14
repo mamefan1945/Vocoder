@@ -80,6 +80,7 @@ void HarmonizerEngine::reset() noexcept
     targetFormantCoefficients.fill(0.0f);
     totalSamples = 0;
     pitchUpdateCounter = 0;
+    pitchMissCount = 0;
     formantUpdateCounter = 0;
     fastEnergy = 0.0f;
     slowEnergy = 0.0f;
@@ -494,7 +495,9 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
     const auto attackCoefficient = 1.0f - std::exp(-1.0f / (0.008f * sampleRate));
     const auto releaseCoefficient = std::exp(-1.0f / (0.045f * sampleRate));
     const auto voicedAttack = 1.0f - std::exp(-1.0f / (0.006f * sampleRate));
-    const auto voicedRelease = 1.0f - std::exp(-1.0f / (0.008f * sampleRate));
+    // Release voicing more gradually so one or two weak YIN frames do not
+    // punch audible holes in sustained notes or harmony chords.
+    const auto voicedRelease = 1.0f - std::exp(-1.0f / (0.025f * sampleRate));
     const auto updateInterval = juce::jmax(1, static_cast<int>(currentSampleRate * 0.010));
     const auto formantSmoothing = 1.0f - std::exp(-1.0f / (0.025f * sampleRate));
     const auto transientAttack = 1.0f - std::exp(-1.0f / (0.0015f * sampleRate));
@@ -518,10 +521,21 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             pitchUpdateCounter = 0;
             const auto estimate = estimatePitch();
             if (estimate >= minimumPitchHz && estimate <= maximumPitchHz)
+            {
+                pitchMissCount = 0;
                 detectedPitchHz = detectedPitchHz > 0.0f
                     ? detectedPitchHz + 0.30f * (estimate - detectedPitchHz) : estimate;
-            else
-                detectedPitchHz *= 0.60f;
+            }
+            else if (detectedPitchHz > 0.0f)
+            {
+                // A single weak/noisy frame is common at vowel boundaries and
+                // during vibrato. Hold the last reliable F0 briefly, then fade
+                // it instead of multiplying it by 0.60 and losing voicing in
+                // only two or three analysis updates.
+                pitchMissCount = juce::jmin(pitchMissCount + 1, 1000);
+                if (pitchMissCount > 3)
+                    detectedPitchHz *= 0.88f;
+            }
             if (detectedPitchHz < minimumPitchHz)
                 detectedPitchHz = 0.0f;
         }
