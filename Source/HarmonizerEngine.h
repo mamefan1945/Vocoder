@@ -54,6 +54,7 @@ private:
     double currentSampleRate = 44100.0;
     uint64_t totalSamples = 0;
     int pitchUpdateCounter = 0;
+    int pitchMissCount = 0;
     int formantUpdateCounter = 0;
     int64_t previousPitchMark = -1;
     double previousPitchPeriod = 0.0;
