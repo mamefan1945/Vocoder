@@ -20,6 +20,7 @@ bool MainComponent::LockableMidiKeyboard::isBlackKey(int note) noexcept
 
 void MainComponent::LockableMidiKeyboard::mouseDown(const juce::MouseEvent& event)
 {
+    grabKeyboardFocus();
     const auto note = noteAt(event.position);
     if (event.mods.isRightButtonDown())
     {
