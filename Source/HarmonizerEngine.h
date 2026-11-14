@@ -79,7 +79,7 @@ private:
     float estimatePitch() const noexcept;
     void estimateFormantEnvelope() noexcept;
     void detectAndProcessPitchMark() noexcept;
-    void processPitchMark(int64_t mark, double sourcePeriod) noexcept;
+    void processPitchMark(int64_t mark, double sourcePeriod, int64_t nextMark) noexcept;
     void scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
                        double sourcePeriod, int64_t synthesisCentre) noexcept;
     void handleMidi(const juce::MidiBuffer& midi, int octaveShift) noexcept;
