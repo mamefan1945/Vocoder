@@ -27,6 +27,7 @@ void HarmonizerEngine::PitchVoice::start(int midiNote, int originalMidiNote, flo
     nextSynthesisMark = 0.0;
     synthesisMarkInitialized = false;
     releasing = false;
+    formantState.fill(0.0f);
 }
 
 void HarmonizerEngine::PitchVoice::stop() noexcept
@@ -58,11 +59,25 @@ void HarmonizerEngine::reset() noexcept
         voice.nextSynthesisMark = 0.0;
         voice.synthesisMarkInitialized = false;
         voice.releasing = false;
+        voice.formantState.fill(0.0f);
     }
 
     inputHistory.fill(0.0f);
+    residualHistory.fill(0.0f);
+    for (auto& coefficients : formantCoefficientHistory)
+        coefficients.fill(0.0f);
+    formantCoefficients.fill(0.0f);
+    targetFormantCoefficients.fill(0.0f);
     totalSamples = 0;
     pitchUpdateCounter = 0;
+    formantUpdateCounter = 0;
+    fastEnergy = 0.0f;
+    slowEnergy = 0.0f;
+    slopeEnergy = 0.0f;
+    previousInputSample = 0.0f;
+    transientMix = 0.0f;
+    transientHoldSamples = 0;
+    transientCooldownSamples = 0;
     previousPitchMark = -1;
     previousPitchPeriod = 0.0;
     nextExpectedPitchMark = 0.0;
@@ -169,6 +184,81 @@ float HarmonizerEngine::estimatePitch() const noexcept
     return static_cast<float>(decimatedRate / refinedLag);
 }
 
+
+void HarmonizerEngine::estimateFormantEnvelope() noexcept
+{
+    // LPC spectral-envelope analysis. A Hann-windowed frame and bandwidth
+    // expansion keep the all-pole synthesis filter well behaved between updates.
+    std::array<double, lpcOrder + 1> autocorrelation {};
+    double mean = 0.0;
+    const auto newest = static_cast<int64_t>(totalSamples) - 1;
+    if (newest < lpcFrameSize)
+        return;
+
+    for (int i = 0; i < lpcFrameSize; ++i)
+    {
+        const auto absolute = newest - (lpcFrameSize - 1 - i);
+        mean += inputHistory[static_cast<size_t>(absolute) & inputRingMask];
+    }
+    mean /= static_cast<double>(lpcFrameSize);
+
+    std::array<double, lpcFrameSize> frame {};
+    for (int i = 0; i < lpcFrameSize; ++i)
+    {
+        const auto absolute = newest - (lpcFrameSize - 1 - i);
+        const auto window = 0.5 - 0.5 * std::cos(
+            2.0 * 3.14159265358979323846 * static_cast<double>(i)
+            / static_cast<double>(lpcFrameSize - 1));
+        frame[static_cast<size_t>(i)] =
+            (static_cast<double>(inputHistory[static_cast<size_t>(absolute) & inputRingMask]) - mean)
+            * window;
+    }
+
+    for (int lag = 0; lag <= lpcOrder; ++lag)
+        for (int i = lag; i < lpcFrameSize; ++i)
+            autocorrelation[static_cast<size_t>(lag)] +=
+                frame[static_cast<size_t>(i)] * frame[static_cast<size_t>(i - lag)];
+
+    if (autocorrelation[0] < 1.0e-8)
+    {
+        targetFormantCoefficients.fill(0.0f);
+        return;
+    }
+
+    std::array<double, lpcOrder + 1> predictor {};
+    std::array<double, lpcOrder + 1> updated {};
+    predictor[0] = 1.0;
+    auto predictionError = autocorrelation[0];
+
+    for (int order = 1; order <= lpcOrder; ++order)
+    {
+        auto residual = autocorrelation[static_cast<size_t>(order)];
+        for (int j = 1; j < order; ++j)
+            residual += predictor[static_cast<size_t>(j)]
+                      * autocorrelation[static_cast<size_t>(order - j)];
+
+        const auto reflection = juce::jlimit(-0.98, 0.98,
+            -residual / juce::jmax(1.0e-12, predictionError));
+        updated = predictor;
+        for (int j = 1; j < order; ++j)
+            updated[static_cast<size_t>(j)] =
+                predictor[static_cast<size_t>(j)]
+                + reflection * predictor[static_cast<size_t>(order - j)];
+        updated[static_cast<size_t>(order)] = reflection;
+        predictor = updated;
+        predictionError *= 1.0 - reflection * reflection;
+    }
+
+    constexpr double bandwidthExpansion = 0.994;
+    double expansion = bandwidthExpansion;
+    for (int i = 0; i < lpcOrder; ++i)
+    {
+        targetFormantCoefficients[static_cast<size_t>(i)] =
+            static_cast<float>(predictor[static_cast<size_t>(i + 1)] * expansion);
+        expansion *= bandwidthExpansion;
+    }
+}
+
 void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
                                      double sourcePeriod, int64_t synthesisCentre) noexcept
 {
@@ -194,7 +284,7 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
             continue;
         const auto outputIndex = static_cast<size_t>(outputAbsolute) & outputRingMask;
 
-        voice.overlap[outputIndex] += inputHistory[sourceIndex] * window;
+        voice.overlap[outputIndex] += residualHistory[sourceIndex] * window;
         voice.weights[outputIndex] += window;
     }
 }
@@ -269,7 +359,7 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
     // positive and negative peaks, which can invert adjacent PSOLA grains.
     for (auto candidate = first; candidate <= last; ++candidate)
     {
-        const auto sample = inputHistory[static_cast<size_t>(candidate) & inputRingMask]
+        const auto sample = residualHistory[static_cast<size_t>(candidate) & inputRingMask]
                           * pitchMarkPolarity;
         if (sample > bestPeak)
         {
@@ -284,7 +374,7 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
         bestPeak = -std::numeric_limits<float>::max();
         for (auto candidate = first; candidate <= last; ++candidate)
         {
-            const auto sample = inputHistory[static_cast<size_t>(candidate) & inputRingMask]
+            const auto sample = residualHistory[static_cast<size_t>(candidate) & inputRingMask]
                               * pitchMarkPolarity;
             if (sample > bestPeak)
             {
@@ -388,6 +478,11 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
     const auto voicedAttack = 1.0f - std::exp(-1.0f / (0.006f * sampleRate));
     const auto voicedRelease = 1.0f - std::exp(-1.0f / (0.008f * sampleRate));
     const auto updateInterval = juce::jmax(1, static_cast<int>(currentSampleRate * 0.010));
+    const auto formantSmoothing = 1.0f - std::exp(-1.0f / (0.025f * sampleRate));
+    const auto transientAttack = 1.0f - std::exp(-1.0f / (0.0015f * sampleRate));
+    const auto transientRelease = 1.0f - std::exp(-1.0f / (0.010f * sampleRate));
+    const auto fastEnergyCoefficient = 1.0f - std::exp(-1.0f / (0.0015f * sampleRate));
+    const auto slowEnergyCoefficient = 1.0f - std::exp(-1.0f / (0.050f * sampleRate));
     const auto bendSmoothing = 1.0f - std::exp(-1.0f / (0.010f * sampleRate));
 
     for (int i = 0; i < numSamples; ++i)
@@ -411,12 +506,68 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                 detectedPitchHz = 0.0f;
         }
 
+        if (++formantUpdateCounter >= updateInterval)
+        {
+            formantUpdateCounter = 0;
+            estimateFormantEnvelope();
+        }
+        for (int coefficient = 0; coefficient < lpcOrder; ++coefficient)
+            formantCoefficients[static_cast<size_t>(coefficient)] +=
+                (targetFormantCoefficients[static_cast<size_t>(coefficient)]
+                 - formantCoefficients[static_cast<size_t>(coefficient)]) * formantSmoothing;
+
+        const auto historyIndex = static_cast<size_t>(absolute) & inputRingMask;
+        float residual = source;
+        for (int coefficient = 0; coefficient < lpcOrder; ++coefficient)
+        {
+            const auto previousAbsolute = absolute - coefficient - 1;
+            if (previousAbsolute >= 0)
+                residual += formantCoefficients[static_cast<size_t>(coefficient)]
+                    * inputHistory[static_cast<size_t>(previousAbsolute) & inputRingMask];
+            formantCoefficientHistory[static_cast<size_t>(coefficient)][historyIndex] =
+                formantCoefficients[static_cast<size_t>(coefficient)];
+        }
+        residualHistory[historyIndex] = residual;
+
+        const auto slope = source - previousInputSample;
+        previousInputSample = source;
+        fastEnergy += fastEnergyCoefficient * (source * source - fastEnergy);
+        slowEnergy += slowEnergyCoefficient * (source * source - slowEnergy);
+        slopeEnergy += fastEnergyCoefficient * (slope * slope - slopeEnergy);
+        if (transientCooldownSamples > 0)
+            --transientCooldownSamples;
+        if (transientCooldownSamples == 0
+            && fastEnergy > slowEnergy * 3.5f
+            && slopeEnergy > fastEnergy * 0.12f
+            && fastEnergy > 1.0e-5f)
+        {
+            transientHoldSamples = juce::jmax(transientHoldSamples,
+                static_cast<int>(currentSampleRate * 0.012));
+            transientCooldownSamples = static_cast<int>(currentSampleRate * 0.030);
+        }
+        const auto transientDetected = transientHoldSamples > 0;
+        if (transientHoldSamples > 0)
+            --transientHoldSamples;
+        transientMix += ((transientDetected ? 1.0f : 0.0f) - transientMix)
+                      * (transientDetected ? transientAttack : transientRelease);
+
         const auto voiced = detectedPitchHz >= minimumPitchHz
                          && detectedPitchHz <= maximumPitchHz;
         voicedMix += ((voiced ? 1.0f : 0.0f) - voicedMix)
                    * (voiced ? voicedAttack : voicedRelease);
 
-        detectAndProcessPitchMark();
+        if (transientDetected)
+        {
+            // Keep broadband attacks and consonant onsets out of the periodic
+            // grain train; they are passed through on the aligned dry path.
+            havePitchMark = false;
+            previousPitchMark = -1;
+            previousPitchPeriod = 0.0;
+            for (auto& voice : voices)
+                voice.synthesisMarkInitialized = false;
+        }
+        else
+            detectAndProcessPitchMark();
 
         const auto delayedAbsolute = absolute - latencySamples;
         const auto delayedInput = delayedAbsolute >= 0
@@ -454,8 +605,26 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             else
                 voice.envelope += (1.0f - voice.envelope) * attackCoefficient;
 
+            // Reconstruct the source vocal-tract spectral envelope after
+            // pitch-shifting the LPC residual. Coefficients are read from the
+            // matching delayed input time so formant motion stays aligned.
+            auto formantOutput = psola;
+            if (delayedAbsolute >= 0)
+            {
+                const auto coefficientIndex =
+                    static_cast<size_t>(delayedAbsolute) & inputRingMask;
+                for (int coefficient = 0; coefficient < lpcOrder; ++coefficient)
+                    formantOutput -=
+                        formantCoefficientHistory[static_cast<size_t>(coefficient)][coefficientIndex]
+                        * voice.formantState[static_cast<size_t>(coefficient)];
+            }
+            for (int coefficient = lpcOrder - 1; coefficient > 0; --coefficient)
+                voice.formantState[static_cast<size_t>(coefficient)] =
+                    voice.formantState[static_cast<size_t>(coefficient - 1)];
+            voice.formantState[0] = formantOutput;
+
             const auto voiceLevel = voice.velocity * voice.envelope;
-            voicedHarmony += psola * voiceLevel;
+            voicedHarmony += formantOutput * voiceLevel;
             unvoicedGain = juce::jmax(unvoicedGain, voiceLevel);
             ++activeCount;
         }
@@ -465,8 +634,11 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         // consonant through every voice (which boosts S/SH/F levels by sqrt(N)).
         const auto normalization = activeCount > 0
             ? 1.0f / std::sqrt(static_cast<float>(activeCount)) : 0.0f;
-        const auto harmony = voicedHarmony * normalization * voicedMix
-                           + delayedInput * (1.0f - voicedMix) * unvoicedGain;
+        auto harmony = voicedHarmony * normalization * voicedMix
+                     + delayedInput * (1.0f - voicedMix) * unvoicedGain;
+        // Briefly favour the latency-aligned direct signal at detected attacks.
+        // This avoids smearing plosives and sharp consonant onsets across PSOLA grains.
+        harmony += transientMix * (delayedInput * unvoicedGain - harmony);
         output[i] = (delayedInput * (1.0f - mix)
                    + harmony * mix) * outputGain;
     }
