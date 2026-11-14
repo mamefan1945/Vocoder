@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <vector>
 
@@ -9,6 +10,8 @@ class HarmonizerEngine
 public:
     void prepare(double sampleRate, int maximumBlockSize = 2048) noexcept;
     void reset() noexcept;
+    void setFormantPreservation(float amount) noexcept;
+    void setTransientProtection(float amount) noexcept;
     void processBlock(const float* input, float* output, int numSamples,
                       const juce::MidiBuffer& midi, float dryWet, float outputGain,
                       int octaveShift = 0) noexcept;
@@ -69,6 +72,8 @@ private:
     float pitchBendSemitones = 0.0f;
     float targetPitchBendSemitones = 0.0f;
     int latencySamples = 0;
+    std::atomic<float> formantPreservation { 1.0f };
+    std::atomic<float> transientProtection { 1.0f };
 
     float estimatePitch() const noexcept;
     void estimateFormantEnvelope() noexcept;
