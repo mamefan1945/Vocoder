@@ -89,6 +89,7 @@ void HarmonizerEngine::reset() noexcept
     transientMix = 0.0f;
     transientHoldSamples = 0;
     transientCooldownSamples = 0;
+    transientWasActive = false;
     previousPitchMark = -1;
     previousPitchPeriod = 0.0;
     nextExpectedPitchMark = 0.0;
@@ -549,6 +550,23 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         transientMix += ((transientDetected ? 1.0f : 0.0f) - transientMix)
                       * (transientDetected ? transientAttack : transientRelease);
 
+        // A hard consonant can leave the residual peak tracker following
+        // broadband, non-periodic peaks. Invalidate that pitch/PSOLA timeline
+        // once at transient onset, while keeping MIDI voices themselves held.
+        // The next reliable voiced pitch estimate starts a fresh grain train.
+        const auto transientStarted = transientDetected && !transientWasActive;
+        transientWasActive = transientDetected;
+        if (transientStarted)
+        {
+            detectedPitchHz = 0.0f;
+            pitchMissCount = 0;
+            havePitchMark = false;
+            previousPitchMark = -1;
+            previousPitchPeriod = 0.0;
+            for (auto& voice : voices)
+                voice.synthesisMarkInitialized = false;
+        }
+
         if (++pitchUpdateCounter >= updateInterval)
         {
             pitchUpdateCounter = 0;
@@ -616,7 +634,11 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         // below; resetting PSOLA timing here forces a fresh phase acquisition
         // after every T/K/P burst and can create an audible gap on the vowel
         // immediately following the consonant.
-        detectAndProcessPitchMark();
+        // Do not feed broadband consonant peaks into the PSOLA mark train.
+        // MIDI notes remain active; pitch tracking and synthesis restart when
+        // a reliable voiced estimate returns after the transient.
+        if (!transientDetected && transientMix < 0.05f)
+            detectAndProcessPitchMark();
 
         const auto delayedAbsolute = absolute - latencySamples;
         const auto delayedInput = delayedAbsolute >= 0
