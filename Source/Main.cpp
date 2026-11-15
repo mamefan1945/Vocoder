@@ -33,38 +33,68 @@ namespace
 
             const auto waveArea = juce::Rectangle<float>(
                 getWidth() * 0.18f, getHeight() * 0.5f + 20.0f,
-                getWidth() * 0.64f, 54.0f);
+                getWidth() * 0.64f, 76.0f);
             g.setColour(juce::Colour(0xff343b48));
             g.drawRoundedRectangle(waveArea, 8.0f, 1.0f);
 
-            // Animated multi-partial waveform: a visible signal trace rather than
-            // a spinner that can appear stuck when startup work takes longer.
-            juce::Path wave;
-            constexpr int points = 120;
-            for (int i = 0; i <= points; ++i)
+            // Animated three-voice trace, shaped like a harmonized vocal:
+            // a strong fundamental, formant-rich upper partials, and two
+            // slightly detuned harmony voices moving together.
+            constexpr int points = 180;
+            const auto twoPi = juce::MathConstants<float>::twoPi;
+            const auto pi = juce::MathConstants<float>::pi;
+            const std::array<float, 3> voiceCycles { 6.2f, 7.8f, 9.3f };
+            const std::array<float, 3> voiceOffsets { -17.0f, 0.0f, 17.0f };
+            const std::array<juce::uint32, 3> voiceColours {
+                0x887bc8ff, 0xff62b5ff, 0x887fe0c4
+            };
+
+            for (size_t voice = 0; voice < voiceCycles.size(); ++voice)
             {
-                const auto x = waveArea.getX() + waveArea.getWidth()
-                    * static_cast<float>(i) / static_cast<float>(points);
-                const auto t = static_cast<float>(i) / static_cast<float>(points);
-                // Clamp the sine before the fractional power. At t == 1,
-                // floating-point rounding can make sin(pi) slightly negative;
-                // pow(negative, fractional) produces NaN and can invalidate
-                // the entire JUCE path, leaving only the placeholder frame.
-                const auto envelopeShape = juce::jmax(0.0f,
-                    std::sin(juce::MathConstants<float>::pi * t));
-                const auto envelope = 0.35f + 0.65f
-                    * std::pow(envelopeShape, 0.55f);
-                const auto y = waveArea.getCentreY()
-                    - envelope * (12.0f * std::sin(t * 6.0f * juce::MathConstants<float>::twoPi - phase)
-                    + 4.0f * std::sin(t * 13.0f * juce::MathConstants<float>::twoPi - phase * 1.7f));
-                if (i == 0)
-                    wave.startNewSubPath(x, y);
-                else
-                    wave.lineTo(x, y);
+                juce::Path wave;
+                for (int i = 0; i <= points; ++i)
+                {
+                    const auto t = static_cast<float>(i) / static_cast<float>(points);
+                    const auto x = waveArea.getX() + waveArea.getWidth() * t;
+                    const auto phasePosition = t * voiceCycles[voice] * twoPi - phase
+                        * (1.0f + 0.07f * static_cast<float>(voice));
+                    const auto fundamental = std::sin(phasePosition);
+                    const auto second = std::sin(phasePosition * 2.0f + 0.35f);
+                    const auto third = std::sin(phasePosition * 3.0f + 0.8f);
+                    const auto fourth = std::sin(phasePosition * 4.0f + 1.1f);
+                    const auto fifth = std::sin(phasePosition * 5.0f + 1.6f);
+
+                    // Broad, moving vocal-formant emphasis rather than a
+                    // perfectly uniform electronic test-tone waveform.
+                    const auto formantA = 0.68f + 0.32f
+                        * std::sin(twoPi * (1.15f * t) - phase * 0.32f);
+                    const auto formantB = 0.72f + 0.28f
+                        * std::sin(twoPi * (2.1f * t) + phase * 0.21f);
+                    const auto vocalShape = fundamental
+                        + 0.42f * formantA * second
+                        + 0.24f * formantB * third
+                        + 0.12f * fourth + 0.07f * fifth;
+                    const auto envelopeShape = juce::jmax(0.0f, std::sin(pi * t));
+                    const auto envelope = 0.48f + 0.52f
+                        * std::pow(envelopeShape, 0.42f);
+                    const auto amplitudePulse = 0.86f + 0.14f
+                        * std::sin(twoPi * (2.4f * t) - phase * 0.55f);
+                    const auto y = waveArea.getCentreY() + voiceOffsets[voice]
+                        - envelope * amplitudePulse * vocalShape
+                            * (voice == 1 ? 10.5f : 8.0f);
+
+                    if (i == 0)
+                        wave.startNewSubPath(x, y);
+                    else
+                        wave.lineTo(x, y);
+                }
+
+                g.setColour(juce::Colour(voiceColours[voice]));
+                g.strokePath(wave, juce::PathStrokeType(
+                    voice == 1 ? 2.4f : 1.7f,
+                    juce::PathStrokeType::curved,
+                    juce::PathStrokeType::rounded));
             }
-            g.setColour(juce::Colour(0xff62b5ff));
-            g.strokePath(wave, juce::PathStrokeType(2.6f,
-                juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
 
     private:
