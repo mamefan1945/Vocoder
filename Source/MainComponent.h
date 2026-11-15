@@ -5,6 +5,7 @@
 #include "VocoderEngine.h"
 #include "SoundFontEngine.h"
 #include "HarmonizerEngine.h"
+#include <thread>
 
 class MainComponent final : public juce::Component,
                             public juce::AudioIODeviceCallback,
@@ -73,6 +74,7 @@ private:
     void timerCallback() override;
     void selectMidiInput();
     void refreshMidiInputs();
+    void initializeAudioAndInstruments();
     void updateSoundFontControls();
     void updateModeControls();
     void populateSoundFontInstruments();
@@ -157,6 +159,8 @@ private:
     HarmonizerEngine harmonizer;
     juce::AudioBuffer<float> harmonizerBuffer;
     juce::String activeMidiIdentifier;
+    std::thread startupThread;
+    std::atomic<bool> shuttingDown { false };
 
     std::atomic<float> outputGain { 1.0f };
     std::atomic<float> harmonizerMix { 1.0f };
