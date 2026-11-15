@@ -60,7 +60,7 @@ namespace
                 0.12f
             };
 
-            const auto sampleEnvelope = [](float position)
+            const auto sampleEnvelope = [&speechEnvelope](float position)
             {
                 const auto scaled = juce::jlimit(0.0f, 1.0f, position)
                     * static_cast<float>(speechEnvelope.size() - 1);
