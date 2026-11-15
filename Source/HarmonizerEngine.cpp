@@ -557,7 +557,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             // last reliable vowel pitch (or create a false high-note chirp).
             // The transient detector runs first so this gate applies to the
             // very same audio sample that triggered the transient.
-            if (transientMix < 0.05f)
+            if (!transientDetected && transientMix < 0.05f)
             {
                 const auto estimate = estimatePitch();
                 if (estimate >= minimumPitchHz && estimate <= maximumPitchHz)
