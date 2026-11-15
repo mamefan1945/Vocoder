@@ -66,6 +66,15 @@ MainComponent::MainComponent()
     titleLabel.setFont(juce::Font(juce::FontOptions(24.0f, juce::Font::bold)));
     addAndMakeVisible(titleLabel);
 
+    presetLabel.setText("Presets", juce::dontSendNotification);
+    addAndMakeVisible(presetLabel);
+    savePresetButton.setTooltip("Save all processing, carrier and sound controls to a reusable .vcpreset file.");
+    savePresetButton.onClick = [this] { savePreset(); };
+    addAndMakeVisible(savePresetButton);
+    loadPresetButton.setTooltip("Load a previously saved .vcpreset file.");
+    loadPresetButton.onClick = [this] { loadPreset(); };
+    addAndMakeVisible(loadPresetButton);
+
     modeLabel.setText("Processing", juce::dontSendNotification);
     addAndMakeVisible(modeLabel);
     processingMode.addItem("Pass-through", 1);
@@ -453,7 +462,14 @@ void MainComponent::resized()
     const auto vocoderMode = mode == 2;
     const auto harmonizerMode = mode == 3;
     const auto hasKeyboard = vocoderMode || harmonizerMode;
-    area.removeFromTop(10);
+    area.removeFromTop(8);
+    row = area.removeFromTop(30);
+    presetLabel.setBounds(row.removeFromLeft(58));
+    row.removeFromLeft(8);
+    savePresetButton.setBounds(row.removeFromLeft(124));
+    row.removeFromLeft(8);
+    loadPresetButton.setBounds(row.removeFromLeft(124));
+    area.removeFromTop(6);
     if (hasKeyboard)
     {
         row = area.removeFromTop(32);
@@ -568,6 +584,132 @@ void MainComponent::resized()
     deviceSelector.setBounds(0, 0, juce::jmax(320, deviceViewport.getWidth() - 18),
                              juce::jmax(300, deviceViewport.getHeight()));
 }
+
+void MainComponent::savePreset()
+{
+    presetFileChooser = std::make_unique<juce::FileChooser>(
+        "Save Vocoder preset", juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile("Vocoder Presets").getChildFile("My Preset.vcpreset"),
+        "*.vcpreset");
+    presetFileChooser->launchAsync(juce::FileBrowserComponent::saveMode
+        | juce::FileBrowserComponent::canSelectFiles
+        | juce::FileBrowserComponent::warnAboutOverwriting,
+        [this](const juce::FileChooser& chooser)
+        {
+            const auto file = chooser.getResult();
+            if (file == juce::File{})
+                return;
+
+            juce::DynamicObject::Ptr data = new juce::DynamicObject();
+            data->setProperty("formatVersion", 1);
+            data->setProperty("mode", processingMode.getSelectedId());
+            data->setProperty("carrierSource", carrierSource.getSelectedId());
+            data->setProperty("waveform", waveform.getSelectedId());
+            data->setProperty("octave", octave.getSelectedId());
+            data->setProperty("soundFontInstrument", soundFontInstrument.getSelectedId());
+            data->setProperty("outputLevel", outputLevel.getValue());
+            data->setProperty("attack", attackTime.getValue());
+            data->setProperty("release", releaseTime.getValue());
+            data->setProperty("lowFrequency", lowFrequency.getValue());
+            data->setProperty("highFrequency", highFrequency.getValue());
+            data->setProperty("dryWet", dryWetMix.getValue());
+            data->setProperty("formantShift", formantShiftSlider.getValue());
+            data->setProperty("gateThreshold", gateThresholdSlider.getValue());
+            data->setProperty("articulation", articulationLiftSlider.getValue());
+            data->setProperty("unvoicedNoise", unvoicedNoiseSlider.getValue());
+            data->setProperty("sibilance", sibilanceSlider.getValue());
+            data->setProperty("formantPreservation", formantPreservationSlider.getValue());
+            data->setProperty("transientProtection", transientProtectionSlider.getValue());
+            data->setProperty("microphoneMonitor", microphoneMonitor.getToggleState());
+            data->setProperty("carrierPreview", carrierPreview.getToggleState());
+
+            const auto json = juce::JSON::toString(juce::var(data.get()), true);
+            if (!file.replaceWithText(json))
+                statusLabel.setText("Could not save preset: " + file.getFullPathName(),
+                                    juce::dontSendNotification);
+            else
+                statusLabel.setText("Preset saved: " + file.getFileName(),
+                                    juce::dontSendNotification);
+        });
+}
+
+void MainComponent::loadPreset()
+{
+    presetFileChooser = std::make_unique<juce::FileChooser>(
+        "Load Vocoder preset", juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
+        "*.vcpreset");
+    presetFileChooser->launchAsync(juce::FileBrowserComponent::openMode
+        | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& chooser)
+        {
+            const auto file = chooser.getResult();
+            if (file == juce::File{})
+                return;
+
+            juce::var parsed;
+            const auto result = juce::JSON::parse(file.loadFileAsString(), parsed);
+            if (result.failed() || !parsed.isObject()
+                || static_cast<int>(parsed.getProperty("formatVersion", 0)) != 1)
+            {
+                statusLabel.setText("Invalid or unsupported preset file.",
+                                    juce::dontSendNotification);
+                return;
+            }
+
+            applyPreset(parsed);
+            statusLabel.setText("Preset loaded: " + file.getFileName(),
+                                juce::dontSendNotification);
+        });
+}
+
+void MainComponent::applyPreset(const juce::var& preset)
+{
+    const auto setSlider = [&preset](juce::Slider& slider, const juce::Identifier& key)
+    {
+        slider.setValue(static_cast<double>(preset.getProperty(key, slider.getValue())),
+                        juce::sendNotificationSync);
+    };
+
+    processingMode.setSelectedId(juce::jlimit(1, 3,
+        static_cast<int>(preset.getProperty("mode", processingMode.getSelectedId()))),
+        juce::sendNotificationSync);
+    carrierSource.setSelectedId(juce::jlimit(1, 2,
+        static_cast<int>(preset.getProperty("carrierSource", carrierSource.getSelectedId()))),
+        juce::sendNotificationSync);
+    waveform.setSelectedId(juce::jlimit(1, 8,
+        static_cast<int>(preset.getProperty("waveform", waveform.getSelectedId()))),
+        juce::sendNotificationSync);
+    octave.setSelectedId(juce::jlimit(1, 5,
+        static_cast<int>(preset.getProperty("octave", octave.getSelectedId()))),
+        juce::sendNotificationSync);
+    const auto instrumentId = static_cast<int>(preset.getProperty(
+        "soundFontInstrument", soundFontInstrument.getSelectedId()));
+    if (instrumentId > 0 && instrumentId <= soundFontInstrument.getNumItems())
+        soundFontInstrument.setSelectedId(instrumentId, juce::sendNotificationSync);
+
+    setSlider(outputLevel, "outputLevel");
+    setSlider(attackTime, "attack");
+    setSlider(releaseTime, "release");
+    setSlider(lowFrequency, "lowFrequency");
+    setSlider(highFrequency, "highFrequency");
+    setSlider(dryWetMix, "dryWet");
+    setSlider(formantShiftSlider, "formantShift");
+    setSlider(gateThresholdSlider, "gateThreshold");
+    setSlider(articulationLiftSlider, "articulation");
+    setSlider(unvoicedNoiseSlider, "unvoicedNoise");
+    setSlider(sibilanceSlider, "sibilance");
+    setSlider(formantPreservationSlider, "formantPreservation");
+    setSlider(transientProtectionSlider, "transientProtection");
+
+    microphoneMonitor.setToggleState(
+        static_cast<bool>(preset.getProperty("microphoneMonitor", false)),
+        juce::sendNotificationSync);
+    carrierPreview.setToggleState(
+        static_cast<bool>(preset.getProperty("carrierPreview", false)),
+        juce::sendNotificationSync);
+    updateModeControls();
+}
+
 void MainComponent::sliderValueChanged(juce::Slider* slider)
 {
     if (slider == &outputLevel)
