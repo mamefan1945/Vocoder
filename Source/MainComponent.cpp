@@ -55,8 +55,9 @@ void MainComponent::LockableMidiKeyboard::mouseUp(const juce::MouseEvent& event)
     suppressMouseSequence = false;
 }
 
-MainComponent::MainComponent()
-    : deviceSelector(deviceManager, 1, 2, 0, 2, false, false, true, false),
+MainComponent::MainComponent(std::function<void()> onStartupComplete)
+    : startupCompleteCallback(std::move(onStartupComplete)),
+      deviceSelector(deviceManager, 1, 2, 0, 2, false, false, true, false),
       midiInputRouter(keyboardState, externalMidiCollector),
       keyboardComponent(keyboardState)
 {
@@ -247,6 +248,8 @@ MainComponent::MainComponent()
             if (safeThis->statusLabel.getText().startsWith("Starting in background"))
                 safeThis->statusLabel.setText("Ready. Select a processing mode and audio devices.",
                                               juce::dontSendNotification);
+            if (safeThis->startupCompleteCallback)
+                safeThis->startupCompleteCallback();
         });
     });
 }
