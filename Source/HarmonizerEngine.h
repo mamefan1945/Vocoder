@@ -70,7 +70,6 @@ private:
     float transientMix = 0.0f;
     int transientHoldSamples = 0;
     int transientCooldownSamples = 0;
-    bool transientWasActive = false;
     float pitchBendSemitones = 0.0f;
     float targetPitchBendSemitones = 0.0f;
     int latencySamples = 0;
