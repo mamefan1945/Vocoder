@@ -43,8 +43,8 @@ namespace
             constexpr int points = 180;
             const auto twoPi = juce::MathConstants<float>::twoPi;
             const auto pi = juce::MathConstants<float>::pi;
-            const std::array<float, 3> voiceCycles { 6.2f, 7.8f, 9.3f };
-            const std::array<float, 3> voiceOffsets { -17.0f, 0.0f, 17.0f };
+            const std::array<float, 3> voiceCycles { 24.8f, 31.2f, 37.2f };
+            const std::array<float, 3> voiceOffsets { -10.0f, 0.0f, 10.0f };
             const std::array<juce::uint32, 3> voiceColours {
                 0x887bc8ff, 0xff62b5ff, 0x887fe0c4
             };
@@ -81,7 +81,7 @@ namespace
                         * std::sin(twoPi * (2.4f * t) - phase * 0.55f);
                     const auto y = waveArea.getCentreY() + voiceOffsets[voice]
                         - envelope * amplitudePulse * vocalShape
-                            * (voice == 1 ? 10.5f : 8.0f);
+                            * (voice == 1 ? 5.0f : 3.8f);
 
                     if (i == 0)
                         wave.startNewSubPath(x, y);
