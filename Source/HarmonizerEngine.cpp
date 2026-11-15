@@ -527,28 +527,58 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         inputHistory[static_cast<size_t>(totalSamples) & inputRingMask] = source;
         ++totalSamples;
 
+        const auto slope = source - previousInputSample;
+        previousInputSample = source;
+        fastEnergy += fastEnergyCoefficient * (source * source - fastEnergy);
+        slowEnergy += slowEnergyCoefficient * (source * source - slowEnergy);
+        slopeEnergy += fastEnergyCoefficient * (slope * slope - slopeEnergy);
+        if (transientCooldownSamples > 0)
+            --transientCooldownSamples;
+        if (transientCooldownSamples == 0
+            && fastEnergy > slowEnergy * 3.5f
+            && slopeEnergy > fastEnergy * 0.12f
+            && fastEnergy > 1.0e-5f)
+        {
+            transientHoldSamples = juce::jmax(transientHoldSamples,
+                static_cast<int>(currentSampleRate * 0.012));
+            transientCooldownSamples = static_cast<int>(currentSampleRate * 0.030);
+        }
+        const auto transientDetected = transientHoldSamples > 0;
+        if (transientHoldSamples > 0)
+            --transientHoldSamples;
+        transientMix += ((transientDetected ? 1.0f : 0.0f) - transientMix)
+                      * (transientDetected ? transientAttack : transientRelease);
+
         if (++pitchUpdateCounter >= updateInterval)
         {
             pitchUpdateCounter = 0;
-            const auto estimate = estimatePitch();
-            if (estimate >= minimumPitchHz && estimate <= maximumPitchHz)
+            // A T/K/P burst is broadband and has no meaningful fundamental.
+            // Do not let its short-lived periodic-looking peaks replace the
+            // last reliable vowel pitch (or create a false high-note chirp).
+            // The transient detector runs first so this gate applies to the
+            // very same audio sample that triggered the transient.
+            if (transientMix < 0.05f)
             {
-                pitchMissCount = 0;
-                detectedPitchHz = detectedPitchHz > 0.0f
-                    ? detectedPitchHz + 0.30f * (estimate - detectedPitchHz) : estimate;
+                const auto estimate = estimatePitch();
+                if (estimate >= minimumPitchHz && estimate <= maximumPitchHz)
+                {
+                    pitchMissCount = 0;
+                    detectedPitchHz = detectedPitchHz > 0.0f
+                        ? detectedPitchHz + 0.30f * (estimate - detectedPitchHz) : estimate;
+                }
+                else if (detectedPitchHz > 0.0f)
+                {
+                    // A single weak/noisy frame is common at vowel boundaries and
+                    // during vibrato. Hold the last reliable F0 briefly, then fade
+                    // it instead of multiplying it by 0.60 and losing voicing in
+                    // only two or three analysis updates.
+                    pitchMissCount = juce::jmin(pitchMissCount + 1, 1000);
+                    if (pitchMissCount > 3)
+                        detectedPitchHz *= 0.88f;
+                }
+                if (detectedPitchHz < minimumPitchHz)
+                    detectedPitchHz = 0.0f;
             }
-            else if (detectedPitchHz > 0.0f)
-            {
-                // A single weak/noisy frame is common at vowel boundaries and
-                // during vibrato. Hold the last reliable F0 briefly, then fade
-                // it instead of multiplying it by 0.60 and losing voicing in
-                // only two or three analysis updates.
-                pitchMissCount = juce::jmin(pitchMissCount + 1, 1000);
-                if (pitchMissCount > 3)
-                    detectedPitchHz *= 0.88f;
-            }
-            if (detectedPitchHz < minimumPitchHz)
-                detectedPitchHz = 0.0f;
         }
 
         if (++formantUpdateCounter >= updateInterval)
@@ -574,27 +604,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         }
         residualHistory[historyIndex] = residual;
 
-        const auto slope = source - previousInputSample;
-        previousInputSample = source;
-        fastEnergy += fastEnergyCoefficient * (source * source - fastEnergy);
-        slowEnergy += slowEnergyCoefficient * (source * source - slowEnergy);
-        slopeEnergy += fastEnergyCoefficient * (slope * slope - slopeEnergy);
-        if (transientCooldownSamples > 0)
-            --transientCooldownSamples;
-        if (transientCooldownSamples == 0
-            && fastEnergy > slowEnergy * 3.5f
-            && slopeEnergy > fastEnergy * 0.12f
-            && fastEnergy > 1.0e-5f)
-        {
-            transientHoldSamples = juce::jmax(transientHoldSamples,
-                static_cast<int>(currentSampleRate * 0.012));
-            transientCooldownSamples = static_cast<int>(currentSampleRate * 0.030);
-        }
-        const auto transientDetected = transientHoldSamples > 0;
-        if (transientHoldSamples > 0)
-            --transientHoldSamples;
-        transientMix += ((transientDetected ? 1.0f : 0.0f) - transientMix)
-                      * (transientDetected ? transientAttack : transientRelease);
+
 
         const auto voiced = detectedPitchHz >= minimumPitchHz
                          && detectedPitchHz <= maximumPitchHz;
