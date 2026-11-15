@@ -56,10 +56,10 @@ void MainComponent::LockableMidiKeyboard::mouseUp(const juce::MouseEvent& event)
 }
 
 MainComponent::MainComponent(std::function<void()> onStartupComplete)
-    : startupCompleteCallback(std::move(onStartupComplete)),
-      deviceSelector(deviceManager, 1, 2, 0, 2, false, false, true, false),
+    : deviceSelector(deviceManager, 1, 2, 0, 2, false, false, true, false),
       midiInputRouter(keyboardState, externalMidiCollector),
-      keyboardComponent(keyboardState)
+      keyboardComponent(keyboardState),
+      startupCompleteCallback(onStartupComplete)
 {
     setSize(1080, 740);
 
