@@ -77,6 +77,9 @@ private:
     void updateModeControls();
     void populateSoundFontInstruments();
     void chooseSoundFont();
+    void savePreset();
+    void loadPreset();
+    void applyPreset(const juce::var& preset);
     void processAudio(const float* const* inputChannelData,
                       int numInputChannels,
                       float* const* outputChannelData,
@@ -98,6 +101,10 @@ private:
     juce::ComboBox carrierSource;
     juce::ComboBox midiInput;
     juce::TextButton refreshMidiButton { "Refresh" };
+    juce::Label presetLabel;
+    juce::TextButton savePresetButton { "Save preset..." };
+    juce::TextButton loadPresetButton { "Load preset..." };
+    std::unique_ptr<juce::FileChooser> presetFileChooser;
     juce::ComboBox waveform;
     juce::ComboBox octave;
     juce::ComboBox soundFontInstrument;
