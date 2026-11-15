@@ -106,8 +106,6 @@ MainComponent::MainComponent()
     refreshMidiButton.setTooltip("Rescan Windows MIDI inputs. Connect the keyboard first, then refresh if it is not listed.");
     refreshMidiButton.onClick = [this] { refreshMidiInputs(); };
     addAndMakeVisible(refreshMidiButton);
-    refreshMidiInputs();
-
     waveformLabel.setText("Carrier type", juce::dontSendNotification);
     addAndMakeVisible(waveformLabel);
     waveform.addItem("Sine", 1);
@@ -221,33 +219,44 @@ MainComponent::MainComponent()
     keyboardComponent.setKeyWidth(24.0f);
     addAndMakeVisible(keyboardComponent);
 
-    statusLabel.setText("Initializing audio devices...", juce::dontSendNotification);
+    statusLabel.setText("Starting in background...", juce::dontSendNotification);
     addAndMakeVisible(statusLabel);
     deviceViewport.setViewedComponent(&deviceSelector, false);
     deviceViewport.setScrollBarsShown(true, false);
     deviceViewport.setScrollOnDragEnabled(true);
     addAndMakeVisible(deviceViewport);
 
-    const auto defaultSoundFont = juce::File::getSpecialLocation(
-        juce::File::currentExecutableFile).getSiblingFile("SoundFonts")
-        .getChildFile("GeneralUser-GS.sf2");
-    juce::String soundFontError;
-    if (soundFontEngine.load(defaultSoundFont, soundFontError))
-        populateSoundFontInstruments();
-    else
-        statusLabel.setText("Default SoundFont unavailable: " + soundFontError,
-                            juce::dontSendNotification);
-
-    const auto error = deviceManager.initialise(2, 2, nullptr, true);
-    if (error.isNotEmpty())
-        statusLabel.setText("Audio initialization: " + error, juce::dontSendNotification);
-
-    deviceManager.addAudioCallback(this);
     updateModeControls();
+
+    // Defer all potentially slow startup work until after this component has
+    // returned to the message loop, so the splash and waveform can animate.
+    juce::Component::SafePointer<MainComponent> safeThis(this);
+    startupThread = std::thread([this, safeThis]
+    {
+        initializeAudioAndInstruments();
+        if (shuttingDown.load(std::memory_order_acquire))
+            return;
+
+        juce::MessageManager::callAsync([safeThis]
+        {
+            if (safeThis == nullptr)
+                return;
+
+            safeThis->populateSoundFontInstruments();
+            safeThis->refreshMidiInputs();
+            if (safeThis->statusLabel.getText().startsWith("Starting in background"))
+                safeThis->statusLabel.setText("Ready. Select a processing mode and audio devices.",
+                                              juce::dontSendNotification);
+        });
+    });
 }
 
 MainComponent::~MainComponent()
 {
+    shuttingDown.store(true, std::memory_order_release);
+    if (startupThread.joinable())
+        startupThread.join();
+
     deviceManager.removeAudioCallback(this);
     if (activeMidiIdentifier.isNotEmpty())
         deviceManager.removeMidiInputDeviceCallback(activeMidiIdentifier, &midiInputRouter);
@@ -266,6 +275,44 @@ MainComponent::~MainComponent()
     transientProtectionSlider.removeListener(this);
     stopTimer();
     deviceManager.closeAudioDevice();
+}
+
+
+void MainComponent::initializeAudioAndInstruments()
+{
+    const auto defaultSoundFont = juce::File::getSpecialLocation(
+        juce::File::currentExecutableFile).getSiblingFile("SoundFonts")
+        .getChildFile("GeneralUser-GS.sf2");
+
+    juce::String soundFontError;
+    const auto soundFontLoaded = soundFontEngine.load(defaultSoundFont, soundFontError);
+
+    if (shuttingDown.load(std::memory_order_acquire))
+        return;
+
+    // Opening a Windows audio device can block while the driver initializes;
+    // keep it off the UI thread. Register the callback only after the synth
+    // engine and its SoundFont state have finished loading.
+    const auto audioError = deviceManager.initialise(2, 2, nullptr, true);
+    if (shuttingDown.load(std::memory_order_acquire))
+        return;
+
+    deviceManager.addAudioCallback(this);
+
+    juce::Component::SafePointer<MainComponent> safeThis(this);
+    juce::MessageManager::callAsync([safeThis, soundFontLoaded,
+                                     soundFontError, audioError]
+    {
+        if (safeThis == nullptr)
+            return;
+
+        if (!soundFontLoaded)
+            safeThis->statusLabel.setText("Default SoundFont unavailable: "
+                + soundFontError, juce::dontSendNotification);
+        else if (audioError.isNotEmpty())
+            safeThis->statusLabel.setText("Audio initialization: "
+                + audioError, juce::dontSendNotification);
+    });
 }
 
 void MainComponent::updateSoundFontControls()
