@@ -13,7 +13,7 @@ class MainComponent final : public juce::Component,
                             private juce::Timer
 {
 public:
-    MainComponent();
+    explicit MainComponent(std::function<void()> onStartupComplete = {});
     ~MainComponent() override;
 
     void paint(juce::Graphics& graphics) override;
@@ -161,6 +161,7 @@ private:
     juce::String activeMidiIdentifier;
     std::thread startupThread;
     std::atomic<bool> shuttingDown { false };
+    std::function<void()> startupCompleteCallback;
 
     std::atomic<float> outputGain { 1.0f };
     std::atomic<float> harmonizerMix { 1.0f };
