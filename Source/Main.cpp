@@ -106,7 +106,8 @@ private:
             centreWithSize(900, 620);
             setVisible(true);
 
-            // Let the splash paint at least once before constructing MainComponent.
+            // Let the splash paint, then construct the application component
+            // asynchronously while keeping the animated splash visible.
             startTimer(250);
         }
 
@@ -124,8 +125,14 @@ private:
         void timerCallback() override
         {
             stopTimer();
-            setContentOwned(new MainComponent(), true);
+            pendingMainComponent = std::make_unique<MainComponent>([this]
+            {
+                if (pendingMainComponent != nullptr)
+                    setContentOwned(pendingMainComponent.release(), true);
+            });
         }
+
+        std::unique_ptr<MainComponent> pendingMainComponent;
     };
 
     std::unique_ptr<MainWindow> mainWindow;
