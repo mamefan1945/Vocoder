@@ -37,47 +37,71 @@ namespace
             g.setColour(juce::Colour(0xff343b48));
             g.drawRoundedRectangle(waveArea, 8.0f, 1.0f);
 
-            // At this zoom level the individual carrier cycles are below
-            // screen resolution. Render their animated vocal-shaped envelope
-            // per pixel instead of drawing aliased oscillations.
+            // A speech-shaped, harmonized waveform based on the synthesized
+            // phrase "Vocoder. Harmonizer." The envelope preserves the
+            // consonant bursts, changing vowel energy and short word gap.
+            // 20x zoom-out: fewer carrier cycles, with enough variation to
+            // read as a vocal phrase rather than a uniform band.
             const auto twoPi = juce::MathConstants<float>::twoPi;
-            const auto pi = juce::MathConstants<float>::pi;
-            const std::array<float, 3> voiceCycles { 248.0f, 312.0f, 372.0f };
-            const std::array<float, 3> voiceOffsets { -8.0f, 0.0f, 8.0f };
+            const std::array<float, 3> voiceCycles { 124.0f, 156.0f, 186.0f };
+            const std::array<float, 3> voiceOffsets { -4.0f, 0.0f, 4.0f };
+            const std::array<float, 3> voicePhase { 0.0f, 0.17f, -0.13f };
             const std::array<juce::uint32, 3> voiceColours {
                 0x887bc8ff, 0xff62b5ff, 0x887fe0c4
             };
-            const auto columns = juce::jmax(1, juce::roundToInt(waveArea.getWidth()));
 
+            // Relative RMS profile across "Vocoder" then "Harmonizer".
+            // The low section near the middle is the deliberately short pause.
+            constexpr std::array<float, 33> speechEnvelope {
+                0.05f, 0.10f, 0.16f, 0.32f, 0.78f, 0.94f, 0.62f, 0.30f,
+                0.16f, 0.10f, 0.28f, 0.48f, 0.34f, 0.18f, 0.38f, 0.52f,
+                0.30f, 0.09f, 0.07f, 0.12f, 0.20f, 0.56f, 1.00f, 0.72f,
+                0.46f, 0.32f, 0.20f, 0.52f, 0.88f, 0.60f, 0.38f, 0.26f,
+                0.12f
+            };
+
+            const auto sampleEnvelope = [](float position)
+            {
+                const auto scaled = juce::jlimit(0.0f, 1.0f, position)
+                    * static_cast<float>(speechEnvelope.size() - 1);
+                const auto index = juce::jmin(static_cast<int>(scaled),
+                    static_cast<int>(speechEnvelope.size()) - 2);
+                const auto fraction = scaled - static_cast<float>(index);
+                return juce::jmap(fraction, speechEnvelope[static_cast<size_t>(index)],
+                    speechEnvelope[static_cast<size_t>(index + 1)]);
+            };
+
+            const auto columns = juce::jmax(1, juce::roundToInt(waveArea.getWidth()));
             for (size_t voice = 0; voice < voiceCycles.size(); ++voice)
             {
-                juce::Path envelopePath;
+                juce::Path waveform;
                 for (int i = 0; i <= columns; ++i)
                 {
                     const auto t = static_cast<float>(i) / static_cast<float>(columns);
                     const auto x = waveArea.getX() + waveArea.getWidth() * t;
-                    const auto phasePosition = t * voiceCycles[voice] * twoPi - phase
-                        * (1.0f + 0.07f * static_cast<float>(voice));
-                    const auto formantA = 0.68f + 0.32f
-                        * std::sin(twoPi * (1.15f * t) - phase * 0.32f);
-                    const auto formantB = 0.72f + 0.28f
-                        * std::sin(twoPi * (2.1f * t) + phase * 0.21f);
-                    const auto harmonicEnergy = 1.0f + 0.42f * std::abs(formantA)
-                        + 0.24f * std::abs(formantB) + 0.12f + 0.07f;
-                    const auto envelopeShape = juce::jmax(0.0f, std::sin(pi * t));
-                    const auto envelope = 0.48f + 0.52f
-                        * std::pow(envelopeShape, 0.42f);
-                    const auto animated = 0.88f + 0.12f
-                        * std::sin(phasePosition * 0.001f + phase * 0.3f);
-                    const auto halfHeight = envelope * animated
-                        * harmonicEnergy * (voice == 1 ? 4.0f : 3.2f);
+                    const auto carrierPhase = twoPi * voiceCycles[voice] * t
+                        - phase * (1.0f + 0.035f * static_cast<float>(voice))
+                        + voicePhase[voice];
+                    const auto formantMotion = 0.82f
+                        + 0.12f * std::sin(twoPi * (2.0f * t) - phase * 0.31f)
+                        + 0.06f * std::sin(twoPi * (5.0f * t) + phase * 0.23f);
+                    const auto breathMotion = 0.90f
+                        + 0.10f * std::sin(phase * 0.7f + t * twoPi * 3.0f
+                            + static_cast<float>(voice) * 0.4f);
+                    const auto envelope = sampleEnvelope(t) * formantMotion * breathMotion;
+                    const auto harmonic = std::sin(carrierPhase)
+                        + 0.20f * std::sin(carrierPhase * 2.01f + 0.4f)
+                        + 0.08f * std::sin(carrierPhase * 3.97f - 0.2f);
                     const auto centre = waveArea.getCentreY() + voiceOffsets[voice];
-                    envelopePath.startNewSubPath(x, centre - halfHeight);
-                    envelopePath.lineTo(x, centre + halfHeight);
+                    const auto y = centre - harmonic * envelope * 22.0f;
+                    if (i == 0)
+                        waveform.startNewSubPath(x, y);
+                    else
+                        waveform.lineTo(x, y);
                 }
 
                 g.setColour(juce::Colour(voiceColours[voice]));
-                g.strokePath(envelopePath, juce::PathStrokeType(
+                g.strokePath(waveform, juce::PathStrokeType(
                     voice == 1 ? 1.8f : 1.3f));
             }
         }
