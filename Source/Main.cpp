@@ -46,8 +46,14 @@ namespace
                 const auto x = waveArea.getX() + waveArea.getWidth()
                     * static_cast<float>(i) / static_cast<float>(points);
                 const auto t = static_cast<float>(i) / static_cast<float>(points);
+                // Clamp the sine before the fractional power. At t == 1,
+                // floating-point rounding can make sin(pi) slightly negative;
+                // pow(negative, fractional) produces NaN and can invalidate
+                // the entire JUCE path, leaving only the placeholder frame.
+                const auto envelopeShape = juce::jmax(0.0f,
+                    std::sin(juce::MathConstants<float>::pi * t));
                 const auto envelope = 0.35f + 0.65f
-                    * std::pow(std::sin(juce::MathConstants<float>::pi * t), 0.55f);
+                    * std::pow(envelopeShape, 0.55f);
                 const auto y = waveArea.getCentreY()
                     - envelope * (12.0f * std::sin(t * 6.0f * juce::MathConstants<float>::twoPi - phase)
                     + 4.0f * std::sin(t * 13.0f * juce::MathConstants<float>::twoPi - phase * 1.7f));
