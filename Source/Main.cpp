@@ -31,27 +31,40 @@ namespace
                              getLocalBounds().withY(getHeight() / 2 - 24).withHeight(28),
                              juce::Justification::centred, 1);
 
-            const auto centre = juce::Point<float>(getWidth() * 0.5f,
-                                                    getHeight() * 0.5f + 42.0f);
-            const auto radius = 15.0f;
+            const auto waveArea = juce::Rectangle<float>(
+                getWidth() * 0.18f, getHeight() * 0.5f + 20.0f,
+                getWidth() * 0.64f, 54.0f);
             g.setColour(juce::Colour(0xff343b48));
-            g.drawEllipse(centre.x - radius, centre.y - radius,
-                          radius * 2.0f, radius * 2.0f, 3.0f);
+            g.drawRoundedRectangle(waveArea, 8.0f, 1.0f);
 
+            // Animated multi-partial waveform: a visible signal trace rather than
+            // a spinner that can appear stuck when startup work takes longer.
+            juce::Path wave;
+            constexpr int points = 120;
+            for (int i = 0; i <= points; ++i)
+            {
+                const auto x = waveArea.getX() + waveArea.getWidth()
+                    * static_cast<float>(i) / static_cast<float>(points);
+                const auto t = static_cast<float>(i) / static_cast<float>(points);
+                const auto envelope = 0.35f + 0.65f
+                    * std::pow(std::sin(juce::MathConstants<float>::pi * t), 0.55f);
+                const auto y = waveArea.getCentreY()
+                    - envelope * (12.0f * std::sin(t * 6.0f * juce::MathConstants<float>::twoPi - phase)
+                    + 4.0f * std::sin(t * 13.0f * juce::MathConstants<float>::twoPi - phase * 1.7f));
+                if (i == 0)
+                    wave.startNewSubPath(x, y);
+                else
+                    wave.lineTo(x, y);
+            }
             g.setColour(juce::Colour(0xff62b5ff));
-            const auto startAngle = phase - 1.0f;
-            const auto endAngle = phase + 1.0f;
-            juce::Path arc;
-            arc.addCentredArc(centre.x, centre.y, radius, radius, 0.0f,
-                              startAngle, endAngle, true);
-            g.strokePath(arc, juce::PathStrokeType(3.0f,
-                           juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.strokePath(wave, juce::PathStrokeType(2.6f,
+                juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
 
     private:
         void timerCallback() override
         {
-            phase = std::fmod(phase + 0.12f, juce::MathConstants<float>::twoPi);
+            phase = std::fmod(phase + 0.22f, juce::MathConstants<float>::twoPi);
             repaint();
         }
 
