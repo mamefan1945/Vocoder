@@ -587,9 +587,11 @@ void MainComponent::resized()
 
 void MainComponent::savePreset()
 {
+    const auto presetDirectory = juce::File::getSpecialLocation(
+        juce::File::userDocumentsDirectory).getChildFile("Vocoder Presets");
+    presetDirectory.createDirectory();
     presetFileChooser = std::make_unique<juce::FileChooser>(
-        "Save Vocoder preset", juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-            .getChildFile("Vocoder Presets").getChildFile("My Preset.vcpreset"),
+        "Save Vocoder preset", presetDirectory.getChildFile("My Preset.vcpreset"),
         "*.vcpreset");
     presetFileChooser->launchAsync(juce::FileBrowserComponent::saveMode
         | juce::FileBrowserComponent::canSelectFiles
@@ -635,8 +637,11 @@ void MainComponent::savePreset()
 
 void MainComponent::loadPreset()
 {
+    const auto presetDirectory = juce::File::getSpecialLocation(
+        juce::File::userDocumentsDirectory).getChildFile("Vocoder Presets");
+    presetDirectory.createDirectory();
     presetFileChooser = std::make_unique<juce::FileChooser>(
-        "Load Vocoder preset", juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
+        "Load Vocoder preset", presetDirectory,
         "*.vcpreset");
     presetFileChooser->launchAsync(juce::FileBrowserComponent::openMode
         | juce::FileBrowserComponent::canSelectFiles,
