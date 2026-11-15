@@ -42,7 +42,7 @@ namespace
             // per pixel instead of drawing aliased oscillations.
             const auto twoPi = juce::MathConstants<float>::twoPi;
             const auto pi = juce::MathConstants<float>::pi;
-            const std::array<float, 3> voiceCycles { 2480.0f, 3120.0f, 3720.0f };
+            const std::array<float, 3> voiceCycles { 248.0f, 312.0f, 372.0f };
             const std::array<float, 3> voiceOffsets { -8.0f, 0.0f, 8.0f };
             const std::array<juce::uint32, 3> voiceColours {
                 0x887bc8ff, 0xff62b5ff, 0x887fe0c4
