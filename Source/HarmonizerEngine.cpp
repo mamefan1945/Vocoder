@@ -646,12 +646,14 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         float voicedHarmony = 0.0f;
         float unvoicedGain = 0.0f;
         int activeCount = 0;
+        int psolaVoiceCount = 0;
 
         for (auto& voice : voices)
         {
             const auto ringIndex = static_cast<size_t>(absolute) & outputRingMask;
             const auto weight = voice.weights[ringIndex];
-            const auto psola = weight > 1.0e-5f
+            const auto hasPsolaGrain = weight > 1.0e-5f;
+            const auto psola = hasPsolaGrain
                 ? voice.overlap[ringIndex] / weight : 0.0f;
             voice.overlap[ringIndex] = 0.0f;
             voice.weights[ringIndex] = 0.0f;
@@ -698,6 +700,8 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             const auto voiceLevel = voice.velocity * voice.envelope;
             voicedHarmony += formantOutput * voiceLevel;
             unvoicedGain = juce::jmax(unvoicedGain, voiceLevel);
+            if (hasPsolaGrain)
+                ++psolaVoiceCount;
             ++activeCount;
         }
 
@@ -708,6 +712,15 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             ? 1.0f / std::sqrt(static_cast<float>(activeCount)) : 0.0f;
         auto harmony = voicedHarmony * normalization * voicedMix
                      + delayedInput * (1.0f - voicedMix) * unvoicedGain;
+
+        // Pitch can reacquire before the first valid PSOLA grains are available,
+        // and a lost mark train can otherwise leave a held MIDI note nearly silent.
+        // Fall back to the latency-aligned vocal only for voices that have no
+        // scheduled grain at this output sample; retain full PSOLA whenever present.
+        const auto grainCoverage = activeCount > 0
+            ? static_cast<float>(psolaVoiceCount) / static_cast<float>(activeCount) : 0.0f;
+        harmony = harmony * grainCoverage
+               + delayedInput * unvoicedGain * (1.0f - grainCoverage);
         // Briefly favour the latency-aligned direct signal at detected attacks.
         // This avoids smearing plosives and sharp consonant onsets across PSOLA grains.
         harmony += transientMix * transientAmount
