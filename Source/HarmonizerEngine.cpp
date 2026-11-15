@@ -89,7 +89,6 @@ void HarmonizerEngine::reset() noexcept
     transientMix = 0.0f;
     transientHoldSamples = 0;
     transientCooldownSamples = 0;
-    transientWasActive = false;
     previousPitchMark = -1;
     previousPitchPeriod = 0.0;
     nextExpectedPitchMark = 0.0;
