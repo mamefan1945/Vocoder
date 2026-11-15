@@ -550,23 +550,6 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         transientMix += ((transientDetected ? 1.0f : 0.0f) - transientMix)
                       * (transientDetected ? transientAttack : transientRelease);
 
-        // A hard consonant can leave the residual peak tracker following
-        // broadband, non-periodic peaks. Invalidate that pitch/PSOLA timeline
-        // once at transient onset, while keeping MIDI voices themselves held.
-        // The next reliable voiced pitch estimate starts a fresh grain train.
-        const auto transientStarted = transientDetected && !transientWasActive;
-        transientWasActive = transientDetected;
-        if (transientStarted)
-        {
-            detectedPitchHz = 0.0f;
-            pitchMissCount = 0;
-            havePitchMark = false;
-            previousPitchMark = -1;
-            previousPitchPeriod = 0.0;
-            for (auto& voice : voices)
-                voice.synthesisMarkInitialized = false;
-        }
-
         if (++pitchUpdateCounter >= updateInterval)
         {
             pitchUpdateCounter = 0;
