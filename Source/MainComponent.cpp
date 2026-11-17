@@ -686,6 +686,7 @@ void MainComponent::startSpeechTest()
     monitorMicrophone.store(false, std::memory_order_relaxed);
     carrierPreview.setToggleState(false, juce::dontSendNotification);
     previewCarrier.store(false, std::memory_order_relaxed);
+    midiInput.setSelectedId(1, juce::sendNotificationSync); // Isolate the fixed test note from external MIDI.
     for (int channel = 1; channel <= 16; ++channel)
         keyboardState.allNotesOff(channel);
     keyboardState.noteOn(1, 48, 0.8f); // C3: stable, single-note carrier reference.
