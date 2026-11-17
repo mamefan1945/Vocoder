@@ -62,6 +62,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
       startupCompleteCallback(onStartupComplete)
 {
     setSize(1080, 740);
+    testAudioFormats.registerBasicFormats();
 
     titleLabel.setText("VOCODER  |  REAL-TIME AUDIO", juce::dontSendNotification);
     titleLabel.setFont(juce::Font(juce::FontOptions(24.0f, juce::Font::bold)));
@@ -320,6 +321,40 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     };
     addAndMakeVisible(carrierPreview);
 
+    loadTestAudioButton.setTooltip("Load prerecorded speech for repeatable testing.");
+    loadTestAudioButton.onClick = [this] { chooseTestAudio(); };
+    addAndMakeVisible(loadTestAudioButton);
+    playTestAudioButton.setEnabled(false);
+    playTestAudioButton.onClick = [this]
+    {
+        if (testAudioReaderSource != nullptr)
+        {
+            if (testAudioTransport.getCurrentPosition() >= testAudioTransport.getLengthInSeconds())
+                testAudioTransport.setPosition(0.0);
+            testAudioTransport.start();
+            statusLabel.setText("Playing prerecorded test input", juce::dontSendNotification);
+        }
+    };
+    addAndMakeVisible(playTestAudioButton);
+    stopTestAudioButton.setEnabled(false);
+    stopTestAudioButton.onClick = [this]
+    {
+        testAudioTransport.stop();
+        if (testAudioReaderSource != nullptr) testAudioTransport.setPosition(0.0);
+        statusLabel.setText("Test audio stopped", juce::dontSendNotification);
+    };
+    addAndMakeVisible(stopTestAudioButton);
+    useTestAudioInput.setEnabled(false);
+    useTestAudioInput.setTooltip("Replace microphone input with the file; external carrier input remains available.");
+    useTestAudioInput.onClick = [this]
+    {
+        useTestAudio.store(useTestAudioInput.getToggleState(), std::memory_order_relaxed);
+        statusLabel.setText(useTestAudioInput.getToggleState()
+            ? "Prerecorded file selected as voice input" : "Live audio input selected",
+            juce::dontSendNotification);
+    };
+    addAndMakeVisible(useTestAudioInput);
+
     startTimerHz(20);
 
     keyboardComponent.setAvailableRange(36, 108);
@@ -367,6 +402,9 @@ MainComponent::~MainComponent()
         startupThread.join();
 
     deviceManager.removeAudioCallback(this);
+    testAudioTransport.stop();
+    testAudioTransport.setSource(nullptr);
+    testAudioReaderSource.reset();
     if (activeMidiIdentifier.isNotEmpty())
         deviceManager.removeMidiInputDeviceCallback(activeMidiIdentifier, &midiInputRouter);
     outputLevel.removeListener(this);
@@ -542,6 +580,44 @@ void MainComponent::chooseSoundFont()
         });
 }
 
+void MainComponent::chooseTestAudio()
+{
+    testAudioFileChooser = std::make_unique<juce::FileChooser>(
+        "Choose prerecorded speech for testing", juce::File{},
+        "*.wav;*.aif;*.aiff;*.flac;*.mp3;*.ogg");
+    testAudioFileChooser->launchAsync(
+        juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [safeThis = juce::Component::SafePointer<MainComponent>(this)](const juce::FileChooser& chooser)
+        {
+            if (safeThis == nullptr) return;
+            const auto file = chooser.getResult();
+            if (file == juce::File{}) return;
+            std::unique_ptr<juce::AudioFormatReader> reader(
+                safeThis->testAudioFormats.createReaderFor(file));
+            if (reader == nullptr)
+            {
+                safeThis->statusLabel.setText("Could not read audio file: " + file.getFileName(),
+                                              juce::dontSendNotification);
+                return;
+            }
+            safeThis->testAudioTransport.stop();
+            safeThis->testAudioTransport.setSource(nullptr);
+            safeThis->testAudioReaderSource.reset();
+            auto newSource = std::make_unique<juce::AudioFormatReaderSource>(reader.release(), true);
+            const auto sourceRate = newSource->getAudioFormatReader()->sampleRate;
+            safeThis->testAudioTransport.setSource(newSource.get(), 0, nullptr, sourceRate);
+            safeThis->testAudioReaderSource = std::move(newSource);
+            safeThis->useTestAudioInput.setEnabled(true);
+            safeThis->playTestAudioButton.setEnabled(true);
+            safeThis->stopTestAudioButton.setEnabled(true);
+            safeThis->useTestAudioInput.setToggleState(true, juce::sendNotification);
+            safeThis->statusLabel.setText("Loaded: " + file.getFileName() + " | "
+                + juce::String(sourceRate, 0) + " Hz | "
+                + juce::String(safeThis->testAudioTransport.getLengthInSeconds(), 1) + " s",
+                juce::dontSendNotification);
+        });
+}
+
 void MainComponent::refreshMidiInputs()
 {
     const auto previousIdentifier = activeMidiIdentifier;
@@ -632,6 +708,15 @@ void MainComponent::resized()
     savePresetButton.setBounds(row.removeFromLeft(124));
     row.removeFromLeft(8);
     loadPresetButton.setBounds(row.removeFromLeft(124));
+    area.removeFromTop(6);
+    row = area.removeFromTop(30);
+    loadTestAudioButton.setBounds(row.removeFromLeft(150));
+    row.removeFromLeft(6);
+    playTestAudioButton.setBounds(row.removeFromLeft(64));
+    row.removeFromLeft(4);
+    stopTestAudioButton.setBounds(row.removeFromLeft(64));
+    row.removeFromLeft(12);
+    useTestAudioInput.setBounds(row.removeFromLeft(190));
     area.removeFromTop(6);
     if (hasKeyboard)
     {
@@ -969,6 +1054,8 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
     if (device != nullptr)
     {
         externalMidiCollector.reset(device->getCurrentSampleRate());
+        testAudioTransport.prepareToPlay(device->getCurrentBufferSizeSamples(), device->getCurrentSampleRate());
+        testAudioBuffer.setSize(1, juce::jmax(512, device->getCurrentBufferSizeSamples()), false, false, true);
         vocoder.prepare(device->getCurrentSampleRate());
         carrierSynth.setCurrentPlaybackSampleRate(device->getCurrentSampleRate());
         synthBuffer.setSize(1, juce::jmax(512, device->getCurrentBufferSizeSamples()), false, false, true);
@@ -1005,6 +1092,7 @@ void MainComponent::audioDeviceStopped()
 {
     vocoder.reset();
     harmonizer.reset();
+    testAudioTransport.releaseResources();
     juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<MainComponent>(this)]
     {
         if (safeThis != nullptr)
@@ -1038,8 +1126,16 @@ void MainComponent::audioDeviceIOCallbackWithContext(const float* const* inputCh
     else
         carrierSynth.renderNextBlock(synthBuffer, midiBuffer, 0, numSamples);
 
+    const float* prerecordedVoice = nullptr;
+    if (useTestAudio.load(std::memory_order_relaxed) && testAudioBuffer.getNumSamples() >= numSamples)
+    {
+        testAudioBuffer.clear(0, 0, numSamples);
+        juce::AudioSourceChannelInfo testInfo(&testAudioBuffer, 0, numSamples);
+        testAudioTransport.getNextAudioBlock(testInfo);
+        prerecordedVoice = testAudioBuffer.getReadPointer(0);
+    }
     processAudio(inputChannelData, numInputChannels, outputChannelData, numOutputChannels,
-                 numSamples, synthBuffer.getReadPointer(0), midiBuffer);
+                 numSamples, synthBuffer.getReadPointer(0), midiBuffer, prerecordedVoice);
 }
 
 void MainComponent::processAudio(const float* const* inputChannelData,
@@ -1048,14 +1144,16 @@ void MainComponent::processAudio(const float* const* inputChannelData,
                                  int numOutputChannels,
                                  int numSamples,
                                  const float* internalCarrier,
-                                 const juce::MidiBuffer& midi)
+                                 const juce::MidiBuffer& midi,
+                                 const float* prerecordedVoice)
 {
     const auto gain = outputGain.load();
     const auto mode = selectedMode.load();
     const auto vocoderEnabled = mode == 1;
     const auto harmonizerEnabled = mode == 2;
     if (harmonizerEnabled && harmonizerBuffer.getNumSamples() >= numSamples)
-        harmonizer.processBlock(numInputChannels > 0 ? inputChannelData[0] : nullptr,
+        harmonizer.processBlock(prerecordedVoice != nullptr ? prerecordedVoice
+                                : (numInputChannels > 0 ? inputChannelData[0] : nullptr),
                                 harmonizerBuffer.getWritePointer(0), numSamples, midi,
                                 harmonizerMix.load(std::memory_order_relaxed), gain,
                                 harmonizerOctaveShift.load(std::memory_order_relaxed));
@@ -1067,8 +1165,9 @@ void MainComponent::processAudio(const float* const* inputChannelData,
 
     for (int sample = 0; sample < numSamples; ++sample)
     {
-        const auto voice = numInputChannels > 0 && inputChannelData[0] != nullptr
-            ? inputChannelData[0][sample] : 0.0f;
+        const auto voice = prerecordedVoice != nullptr ? prerecordedVoice[sample]
+            : (numInputChannels > 0 && inputChannelData[0] != nullptr
+                ? inputChannelData[0][sample] : 0.0f);
         const auto external = numInputChannels > 1 && inputChannelData[1] != nullptr
             ? inputChannelData[1][sample] : 0.0f;
         const auto synth = internalCarrier != nullptr ? internalCarrier[sample] : 0.0f;
