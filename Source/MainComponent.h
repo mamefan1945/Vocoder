@@ -80,6 +80,10 @@ private:
     void populateSoundFontInstruments();
     void chooseSoundFont();
     void chooseTestAudio();
+    bool loadTestAudioFile(const juce::File& file, bool loop);
+    juce::File findSpeechTestFile(const juce::String& voiceName) const;
+    void startSpeechTest();
+    void stopSpeechTest();
     void savePreset();
     void loadPreset();
     void applyPreset(const juce::var& preset);
@@ -120,6 +124,8 @@ private:
     juce::TextButton playTestAudioButton { "Play" };
     juce::TextButton stopTestAudioButton { "Stop" };
     juce::ToggleButton useTestAudioInput { "Use file as voice input" };
+    juce::ComboBox testVoiceSelector;
+    juce::TextButton runSpeechTestButton { "Run speech test" };
     std::unique_ptr<juce::FileChooser> testAudioFileChooser;
     juce::AudioFormatManager testAudioFormats;
     juce::TimeSliceThread testAudioReadAheadThread { "Vocoder test audio read-ahead" };
@@ -192,6 +198,7 @@ private:
     std::atomic<bool> monitorMicrophone { false };
     std::atomic<bool> previewCarrier { false };
     std::atomic<bool> useTestAudio { false };
+    bool speechTestRunning = false;
     bool applyingCarrierPreset = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
