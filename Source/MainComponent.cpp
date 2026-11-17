@@ -191,6 +191,24 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     configureControl(articulationLiftSlider, articulationLiftLabel, "Articulation", 0.0, 200.0, 1.0, 100.0, " %");
     configureControl(unvoicedNoiseSlider, unvoicedNoiseLabel, "Unvoiced noise", 0.0, 200.0, 1.0, 100.0, " %");
     configureControl(sibilanceSlider, sibilanceLabel, "Sibilance", 0.0, 200.0, 1.0, 100.0, " %");
+    filterBandCountLabel.setText("Bands", juce::dontSendNotification);
+    addAndMakeVisible(filterBandCountLabel);
+    filterBandCount.addItem("24", 1);
+    filterBandCount.addItem("32", 2);
+    filterBandCount.addItem("40", 3);
+    filterBandCount.addItem("48", 4);
+    filterBandCount.addItem("56", 5);
+    filterBandCount.setSelectedId(3, juce::dontSendNotification);
+    filterBandCount.setTooltip("Number of logarithmically spaced analysis and synthesis bands.");
+    filterBandCount.onChange = [this]
+    {
+        const int counts[] { 24, 32, 40, 48, 56 };
+        const auto index = juce::jlimit(0, 4, filterBandCount.getSelectedId() - 1);
+        vocoder.setBandCount(counts[index]);
+    };
+    addAndMakeVisible(filterBandCount);
+    configureControl(filterQSlider, filterQLabel, "Filter Q", 2.0, 10.0, 0.5, 5.0, "");
+    filterQSlider.setTooltip("Higher Q narrows each band; lower Q increases overlap between adjacent bands.");
     configureControl(formantPreservationSlider, formantPreservationLabel, "Formant preserve", 0.0, 100.0, 1.0, 100.0, " %");
     configureControl(transientProtectionSlider, transientProtectionLabel, "Transient protect", 0.0, 100.0, 1.0, 100.0, " %");
     inputMeterLabel.setText("Input: -120.0 dBFS", juce::dontSendNotification);
@@ -274,6 +292,7 @@ MainComponent::~MainComponent()
     articulationLiftSlider.removeListener(this);
     unvoicedNoiseSlider.removeListener(this);
     sibilanceSlider.removeListener(this);
+    filterQSlider.removeListener(this);
     formantPreservationSlider.removeListener(this);
     transientProtectionSlider.removeListener(this);
     stopTimer();
@@ -366,6 +385,10 @@ void MainComponent::updateModeControls()
     show(unvoicedNoiseSlider, vocoderMode);
     show(sibilanceLabel, vocoderMode);
     show(sibilanceSlider, vocoderMode);
+    show(filterBandCountLabel, vocoderMode);
+    show(filterBandCount, vocoderMode);
+    show(filterQLabel, vocoderMode);
+    show(filterQSlider, vocoderMode);
     show(formantPreservationLabel, harmonizerMode);
     show(formantPreservationSlider, harmonizerMode);
     show(transientProtectionLabel, harmonizerMode);
@@ -601,6 +624,12 @@ void MainComponent::resized()
         row = area.removeFromTop(30);
         sibilanceLabel.setBounds(row.removeFromLeft(86));
         sibilanceSlider.setBounds(row.removeFromLeft(210));
+        row.removeFromLeft(12);
+        filterBandCountLabel.setBounds(row.removeFromLeft(52));
+        filterBandCount.setBounds(row.removeFromLeft(76));
+        row.removeFromLeft(10);
+        filterQLabel.setBounds(row.removeFromLeft(62));
+        filterQSlider.setBounds(row.removeFromLeft(210));
     }
     else if (harmonizerMode)
     {
@@ -670,6 +699,8 @@ void MainComponent::savePreset()
             data->setProperty("articulation", articulationLiftSlider.getValue());
             data->setProperty("unvoicedNoise", unvoicedNoiseSlider.getValue());
             data->setProperty("sibilance", sibilanceSlider.getValue());
+            data->setProperty("filterBands", filterBandCount.getSelectedId());
+            data->setProperty("filterQ", filterQSlider.getValue());
             data->setProperty("formantPreservation", formantPreservationSlider.getValue());
             data->setProperty("transientProtection", transientProtectionSlider.getValue());
             data->setProperty("microphoneMonitor", microphoneMonitor.getToggleState());
@@ -753,6 +784,8 @@ void MainComponent::applyPreset(const juce::var& preset)
     setSlider(articulationLiftSlider, "articulation");
     setSlider(unvoicedNoiseSlider, "unvoicedNoise");
     setSlider(sibilanceSlider, "sibilance");
+    filterBandCount.setSelectedId(juce::jlimit(1, 5, static_cast<int>(preset.getProperty("filterBands", filterBandCount.getSelectedId()))), juce::sendNotificationSync);
+    setSlider(filterQSlider, "filterQ");
     setSlider(formantPreservationSlider, "formantPreservation");
     setSlider(transientProtectionSlider, "transientProtection");
 
@@ -809,6 +842,8 @@ void MainComponent::sliderValueChanged(juce::Slider* slider)
         vocoder.setUnvoicedNoise(static_cast<float>(unvoicedNoiseSlider.getValue() / 100.0));
     else if (slider == &sibilanceSlider)
         vocoder.setSibilanceAmount(static_cast<float>(sibilanceSlider.getValue() / 100.0));
+    else if (slider == &filterQSlider)
+        vocoder.setFilterQ(static_cast<float>(filterQSlider.getValue()));
     else if (slider == &formantPreservationSlider)
         harmonizer.setFormantPreservation(static_cast<float>(formantPreservationSlider.getValue() / 100.0));
     else if (slider == &transientProtectionSlider)
