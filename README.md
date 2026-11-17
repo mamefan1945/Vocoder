@@ -30,7 +30,7 @@ The application is a standalone Windows x64 program. The DSP engines are separat
 - Selectable audio input/output devices and device buffer settings through JUCE's audio-device selector.
 - Pass-through, vocoder, and MIDI-controlled harmonizer modes.
 - Microphone input on input channel 1; optional external carrier on input channel 2.
-- 32-band vocoder analysis/synthesis filter banks.
+- 40-band vocoder analysis/synthesis filter banks.
 - Adjustable vocoder attack/release, frequency range, formant shift, and noise-gate threshold.
 - Internal polyphonic oscillator synthesizer: sine, saw, square, triangle, noise, rich PWM, and choir-like waveforms.
 - FluidSynth SoundFont playback, with an instrument list populated from the loaded SoundFont.
@@ -179,7 +179,7 @@ A vocoder does not normally shift the pitch of the voice. Instead, it measures t
 
 ### Current implementation
 
-The vocoder uses 32 logarithmically spaced analysis and synthesis bands spanning approximately 120 Hz to 8 kHz. The centre frequencies are distributed logarithmically rather than linearly, giving more resolution in the lower frequency range where speech formants and many important voice characteristics occur.
+The vocoder uses 40 logarithmically spaced analysis and synthesis bands spanning approximately 120 Hz to 8 kHz. The centre frequencies are distributed logarithmically rather than linearly, giving more resolution in the lower frequency range where speech formants and many important voice characteristics occur.
 
 For each audio sample:
 
@@ -439,7 +439,7 @@ Check the licence terms of any user-supplied SoundFont or other asset before red
 
 - Windows x64 standalone is the current supported application target.
 - A VST3 target is a possible future direction, not a current build product.
-- The vocoder is a developing 32-band implementation; it is not intended to be a transparent or reference-grade speech processor.
+- The vocoder is a developing 40-band implementation; it is not intended to be a transparent or reference-grade speech processor.
 - Formant shifting is performed by shifting envelope-band lookup positions and is therefore approximate.
 - The harmonizer is a custom, experimental eight-voice TD-PSOLA engine with LPC-based formant preservation and transient-aware grain suppression. Its pitch tracking, LPC envelope quality, transient decisions, grain scheduling, polyphonic stability, and latency still need listening-based refinement.
 - No automated regression suite currently measures pitch accuracy, harmonic distortion, intelligibility, crackle/dropout rate, or subjective sound quality.
