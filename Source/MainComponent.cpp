@@ -63,6 +63,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
 {
     setSize(1080, 740);
     testAudioFormats.registerBasicFormats();
+    testAudioReadAheadThread.startThread();
 
     titleLabel.setText("VOCODER  |  REAL-TIME AUDIO", juce::dontSendNotification);
     titleLabel.setFont(juce::Font(juce::FontOptions(24.0f, juce::Font::bold)));
@@ -405,6 +406,7 @@ MainComponent::~MainComponent()
     testAudioTransport.stop();
     testAudioTransport.setSource(nullptr);
     testAudioReaderSource.reset();
+    testAudioReadAheadThread.stopThread(2000);
     if (activeMidiIdentifier.isNotEmpty())
         deviceManager.removeMidiInputDeviceCallback(activeMidiIdentifier, &midiInputRouter);
     outputLevel.removeListener(this);
@@ -584,7 +586,7 @@ void MainComponent::chooseTestAudio()
 {
     testAudioFileChooser = std::make_unique<juce::FileChooser>(
         "Choose prerecorded speech for testing", juce::File{},
-        "*.wav;*.aif;*.aiff;*.flac;*.mp3;*.ogg");
+        "*.wav;*.aif;*.aiff");
     testAudioFileChooser->launchAsync(
         juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
         [safeThis = juce::Component::SafePointer<MainComponent>(this)](const juce::FileChooser& chooser)
@@ -605,7 +607,7 @@ void MainComponent::chooseTestAudio()
             safeThis->testAudioReaderSource.reset();
             auto newSource = std::make_unique<juce::AudioFormatReaderSource>(reader.release(), true);
             const auto sourceRate = newSource->getAudioFormatReader()->sampleRate;
-            safeThis->testAudioTransport.setSource(newSource.get(), 0, nullptr, sourceRate);
+            safeThis->testAudioTransport.setSource(newSource.get(), 32768, &testAudioReadAheadThread, sourceRate);
             safeThis->testAudioReaderSource = std::move(newSource);
             safeThis->useTestAudioInput.setEnabled(true);
             safeThis->playTestAudioButton.setEnabled(true);
