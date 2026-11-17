@@ -8,7 +8,8 @@
 class VocoderEngine
 {
 public:
-    static constexpr int bandCount = 40;
+    static constexpr int maxBandCount = 56;
+    static constexpr int configurationCount = 85;
 
     void prepare(double sampleRate);
     void reset();
@@ -26,13 +27,26 @@ public:
     void setArticulationLift(float amount) noexcept;
     void setUnvoicedNoise(float amount) noexcept;
     void setSibilanceAmount(float amount) noexcept;
+    void setBandCount(int bands) noexcept;
+    void setFilterQ(float q) noexcept;
 
 private:
     using Filter = juce::dsp::IIR::Filter<float>;
 
-    std::array<Filter, bandCount> modulatorFilters;
-    std::array<Filter, bandCount> carrierFilters;
-    std::array<Filter, bandCount> sibilanceNoiseFilters;
+    struct FilterConfiguration
+    {
+        int bandCount = 40;
+        std::array<juce::dsp::IIR::Coefficients<float>::Ptr, maxBandCount> coefficients {};
+        std::array<float, maxBandCount> centres {};
+    };
+    std::array<FilterConfiguration, configurationCount> configurations {};
+    std::array<Filter, maxBandCount> modulatorFilters;
+    std::array<Filter, maxBandCount> carrierFilters;
+    std::array<Filter, maxBandCount> sibilanceNoiseFilters;
+    int activeConfiguration = -1;
+    int activeBandCount = 40;
+    std::atomic<int> requestedBandCount { 40 };
+    std::atomic<int> requestedQIndex { 6 };
     std::uint32_t noiseState = 0x6d2b79f5u;
     float previousModulator = 0.0f;
     float zeroCrossingRate = 0.0f;
@@ -40,9 +54,9 @@ private:
     float carrierActivity = 0.0f;
     float carrierActivityAttackCoefficient = 0.0f;
     float carrierActivityReleaseCoefficient = 0.0f;
-    std::array<float, bandCount> envelopes {};
-    std::array<float, bandCount> envelopePowers {};
-    std::array<float, bandCount> bandCentres {};
+    std::array<float, maxBandCount> envelopes {};
+    std::array<float, maxBandCount> envelopePowers {};
+    std::array<float, maxBandCount> bandCentres {};
 
     double currentSampleRate = 44100.0;
     std::atomic<float> attackCoefficient { 0.0f };
@@ -60,4 +74,5 @@ private:
     std::atomic<float> releaseMs { 10.0f };
 
     void updateEnvelopeTimes() noexcept;
+    void applyPendingConfiguration() noexcept;
 };
