@@ -157,6 +157,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
         float noiseLevel = 100.0f;
         float sibilanceLevel = 100.0f;
         juce::String instrumentSearch;
+        bool instrumentFound = true;
         switch (profile)
         {
             case 1: waveformId = 2; break; // Classic saw
@@ -176,6 +177,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
         if (instrumentSearch.isNotEmpty())
         {
             const auto& available = soundFontEngine.getPresets();
+            instrumentFound = false;
             int bestMatch = -1;
             int bestScore = 0;
             for (size_t i = 0; i < available.size(); ++i)
@@ -195,6 +197,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
             {
                 soundFontEngine.selectPreset(bestMatch);
                 soundFontInstrument.setSelectedId(bestMatch + 1, juce::dontSendNotification);
+                instrumentFound = true;
             }
             else
             {
@@ -206,7 +209,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
         unvoicedNoiseSlider.setValue(noiseLevel, juce::sendNotificationSync);
         sibilanceSlider.setValue(sibilanceLevel, juce::sendNotificationSync);
         applyingCarrierPreset = false;
-        if (statusLabel.getText().isEmpty() || !statusLabel.getText().startsWith("No matching GM"))
+        if (instrumentFound)
             statusLabel.setText("Carrier profile: " + carrierPreset.getText(), juce::dontSendNotification);
     };
     addAndMakeVisible(carrierPreset);
