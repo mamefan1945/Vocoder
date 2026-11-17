@@ -79,6 +79,7 @@ private:
     void updateModeControls();
     void populateSoundFontInstruments();
     void chooseSoundFont();
+    void chooseTestAudio();
     void savePreset();
     void loadPreset();
     void applyPreset(const juce::var& preset);
@@ -88,7 +89,8 @@ private:
                       int numOutputChannels,
                       int numSamples,
                       const float* internalCarrier,
-                      const juce::MidiBuffer& midi);
+                      const juce::MidiBuffer& midi,
+                      const float* prerecordedVoice);
 
     juce::AudioDeviceManager deviceManager;
     juce::AudioDeviceSelectorComponent deviceSelector;
@@ -114,6 +116,15 @@ private:
     juce::Label soundFontInstrumentLabel;
     juce::TextButton loadSoundFontButton { "Load SF2..." };
     std::unique_ptr<juce::FileChooser> soundFontFileChooser;
+    juce::TextButton loadTestAudioButton { "Load test WAV..." };
+    juce::TextButton playTestAudioButton { "Play" };
+    juce::TextButton stopTestAudioButton { "Stop" };
+    juce::ToggleButton useTestAudioInput { "Use file as voice input" };
+    std::unique_ptr<juce::FileChooser> testAudioFileChooser;
+    juce::AudioFormatManager testAudioFormats;
+    juce::AudioTransportSource testAudioTransport;
+    std::unique_ptr<juce::AudioFormatReaderSource> testAudioReaderSource;
+    juce::AudioBuffer<float> testAudioBuffer;
     juce::Label modeLabel;
     juce::Label carrierLabel;
     juce::Label midiLabel;
@@ -179,6 +190,7 @@ private:
     std::atomic<bool> useSoundFontCarrier { false };
     std::atomic<bool> monitorMicrophone { false };
     std::atomic<bool> previewCarrier { false };
+    std::atomic<bool> useTestAudio { false };
     bool applyingCarrierPreset = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
