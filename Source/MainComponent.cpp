@@ -356,6 +356,36 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     };
     addAndMakeVisible(useTestAudioInput);
 
+    testVoiceSelector.addItem("Nova (female)", 1);
+    testVoiceSelector.addItem("Ash (male)", 2);
+    testVoiceSelector.setSelectedId(1, juce::dontSendNotification);
+    testVoiceSelector.setTooltip("Select the bundled speech-test voice. The WAV files are found in Downloads or the app's TestAudio folder.");
+    testVoiceSelector.onChange = [this]
+    {
+        if (speechTestRunning)
+        {
+            const auto voiceName = testVoiceSelector.getSelectedId() == 2 ? "ash" : "nova";
+            if (loadTestAudioFile(findSpeechTestFile(voiceName), true))
+                statusLabel.setText("Speech test: " + testVoiceSelector.getText() + " (looping)",
+                                    juce::dontSendNotification);
+            else
+                statusLabel.setText("Could not find vocoder_test_" + juce::String(voiceName)
+                    + ".wav in Downloads or the app TestAudio folder.", juce::dontSendNotification);
+        }
+    };
+    addAndMakeVisible(testVoiceSelector);
+
+    runSpeechTestButton.setClickingTogglesState(true);
+    runSpeechTestButton.setTooltip("Automatically configures the vocoder, selects Rich PWM, holds a C3 carrier note, and loops the selected speech file.");
+    runSpeechTestButton.onClick = [this]
+    {
+        if (runSpeechTestButton.getToggleState())
+            startSpeechTest();
+        else
+            stopSpeechTest();
+    };
+    addAndMakeVisible(runSpeechTestButton);
+
     startTimerHz(20);
 
     keyboardComponent.setAvailableRange(36, 108);
@@ -582,6 +612,103 @@ void MainComponent::chooseSoundFont()
         });
 }
 
+juce::File MainComponent::findSpeechTestFile(const juce::String& voiceName) const
+{
+    const auto fileName = "vocoder_test_" + voiceName + ".wav";
+    const auto executable = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+    const juce::Array<juce::File> candidates
+    {
+        executable.getSiblingFile("TestAudio").getChildFile(fileName),
+        executable.getSiblingFile(fileName),
+        juce::File::getSpecialLocation(juce::File::userHomeDirectory)
+            .getChildFile("Downloads").getChildFile(fileName),
+        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile("Vocoder Test Audio").getChildFile(fileName)
+    };
+
+    for (const auto& candidate : candidates)
+        if (candidate.existsAsFile())
+            return candidate;
+
+    return {};
+}
+
+bool MainComponent::loadTestAudioFile(const juce::File& file, bool loop)
+{
+    if (!file.existsAsFile())
+        return false;
+
+    std::unique_ptr<juce::AudioFormatReader> reader(testAudioFormats.createReaderFor(file));
+    if (reader == nullptr)
+        return false;
+
+    testAudioTransport.stop();
+    testAudioTransport.setSource(nullptr);
+    testAudioReaderSource.reset();
+
+    auto newSource = std::make_unique<juce::AudioFormatReaderSource>(reader.release(), true);
+    newSource->setLooping(loop);
+    const auto sourceRate = newSource->getAudioFormatReader()->sampleRate;
+    testAudioTransport.setSource(newSource.get(), 32768, &testAudioReadAheadThread, sourceRate);
+    testAudioReaderSource = std::move(newSource);
+    testAudioTransport.setPosition(0.0);
+    useTestAudio.store(true, std::memory_order_relaxed);
+    useTestAudioInput.setToggleState(true, juce::dontSendNotification);
+    useTestAudioInput.setEnabled(true);
+    playTestAudioButton.setEnabled(true);
+    stopTestAudioButton.setEnabled(true);
+    if (loop)
+        testAudioTransport.start();
+    return true;
+}
+
+void MainComponent::startSpeechTest()
+{
+    const auto voiceName = testVoiceSelector.getSelectedId() == 2 ? "ash" : "nova";
+    const auto file = findSpeechTestFile(voiceName);
+    if (!loadTestAudioFile(file, true))
+    {
+        runSpeechTestButton.setToggleState(false, juce::dontSendNotification);
+        statusLabel.setText("Speech WAV not found. Download vocoder_test_nova.wav and vocoder_test_ash.wav "
+            "to your Downloads folder, then try again.", juce::dontSendNotification);
+        return;
+    }
+
+    processingMode.setSelectedId(2, juce::sendNotificationSync);
+    carrierSource.setSelectedId(1, juce::sendNotificationSync);
+    carrierPreset.setSelectedId(2, juce::sendNotificationSync);
+    octave.setSelectedId(3, juce::sendNotificationSync);
+    attackTime.setValue(1.0, juce::sendNotificationSync);
+    releaseTime.setValue(10.0, juce::sendNotificationSync);
+    dryWetMix.setValue(100.0, juce::sendNotificationSync);
+    outputLevel.setValue(0.75, juce::sendNotificationSync);
+    microphoneMonitor.setToggleState(false, juce::dontSendNotification);
+    monitorMicrophone.store(false, std::memory_order_relaxed);
+    carrierPreview.setToggleState(false, juce::dontSendNotification);
+    previewCarrier.store(false, std::memory_order_relaxed);
+    for (int channel = 1; channel <= 16; ++channel)
+        keyboardState.allNotesOff(channel);
+    keyboardState.noteOn(1, 48, 0.8f); // C3: stable, single-note carrier reference.
+    speechTestRunning = true;
+    statusLabel.setText("Speech test running: " + testVoiceSelector.getText()
+        + " | Rich PWM | C3 | 100% wet | looping", juce::dontSendNotification);
+}
+
+void MainComponent::stopSpeechTest()
+{
+    speechTestRunning = false;
+    testAudioTransport.stop();
+    if (testAudioReaderSource != nullptr)
+    {
+        testAudioReaderSource->setLooping(false);
+        testAudioTransport.setPosition(0.0);
+    }
+    keyboardState.noteOff(1, 48, 0.0f);
+    useTestAudio.store(false, std::memory_order_relaxed);
+    useTestAudioInput.setToggleState(false, juce::dontSendNotification);
+    statusLabel.setText("Speech test stopped. Live microphone input restored.", juce::dontSendNotification);
+}
+
 void MainComponent::chooseTestAudio()
 {
     testAudioFileChooser = std::make_unique<juce::FileChooser>(
@@ -594,27 +721,13 @@ void MainComponent::chooseTestAudio()
             if (safeThis == nullptr) return;
             const auto file = chooser.getResult();
             if (file == juce::File{}) return;
-            std::unique_ptr<juce::AudioFormatReader> reader(
-                safeThis->testAudioFormats.createReaderFor(file));
-            if (reader == nullptr)
+            if (!safeThis->loadTestAudioFile(file, false))
             {
                 safeThis->statusLabel.setText("Could not read audio file: " + file.getFileName(),
                                               juce::dontSendNotification);
                 return;
             }
-            safeThis->testAudioTransport.stop();
-            safeThis->testAudioTransport.setSource(nullptr);
-            safeThis->testAudioReaderSource.reset();
-            auto newSource = std::make_unique<juce::AudioFormatReaderSource>(reader.release(), true);
-            const auto sourceRate = newSource->getAudioFormatReader()->sampleRate;
-            safeThis->testAudioTransport.setSource(newSource.get(), 32768, &testAudioReadAheadThread, sourceRate);
-            safeThis->testAudioReaderSource = std::move(newSource);
-            safeThis->useTestAudioInput.setEnabled(true);
-            safeThis->playTestAudioButton.setEnabled(true);
-            safeThis->stopTestAudioButton.setEnabled(true);
-            safeThis->useTestAudioInput.setToggleState(true, juce::sendNotification);
             safeThis->statusLabel.setText("Loaded: " + file.getFileName() + " | "
-                + juce::String(sourceRate, 0) + " Hz | "
                 + juce::String(safeThis->testAudioTransport.getLengthInSeconds(), 1) + " s",
                 juce::dontSendNotification);
         });
@@ -712,13 +825,17 @@ void MainComponent::resized()
     loadPresetButton.setBounds(row.removeFromLeft(124));
     area.removeFromTop(6);
     row = area.removeFromTop(30);
-    loadTestAudioButton.setBounds(row.removeFromLeft(150));
-    row.removeFromLeft(6);
-    playTestAudioButton.setBounds(row.removeFromLeft(64));
-    row.removeFromLeft(4);
-    stopTestAudioButton.setBounds(row.removeFromLeft(64));
-    row.removeFromLeft(12);
-    useTestAudioInput.setBounds(row.removeFromLeft(190));
+    loadTestAudioButton.setBounds(row.removeFromLeft(130));
+    row.removeFromLeft(5);
+    playTestAudioButton.setBounds(row.removeFromLeft(52));
+    row.removeFromLeft(3);
+    stopTestAudioButton.setBounds(row.removeFromLeft(52));
+    row.removeFromLeft(8);
+    useTestAudioInput.setBounds(row.removeFromLeft(166));
+    row.removeFromLeft(8);
+    testVoiceSelector.setBounds(row.removeFromLeft(125));
+    row.removeFromLeft(8);
+    runSpeechTestButton.setBounds(row.removeFromLeft(130));
     area.removeFromTop(6);
     if (hasKeyboard)
     {
