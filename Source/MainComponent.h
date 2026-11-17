@@ -122,6 +122,7 @@ private:
     juce::ToggleButton useTestAudioInput { "Use file as voice input" };
     std::unique_ptr<juce::FileChooser> testAudioFileChooser;
     juce::AudioFormatManager testAudioFormats;
+    juce::TimeSliceThread testAudioReadAheadThread { "Vocoder test audio read-ahead" };
     juce::AudioTransportSource testAudioTransport;
     std::unique_ptr<juce::AudioFormatReaderSource> testAudioReaderSource;
     juce::AudioBuffer<float> testAudioBuffer;
