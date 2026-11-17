@@ -108,6 +108,7 @@ private:
     juce::TextButton loadPresetButton { "Load preset..." };
     std::unique_ptr<juce::FileChooser> presetFileChooser;
     juce::ComboBox waveform;
+    juce::ComboBox carrierPreset;
     juce::ComboBox octave;
     juce::ComboBox soundFontInstrument;
     juce::Label soundFontInstrumentLabel;
@@ -117,6 +118,7 @@ private:
     juce::Label carrierLabel;
     juce::Label midiLabel;
     juce::Label waveformLabel;
+    juce::Label carrierPresetLabel;
     juce::Label octaveLabel;
     juce::Slider outputLevel;
     juce::Label outputLevelLabel;
@@ -177,6 +179,7 @@ private:
     std::atomic<bool> useSoundFontCarrier { false };
     std::atomic<bool> monitorMicrophone { false };
     std::atomic<bool> previewCarrier { false };
+    bool applyingCarrierPreset = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
