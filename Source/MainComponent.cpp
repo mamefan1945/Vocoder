@@ -109,6 +109,8 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     addAndMakeVisible(refreshMidiButton);
     waveformLabel.setText("Carrier type", juce::dontSendNotification);
     addAndMakeVisible(waveformLabel);
+    carrierPresetLabel.setText("Profile", juce::dontSendNotification);
+    addAndMakeVisible(carrierPresetLabel);
     waveform.addItem("Sine", 1);
     waveform.addItem("Saw", 2);
     waveform.addItem("Square", 3);
@@ -117,22 +119,105 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     waveform.addItem("Rich (PWM)", 6);
     waveform.addItem("Angelic Choir", 7);
     waveform.addItem("SoundFont (GM)", 8);
-    waveform.setSelectedId(2);
+    waveform.setSelectedId(6);
+    carrierSynth.setWaveform(CarrierSynth::rich);
     waveform.onChange = [this]
     {
         const auto selected = waveform.getSelectedId();
         useSoundFontCarrier.store(selected == 8, std::memory_order_relaxed);
         if (selected != 8)
             carrierSynth.setWaveform(selected - 1);
+        if (!applyingCarrierPreset)
+            carrierPreset.setSelectedId(11, juce::dontSendNotification);
         updateSoundFontControls();
     };
     addAndMakeVisible(waveform);
+
+    carrierPreset.addItem("Classic Analog Saw", 1);
+    carrierPreset.addItem("Rich PWM", 2);
+    carrierPreset.addItem("Bright Pulse", 3);
+    carrierPreset.addItem("Soft Triangle", 4);
+    carrierPreset.addItem("Choir Pad", 5);
+    carrierPreset.addItem("Noise / Hiss", 6);
+    carrierPreset.addItem("Noise Hybrid", 7);
+    carrierPreset.addItem("GM Organ", 8);
+    carrierPreset.addItem("GM Strings", 9);
+    carrierPreset.addItem("GM Choir", 10);
+    carrierPreset.addItem("Custom", 11);
+    carrierPreset.setSelectedId(2, juce::dontSendNotification);
+    carrierPreset.setTooltip("Curated carrier designs. Rich PWM is the recommended starting point; GM profiles select a matching instrument from the loaded SoundFont.");
+    carrierPreset.onChange = [this]
+    {
+        const auto profile = carrierPreset.getSelectedId();
+        if (profile == 11 || profile <= 0)
+            return;
+
+        applyingCarrierPreset = true;
+        int waveformId = 6;
+        float noiseLevel = 100.0f;
+        float sibilanceLevel = 100.0f;
+        juce::String instrumentSearch;
+        switch (profile)
+        {
+            case 1: waveformId = 2; break; // Classic saw
+            case 2: waveformId = 6; break; // Rich PWM
+            case 3: waveformId = 3; noiseLevel = 110.0f; sibilanceLevel = 110.0f; break;
+            case 4: waveformId = 4; break;
+            case 5: waveformId = 7; noiseLevel = 115.0f; sibilanceLevel = 115.0f; break;
+            case 6: waveformId = 5; noiseLevel = 200.0f; sibilanceLevel = 150.0f; break;
+            case 7: waveformId = 6; noiseLevel = 140.0f; sibilanceLevel = 150.0f; break;
+            case 8: waveformId = 8; instrumentSearch = "organ"; break;
+            case 9: waveformId = 8; instrumentSearch = "string"; break;
+            case 10: waveformId = 8; instrumentSearch = "choir"; break;
+            default: break;
+        }
+
+        waveform.setSelectedId(waveformId, juce::sendNotificationSync);
+        if (instrumentSearch.isNotEmpty())
+        {
+            const auto& available = soundFontEngine.getPresets();
+            int bestMatch = -1;
+            int bestScore = 0;
+            for (size_t i = 0; i < available.size(); ++i)
+            {
+                const auto name = available[i].name;
+                int score = name.containsIgnoreCase(instrumentSearch) ? 10 : 0;
+                if (profile == 8 && name.containsIgnoreCase("drawbar")) score += 5;
+                if (profile == 9 && name.containsIgnoreCase("ensemble")) score += 5;
+                if (profile == 10 && name.containsIgnoreCase("aahs")) score += 5;
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestMatch = static_cast<int>(i);
+                }
+            }
+            if (bestMatch >= 0)
+            {
+                soundFontEngine.selectPreset(bestMatch);
+                soundFontInstrument.setSelectedId(bestMatch + 1, juce::dontSendNotification);
+            }
+            else
+            {
+                statusLabel.setText("No matching GM " + instrumentSearch
+                    + " patch found in the loaded SoundFont.", juce::dontSendNotification);
+            }
+        }
+
+        unvoicedNoiseSlider.setValue(noiseLevel, juce::sendNotificationSync);
+        sibilanceSlider.setValue(sibilanceLevel, juce::sendNotificationSync);
+        applyingCarrierPreset = false;
+        if (statusLabel.getText().isEmpty() || !statusLabel.getText().startsWith("No matching GM"))
+            statusLabel.setText("Carrier profile: " + carrierPreset.getText(), juce::dontSendNotification);
+    };
+    addAndMakeVisible(carrierPreset);
 
     soundFontInstrumentLabel.setText("Instrument", juce::dontSendNotification);
     addAndMakeVisible(soundFontInstrumentLabel);
     soundFontInstrument.onChange = [this]
     {
         soundFontEngine.selectPreset(soundFontInstrument.getSelectedId() - 1);
+        if (!applyingCarrierPreset)
+            carrierPreset.setSelectedId(11, juce::dontSendNotification);
     };
     addAndMakeVisible(soundFontInstrument);
     loadSoundFontButton.onClick = [this] { chooseSoundFont(); };
@@ -355,6 +440,8 @@ void MainComponent::updateModeControls()
     const auto show = [](juce::Component& component, bool visible) { component.setVisible(visible); };
     show(carrierLabel, vocoderMode);
     show(carrierSource, vocoderMode);
+    show(carrierPresetLabel, vocoderMode);
+    show(carrierPreset, vocoderMode);
     show(waveformLabel, vocoderMode);
     show(waveform, vocoderMode);
     const auto showSoundFont = vocoderMode && waveform.getSelectedId() == 8;
@@ -556,13 +643,16 @@ void MainComponent::resized()
         area.removeFromTop(8);
         row = area.removeFromTop(32);
         carrierLabel.setBounds(row.removeFromLeft(58));
-        carrierSource.setBounds(row.removeFromLeft(170));
-        row.removeFromLeft(14);
+        carrierSource.setBounds(row.removeFromLeft(150));
+        row.removeFromLeft(8);
+        carrierPresetLabel.setBounds(row.removeFromLeft(48));
+        carrierPreset.setBounds(row.removeFromLeft(150));
+        row.removeFromLeft(8);
         waveformLabel.setBounds(row.removeFromLeft(82));
-        waveform.setBounds(row.removeFromLeft(150));
-        row.removeFromLeft(12);
+        waveform.setBounds(row.removeFromLeft(125));
+        row.removeFromLeft(8);
         octaveLabel.setBounds(row.removeFromLeft(55));
-        octave.setBounds(row.removeFromLeft(90));
+        octave.setBounds(row.removeFromLeft(75));
         if (waveform.getSelectedId() == 8)
         {
             row.removeFromLeft(8);
@@ -686,6 +776,7 @@ void MainComponent::savePreset()
             data->setProperty("mode", processingMode.getSelectedId());
             data->setProperty("carrierSource", carrierSource.getSelectedId());
             data->setProperty("waveform", waveform.getSelectedId());
+            data->setProperty("carrierPreset", carrierPreset.getSelectedId());
             data->setProperty("octave", octave.getSelectedId());
             data->setProperty("soundFontInstrument", soundFontInstrument.getSelectedId());
             data->setProperty("outputLevel", outputLevel.getValue());
@@ -788,6 +879,8 @@ void MainComponent::applyPreset(const juce::var& preset)
     setSlider(filterQSlider, "filterQ");
     setSlider(formantPreservationSlider, "formantPreservation");
     setSlider(transientProtectionSlider, "transientProtection");
+    carrierPreset.setSelectedId(juce::jlimit(1, 11,
+        static_cast<int>(preset.getProperty("carrierPreset", 11))), juce::dontSendNotification);
 
     microphoneMonitor.setToggleState(
         static_cast<bool>(preset.getProperty("microphoneMonitor", false)),
@@ -839,9 +932,15 @@ void MainComponent::sliderValueChanged(juce::Slider* slider)
     else if (slider == &articulationLiftSlider)
         vocoder.setArticulationLift(static_cast<float>(articulationLiftSlider.getValue() / 100.0));
     else if (slider == &unvoicedNoiseSlider)
+    {
         vocoder.setUnvoicedNoise(static_cast<float>(unvoicedNoiseSlider.getValue() / 100.0));
+        if (!applyingCarrierPreset) carrierPreset.setSelectedId(11, juce::dontSendNotification);
+    }
     else if (slider == &sibilanceSlider)
+    {
         vocoder.setSibilanceAmount(static_cast<float>(sibilanceSlider.getValue() / 100.0));
+        if (!applyingCarrierPreset) carrierPreset.setSelectedId(11, juce::dontSendNotification);
+    }
     else if (slider == &filterQSlider)
         vocoder.setFilterQ(static_cast<float>(filterQSlider.getValue()));
     else if (slider == &formantPreservationSlider)
