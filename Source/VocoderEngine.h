@@ -8,7 +8,7 @@
 class VocoderEngine
 {
 public:
-    static constexpr int bandCount = 32;
+    static constexpr int bandCount = 40;
 
     void prepare(double sampleRate);
     void reset();
