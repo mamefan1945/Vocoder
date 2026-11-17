@@ -130,6 +130,10 @@ private:
     juce::Slider articulationLiftSlider;
     juce::Slider unvoicedNoiseSlider;
     juce::Slider sibilanceSlider;
+    juce::ComboBox filterBandCount;
+    juce::Label filterBandCountLabel;
+    juce::Slider filterQSlider;
+    juce::Label filterQLabel;
     juce::Slider formantPreservationSlider;
     juce::Slider transientProtectionSlider;
     juce::Label formantShiftLabel;
