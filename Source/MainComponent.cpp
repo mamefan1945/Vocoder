@@ -666,7 +666,7 @@ void MainComponent::startSpeechTest()
 {
     const auto voiceName = testVoiceSelector.getSelectedId() == 2 ? "ash" : "nova";
     const auto file = findSpeechTestFile(voiceName);
-    if (!loadTestAudioFile(file, true))
+    if (!file.existsAsFile())
     {
         runSpeechTestButton.setToggleState(false, juce::dontSendNotification);
         statusLabel.setText("Speech WAV not found. Download vocoder_test_nova.wav and vocoder_test_ash.wav "
@@ -689,6 +689,14 @@ void MainComponent::startSpeechTest()
     for (int channel = 1; channel <= 16; ++channel)
         keyboardState.allNotesOff(channel);
     keyboardState.noteOn(1, 48, 0.8f); // C3: stable, single-note carrier reference.
+    if (!loadTestAudioFile(file, true))
+    {
+        keyboardState.noteOff(1, 48, 0.0f);
+        runSpeechTestButton.setToggleState(false, juce::dontSendNotification);
+        statusLabel.setText("Could not open speech test WAV: " + file.getFileName(),
+                            juce::dontSendNotification);
+        return;
+    }
     speechTestRunning = true;
     statusLabel.setText("Speech test running: " + testVoiceSelector.getText()
         + " | Rich PWM | C3 | 100% wet | looping", juce::dontSendNotification);
