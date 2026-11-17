@@ -168,6 +168,17 @@ For a simple harmonizer test:
 5. Add a second, third, and fourth key while keeping the sung note and microphone level as constant as possible.
 6. Try the Octave selector and the Dry / wet control.
 
+## Automated speech test
+
+The main window includes a **Nova (female) / Ash (male)** selector and a **Run speech test** button. This is a repeatable vocoder test setup: it selects Vocoder mode, the internal carrier, the Rich PWM carrier profile, a held C3 note, 100% wet output, disables microphone/carrier monitoring, and loops the selected prerecorded voice through the vocoder.
+
+Download the two WAV files supplied with the speech-test workflow and place them in either the app's `TestAudio` folder, beside `Vocoder.exe`, or your Windows `Downloads` folder using these exact names:
+
+- `vocoder_test_nova.wav`
+- `vocoder_test_ash.wav`
+
+Click **Run speech test** to start. Change the voice selector while the test is running to switch recordings without changing the carrier setup. Click the button again to stop playback, release the test note, and return to live microphone input. The files are intentionally external to the executable so you can replace them with updated speech recordings without rebuilding the application.
+
 ## Vocoder concepts and signal path
 
 A vocoder does not normally shift the pitch of the voice. Instead, it measures the changing spectral shape of the voice and applies that shape to a separate sound source called the **carrier**.
