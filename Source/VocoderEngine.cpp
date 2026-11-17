@@ -4,9 +4,9 @@ namespace
 {
 constexpr float lowestBandHz = 120.0f;
 constexpr float highestBandHz = 8000.0f;
-// Adjacent logarithmic bands are spaced by roughly 16%; Q=4 gives
-// useful overlap without smearing the spectral envelope across many bands.
-constexpr float filterQ = 4.0f;
+// Forty logarithmic bands improve resolution through the vowel-formant
+// region. Q=5 keeps adjacent bands overlapping enough to avoid spectral gaps.
+constexpr float filterQ = 5.0f;
 }
 
 void VocoderEngine::prepare(double sampleRate)
