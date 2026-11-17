@@ -4,29 +4,38 @@ namespace
 {
 constexpr float lowestBandHz = 120.0f;
 constexpr float highestBandHz = 8000.0f;
-// Forty logarithmic bands improve resolution through the vowel-formant
-// region. Q=5 keeps adjacent bands overlapping enough to avoid spectral gaps.
-constexpr float filterQ = 5.0f;
+constexpr std::array<int, 5> supportedBandCounts { 24, 32, 40, 48, 56 };
+constexpr int qSteps = 17;
+constexpr float minimumQ = 2.0f;
+constexpr float qStep = 0.5f;
 }
 
 void VocoderEngine::prepare(double sampleRate)
 {
     currentSampleRate = juce::jmax(8000.0, sampleRate);
 
-    for (int band = 0; band < bandCount; ++band)
+    // Precompute all configurations before audio processing starts.
+    for (size_t countIndex = 0; countIndex < supportedBandCounts.size(); ++countIndex)
     {
-        const auto proportion = static_cast<float>(band) / static_cast<float>(bandCount - 1);
-        const auto centre = lowestBandHz * std::pow(highestBandHz / lowestBandHz, proportion);
-        const auto safeCentre = juce::jmin(centre, static_cast<float>(currentSampleRate * 0.45));
-        bandCentres[static_cast<size_t>(band)] = safeCentre;
-
-        auto coefficients = juce::dsp::IIR::Coefficients<float>::makeBandPass(
-            currentSampleRate, safeCentre, filterQ);
-
-        modulatorFilters[static_cast<size_t>(band)].coefficients = coefficients;
-        carrierFilters[static_cast<size_t>(band)].coefficients = coefficients;
-        sibilanceNoiseFilters[static_cast<size_t>(band)].coefficients = coefficients;
+        const auto count = supportedBandCounts[countIndex];
+        for (int qIndex = 0; qIndex < qSteps; ++qIndex)
+        {
+            auto& config = configurations[countIndex * qSteps + static_cast<size_t>(qIndex)];
+            config.bandCount = count;
+            const auto q = minimumQ + static_cast<float>(qIndex) * qStep;
+            for (int band = 0; band < count; ++band)
+            {
+                const auto proportion = static_cast<float>(band) / static_cast<float>(count - 1);
+                const auto centre = lowestBandHz * std::pow(highestBandHz / lowestBandHz, proportion);
+                const auto safeCentre = juce::jmin(centre, static_cast<float>(currentSampleRate * 0.45));
+                config.centres[static_cast<size_t>(band)] = safeCentre;
+                config.coefficients[static_cast<size_t>(band)] =
+                    juce::dsp::IIR::Coefficients<float>::makeBandPass(currentSampleRate, safeCentre, q);
+            }
+        }
     }
+    activeConfiguration = -1;
+    applyPendingConfiguration();
 
     voicingSmoothingCoefficient = std::exp(-1.0f / (0.010f * static_cast<float>(currentSampleRate)));
     carrierActivityAttackCoefficient = std::exp(-1.0f / (0.001f * static_cast<float>(currentSampleRate)));
@@ -63,7 +72,8 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto articulationAmount = articulationLift.load(std::memory_order_relaxed);
     const auto noiseAmount = unvoicedNoise.load(std::memory_order_relaxed);
     const auto sibilanceGain = sibilanceAmount.load(std::memory_order_relaxed);
-    const auto bandsPerOctave = static_cast<float>(bandCount - 1) / std::log2(highestBandHz / lowestBandHz);
+    applyPendingConfiguration();
+    const auto bandsPerOctave = static_cast<float>(activeBandCount - 1) / std::log2(highestBandHz / lowestBandHz);
     const auto bandOffset = shift * (bandsPerOctave / 12.0f);
 
     // A short-term zero-crossing estimate distinguishes noisy, unvoiced speech
@@ -101,9 +111,9 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto carrierPresence = juce::jlimit(0.0f, 1.0f,
         (carrierActivity - 0.0001f) / 0.0009f);
 
-    std::array<float, bandCount> carrierBands {};
-    std::array<float, bandCount> noiseBands {};
-    for (int band = 0; band < bandCount; ++band)
+    std::array<float, maxBandCount> carrierBands {};
+    std::array<float, maxBandCount> noiseBands {};
+    for (int band = 0; band < activeBandCount; ++band)
     {
         const auto index = static_cast<size_t>(band);
         const auto voiceBand = modulatorFilters[index].processSample(modulator);
@@ -127,17 +137,17 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     // lifts quiet speech bands while the square-root curve preserves consonant
     // and vowel dynamics instead of letting a few loud bands dominate.
     float wetOutput = 0.0f;
-    for (int band = 0; band < bandCount; ++band)
+    for (int band = 0; band < activeBandCount; ++band)
     {
         const auto index = static_cast<size_t>(band);
         const auto centre = bandCentres[index];
         if (centre < low || centre > high)
             continue;
 
-        const auto sourcePosition = juce::jlimit(0.0f, static_cast<float>(bandCount - 1),
+        const auto sourcePosition = juce::jlimit(0.0f, static_cast<float>(activeBandCount - 1),
                                                  static_cast<float>(band) - bandOffset);
         const auto lower = static_cast<int>(sourcePosition);
-        const auto upper = juce::jmin(lower + 1, bandCount - 1);
+        const auto upper = juce::jmin(lower + 1, activeBandCount - 1);
         const auto fraction = sourcePosition - static_cast<float>(lower);
         const auto shiftedLevel = envelopes[static_cast<size_t>(lower)] * (1.0f - fraction)
                                 + envelopes[static_cast<size_t>(upper)] * fraction;
@@ -169,7 +179,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     }
 
     // The compressed envelopes are much larger than the previous raw levels;
-    // use a conservative summing scale to retain headroom across 32 bands.
+    // use a conservative summing scale to retain headroom across the selected filterbank.
     wetOutput *= 0.45f * outputGain.load(std::memory_order_relaxed);
     const auto mix = dryWet.load(std::memory_order_relaxed);
     return wetOutput * mix + modulator * (1.0f - mix);
@@ -228,6 +238,49 @@ void VocoderEngine::setUnvoicedNoise(float amount) noexcept
 void VocoderEngine::setSibilanceAmount(float amount) noexcept
 {
     sibilanceAmount.store(juce::jlimit(0.0f, 2.0f, amount), std::memory_order_relaxed);
+}
+
+
+void VocoderEngine::setBandCount(int bands) noexcept
+{
+    const auto supported = bands <= 24 ? 24 : bands <= 32 ? 32 : bands <= 40 ? 40
+                         : bands <= 48 ? 48 : 56;
+    requestedBandCount.store(supported, std::memory_order_relaxed);
+}
+
+void VocoderEngine::setFilterQ(float q) noexcept
+{
+    const auto index = juce::jlimit(0, qSteps - 1, juce::roundToInt((q - minimumQ) / qStep));
+    requestedQIndex.store(index, std::memory_order_relaxed);
+}
+
+void VocoderEngine::applyPendingConfiguration() noexcept
+{
+    const auto bands = requestedBandCount.load(std::memory_order_relaxed);
+    const auto qIndex = requestedQIndex.load(std::memory_order_relaxed);
+    size_t countIndex = 0;
+    while (countIndex + 1 < supportedBandCounts.size() && supportedBandCounts[countIndex] != bands)
+        ++countIndex;
+    const auto configuration = static_cast<int>(countIndex * qSteps) + juce::jlimit(0, qSteps - 1, qIndex);
+    if (configuration == activeConfiguration)
+        return;
+    const auto& config = configurations[static_cast<size_t>(configuration)];
+    activeBandCount = config.bandCount;
+    for (int band = 0; band < activeBandCount; ++band)
+    {
+        const auto index = static_cast<size_t>(band);
+        bandCentres[index] = config.centres[index];
+        modulatorFilters[index].coefficients = config.coefficients[index];
+        carrierFilters[index].coefficients = config.coefficients[index];
+        sibilanceNoiseFilters[index].coefficients = config.coefficients[index];
+    }
+    for (int band = activeBandCount; band < maxBandCount; ++band)
+    {
+        const auto index = static_cast<size_t>(band);
+        envelopes[index] = 0.0f;
+        envelopePowers[index] = 0.0f;
+    }
+    activeConfiguration = configuration;
 }
 
 void VocoderEngine::updateEnvelopeTimes() noexcept
