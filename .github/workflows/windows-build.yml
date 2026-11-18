@@ -50,7 +50,7 @@ jobs:
           name: Vocoder-Windows-x64-build-${{ github.run_number }}
           path: |
             build/**/Vocoder.exe
-            build/**/SoundFonts/**
+            build/**/Vocoder_artefacts/Release/SoundFonts/**
             build/**/TestAudio/**
             build/**/fluidsynth*.dll
             build/**/libfluidsynth*.dll
