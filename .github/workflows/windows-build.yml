@@ -47,7 +47,7 @@ jobs:
       - name: Upload application
         uses: actions/upload-artifact@v4
         with:
-          name: Vocoder-Windows-x64
+          name: Vocoder-Windows-x64-build-${{ github.run_number }}
           path: |
             build/**/Vocoder.exe
             build/**/SoundFonts/**
