@@ -6,6 +6,7 @@
 #include "SoundFontEngine.h"
 #include "HarmonizerEngine.h"
 #include <thread>
+#include <vector>
 
 class MainComponent final : public juce::Component,
                             public juce::AudioIODeviceCallback,
@@ -69,6 +70,16 @@ private:
         juce::MidiKeyboardState& keyboardState;
         juce::MidiMessageCollector& midiCollector;
     };
+
+    struct ControlInfo
+    {
+        juce::Component* target = nullptr;
+        juce::TextButton* button = nullptr;
+    };
+    juce::OwnedArray<juce::TextButton> controlInfoButtons;
+    std::vector<ControlInfo> controlInfo;
+    void addControlInfo(juce::Component& target, const juce::String& title,
+                        const juce::String& details);
 
     void sliderValueChanged(juce::Slider* slider) override;
     void timerCallback() override;

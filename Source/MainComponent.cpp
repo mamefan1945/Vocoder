@@ -404,6 +404,71 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     deviceViewport.setScrollOnDragEnabled(true);
     addAndMakeVisible(deviceViewport);
 
+    // Context-sensitive help buttons. Each explanation describes both the
+    // parameter's role and the audible trade-offs of changing it.
+    addControlInfo(modeLabel, "Processing mode",
+        "Pass-through sends the input directly to the output. Vocoder uses the voice to shape a selected carrier sound. Harmonizer detects the voice pitch and creates notes from the keys you play. Each mode has different controls and a different sound.");
+    addControlInfo(carrierLabel, "Carrier source",
+        "Selects what sound the Vocoder reshapes. Internal MIDI synth uses the built-in oscillator or SoundFont instrument. External input 2 uses audio arriving on your interface's second input. The external option requires a correctly connected second input.");
+    addControlInfo(carrierPresetLabel, "Carrier profile",
+        "Chooses a preconfigured carrier character. Rich PWM is a harmonically rich starting point; saw and pulse profiles are brighter and more synthetic, while choir and SoundFont profiles can sound smoother or more instrument-like. The profile also adjusts related noise and sibilance settings.");
+    addControlInfo(waveformLabel, "Carrier type",
+        "Sets the waveform used as the Vocoder's carrier. Richer waveforms provide more harmonics for speech articulation; sine is smooth but can make words harder to understand. Noise is useful for breathy or percussive textures. SoundFont uses the selected sampled instrument.");
+    addControlInfo(octaveLabel, "Octave",
+        "Transposes the played carrier or Harmonizer notes by whole octaves. Positive settings sound higher; negative settings sound lower. It changes pitch, not the detected vocal pitch or the tuning of the source recording.");
+    addControlInfo(soundFontInstrumentLabel, "SoundFont instrument",
+        "Selects the General MIDI preset used by the SoundFont carrier. Different instruments have different attack, sustain and harmonic content, so they can change both intelligibility and character. The choice has no effect unless SoundFont is selected as the carrier type.");
+    addControlInfo(midiLabel, "MIDI input",
+        "Chooses the MIDI keyboard or controller that supplies notes. In Vocoder mode, notes drive the carrier. In Harmonizer mode, played notes determine the harmony pitches. Select the correct device; the on-screen keyboard can also be used.");
+    addControlInfo(outputLevelLabel, "Output level",
+        "Sets the final output gain after processing. Raising it makes the result louder but can cause clipping or distortion if the signal exceeds the available headroom. Lower it if the output meter approaches 0 dBFS or sounds harsh.");
+    addControlInfo(attackLabel, "Attack",
+        "Controls how quickly the Vocoder's analysis bands respond when the voice gets louder. Short attack preserves consonant edges and fast syllables but can sound rougher; longer attack smooths changes but may soften or blur word beginnings.");
+    addControlInfo(releaseLabel, "Release",
+        "Controls how quickly Vocoder band levels fall after the voice becomes quieter. Short release gives tighter, more percussive articulation but can chatter. Longer release sustains vowels and smooths gaps, but can smear syllables together.");
+    addControlInfo(lowFrequencyLabel, "Low frequency",
+        "Sets the lowest frequency included in the Vocoder analysis and synthesis range. Raising it removes low vocal energy and rumble; setting it too high can thin the voice and weaken low vowels.");
+    addControlInfo(highFrequencyLabel, "High frequency",
+        "Sets the upper edge of the Vocoder frequency range. Higher values retain more consonant detail and brightness; lower values create a darker, more muffled sound and can make S, F and T sounds less distinct.");
+    addControlInfo(dryWetLabel, "Dry / wet",
+        "Balances the unprocessed voice (dry) against the processed effect (wet). 0% is dry input; 100% is fully processed. More wet gives a stronger effect, while some dry signal can improve word recognition but may reduce the classic synthetic character.");
+    addControlInfo(formantShiftLabel, "Formant",
+        "Shifts the vocal resonances that give a voice its vowel character, independently of the fundamental pitch. Positive values tend toward a smaller/brighter vocal quality; negative values toward a larger/darker quality. Extreme shifts can make vowels unnatural or less intelligible.");
+    addControlInfo(gateThresholdLabel, "Noise gate",
+        "Sets the input level below which quiet signal is suppressed. A higher threshold reduces room noise and carrier leakage between phrases, but can cut off soft words and consonants. A lower threshold preserves quiet details but lets more background noise through.");
+    addControlInfo(articulationLiftLabel, "Articulation",
+        "Adjusts emphasis on speech detail in the Vocoder. Increasing it can make consonants and syllable edges clearer; too much can exaggerate noise, hiss and sharp transients. Reduce it if the result sounds brittle.");
+    addControlInfo(unvoicedNoiseLabel, "Unvoiced noise",
+        "Controls how much noise-like content is used for unvoiced speech sounds such as S, F, SH and breath. More can restore consonant clarity; too much adds hiss. Less produces a cleaner tone but may make words difficult to understand.");
+    addControlInfo(sibilanceLabel, "Sibilance",
+        "Adjusts the strength of high-frequency sibilant sounds. Raising it can make S and SH more recognizable; excessive levels sound harsh or hissy. Lower it if esses dominate the processed voice.");
+    addControlInfo(filterBandCountLabel, "Filter bands",
+        "Sets how many frequency bands analyze and recreate the voice. More bands can reproduce finer spectral detail and clearer vowels, but use more CPU and may sound sharper or more complex. Fewer bands sound coarser and more robotic.");
+    addControlInfo(filterQLabel, "Filter Q",
+        "Controls the selectivity and overlap of adjacent Vocoder filters. Higher Q makes bands narrower and more distinct, which can add definition but also create a hollow or peaky sound. Lower Q increases overlap for a smoother, broader tone.");
+    addControlInfo(formantPreservationLabel, "Formant preservation",
+        "Controls how much the Harmonizer preserves the vocal tract resonances while changing pitch. Higher values help retain the original speaker's vowel identity and reduce chipmunk-like shifts. Lower values allow more of the natural formant movement that comes with pitch shifting.");
+    addControlInfo(transientProtectionLabel, "Transient protection",
+        "Controls how strongly short consonant attacks and other fast transients are protected from pitch-shifting artifacts. More protection can keep speech crisp, but may leave some consonants less harmonized. Less protection can sound smoother on sustained vowels but may smear or crackle on sharp sounds.");
+    addControlInfo(pitchSensitivityLabel, "Pitch sensitivity",
+        "Controls how readily the Harmonizer accepts a detected vocal pitch. Higher sensitivity can help with quiet or breathy singing, but may mistake noisy consonants or background sounds for a note, causing jumps. Lower sensitivity is steadier but may miss weak notes.");
+    addControlInfo(pitchHoldLabel, "Pitch hold",
+        "Sets how long the last reliable vocal pitch is retained when the pitch detector temporarily loses the voice, often during consonants. A longer hold reduces dropouts but can sustain a stale note through pauses. A shorter hold reacts faster but may cut notes off.");
+    addControlInfo(pitchRecoveryLabel, "Pitch recovery",
+        "Sets how quickly the held pitch fades after the hold period expires. Longer recovery makes note tails smoother but can leave harmony audible after the voice stops. Shorter recovery silences faster but can sound abrupt.");
+    addControlInfo(microphoneMonitor, "Mic monitor",
+        "When enabled in Vocoder mode, adds the direct microphone signal to the processed output. This is useful for checking the input or blending natural voice with the effect, but it reduces the fully synthetic sound and can increase feedback risk through speakers.");
+    addControlInfo(carrierPreview, "Carrier preview",
+        "Auditions the carrier directly without relying on the voice modulation. Use it to check the selected waveform or instrument and confirm the carrier is audible. Turn it off for normal Vocoder operation.");
+    addControlInfo(useTestAudioInput, "Use file as voice input",
+        "When enabled, the loaded test recording replaces the live microphone as the voice source for processing. This makes comparisons repeatable. Disable it to return to the live input; the file can still be played for reference.");
+    addControlInfo(testVoiceSelector, "Test recording",
+        "Selects the bundled speech or singing test. Nova and Ash are Vocoder speech tests. The Road Goes On options test Harmonizer processing, with either a fixed triad or the vocal MIDI melody driving the keys.");
+    addControlInfo(carrierSource, "Carrier source selection",
+        "Internal MIDI synth generates the carrier inside the app. External input 2 takes the carrier from the second audio input channel. Choose the source that matches your wiring; an unconnected external input may produce silence.");
+    addControlInfo(waveform, "Carrier waveform selection",
+        "Changes the harmonic content of the Vocoder carrier. A rich spectrum generally gives the voice more material to shape and can improve intelligibility. A smooth sine may sound pure but often produces less recognizable speech.");
+
     updateModeControls();
 
     // Defer all potentially slow startup work until after this component has
@@ -1097,6 +1162,37 @@ void MainComponent::resized()
     deviceViewport.setBounds(area);
     deviceSelector.setBounds(0, 0, juce::jmax(320, deviceViewport.getWidth() - 18),
                              juce::jmax(300, deviceViewport.getHeight()));
+    // Place help buttons at the right edge of their associated label/control.
+    // Bounds are freshly assigned above on every resize, so this remains stable.
+    for (const auto& item : controlInfo)
+    {
+        if (item.target == nullptr || item.button == nullptr || !item.target->isVisible())
+        {
+            if (item.button != nullptr)
+                item.button->setVisible(false);
+            continue;
+        }
+        auto bounds = item.target->getBounds();
+        const auto buttonWidth = juce::jmin(18, bounds.getWidth());
+        item.button->setBounds(bounds.getRight() - buttonWidth, bounds.getY() + 1,
+                               buttonWidth, juce::jmax(18, bounds.getHeight() - 2));
+        item.button->setVisible(true);
+        item.target->setBounds(bounds.withWidth(juce::jmax(1, bounds.getWidth() - buttonWidth - 2)));
+    }
+}
+
+void MainComponent::addControlInfo(juce::Component& target, const juce::String& title,
+                                     const juce::String& details)
+{
+    auto* button = controlInfoButtons.add(new juce::TextButton("i"));
+    button->setTooltip("What this control does");
+    button->setLookAndFeel(nullptr);
+    button->onClick = [title, details]
+    {
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon, title, details);
+    };
+    addAndMakeVisible(button);
+    controlInfo.push_back({ &target, button });
 }
 
 void MainComponent::savePreset()
