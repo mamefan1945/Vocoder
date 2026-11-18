@@ -102,6 +102,22 @@ private:
             if (!isVoiceActive())
                 return;
 
+            // Octave changes are requested by the UI thread but applied here on
+            // the audio thread, so an already-held carrier note retunes safely.
+            const auto selectedOctave = octave.load(std::memory_order_relaxed);
+            if (selectedOctave != appliedOctave)
+            {
+                const auto currentNote = getCurrentlyPlayingNote();
+                if (juce::isPositiveAndBelow(currentNote, 128))
+                {
+                    const auto shiftedNote = juce::jlimit(0, 127,
+                        currentNote + 12 * selectedOctave);
+                    baseFrequency = juce::MidiMessage::getMidiNoteInHertz(shiftedNote);
+                    updatePitchBend();
+                }
+                appliedOctave = selectedOctave;
+            }
+
             auto* destination = output.getWritePointer(0, startSample);
             for (int i = 0; i < numSamples; ++i)
             {
@@ -200,6 +216,7 @@ private:
         double frequency = 440.0;
         double baseFrequency = 440.0;
         int pitchWheel = 8192;
+        int appliedOctave = 0;
         double phase = 0.0;
         double pwmPhase = 0.0;
         std::array<double, 3> choirPhases {};
