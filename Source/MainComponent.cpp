@@ -369,27 +369,13 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     testVoiceSelector.setTooltip("Choose a prerecorded voice test. Nova and Ash test Vocoder; The Road Goes On tests Harmonizer.");
     testVoiceSelector.onChange = [this]
     {
-        if (!speechTestRunning)
-            return;
-
-        if (testVoiceSelector.getSelectedId() == 3)
+        if (speechTestRunning)
         {
-            if (loadTestAudioFile(findHarmonizerTestFile(), true))
-                statusLabel.setText("Harmonizer test: The Road Goes On | C major chord | looping",
-                                    juce::dontSendNotification);
-            else
-                statusLabel.setText("Could not open TestAudio/the road goes on.mp3.",
-                                    juce::dontSendNotification);
-            return;
+            // Restart the selected test so its processing mode, MIDI notes,
+            // monitoring state, and audio file always match the selection.
+            stopSpeechTest();
+            startSpeechTest();
         }
-
-        const auto voiceName = testVoiceSelector.getSelectedId() == 2 ? "ash" : "nova";
-        if (loadTestAudioFile(findSpeechTestFile(voiceName), true))
-            statusLabel.setText("Vocoder speech test: " + testVoiceSelector.getText() + " (looping)",
-                                juce::dontSendNotification);
-        else
-            statusLabel.setText("Could not find vocoder_test_" + juce::String(voiceName)
-                + ".wav in Downloads or the app TestAudio folder.", juce::dontSendNotification);
     };
     addAndMakeVisible(testVoiceSelector);
 
