@@ -151,12 +151,23 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         const auto fraction = sourcePosition - static_cast<float>(lower);
         const auto shiftedLevel = envelopes[static_cast<size_t>(lower)] * (1.0f - fraction)
                                 + envelopes[static_cast<size_t>(upper)] * fraction;
-        // A real gate prevents microphone self-noise and room noise from
-        // continuously opening the carrier. The threshold is expressed as
-        // per-band RMS amplitude and remains adjustable from the UI.
-        const auto aboveGate = juce::jmax(0.0f,
-            shiftedLevel - gateThreshold.load(std::memory_order_relaxed));
-        const auto modulation = std::sqrt(juce::jlimit(0.0f, 1.0f, aboveGate * 24.0f));
+        // Use a soft-knee expander rather than subtracting a hard threshold.
+        // Quiet consonants often sit well below vowel energy; a hard per-band
+        // gate erases them and makes otherwise clear speech unintelligible.
+        // The user threshold is the centre of a 30 dB transition region.
+        const auto threshold = gateThreshold.load(std::memory_order_relaxed);
+        const auto gateFloor = threshold * 0.15f;
+        const auto gateCeiling = juce::jmax(gateFloor + 0.00001f, threshold * 1.5f);
+        const auto gatePosition = juce::jlimit(0.0f, 1.0f,
+            (shiftedLevel - gateFloor) / (gateCeiling - gateFloor));
+        const auto gateCurve = gatePosition * gatePosition * (3.0f - 2.0f * gatePosition);
+        const auto gateGain = threshold <= 0.000001f ? 1.0f : gateCurve;
+        const auto modulation = std::sqrt(juce::jlimit(0.0f, 1.0f, shiftedLevel * 24.0f))
+                              * gateGain;
+        // A slightly more sensitive envelope for the noise path retains the
+        // low-level broadband detail that identifies S, F, SH and TH sounds.
+        const auto noiseModulation = std::sqrt(juce::jlimit(0.0f, 1.0f, shiftedLevel * 40.0f))
+                                   * gateGain;
 
         // Speech intelligibility depends heavily on upper-mid and high-frequency
         // consonant detail. Apply a gentle upward tilt after the hard gate so
@@ -173,14 +184,14 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         // speech, only in the upper bands, and only while a carrier note is held.
         const auto highFrequencyWeight = juce::jlimit(0.0f, 1.0f,
             (centre - 900.0f) / 2600.0f);
-        const auto sibilance = 0.20f * sibilanceGain * unvoicedAmount
+        const auto sibilance = 0.35f * sibilanceGain * unvoicedAmount
                              * highFrequencyWeight * carrierPresence * noiseAmount;
-        wetOutput += noiseBands[index] * modulation * sibilance;
+        wetOutput += noiseBands[index] * noiseModulation * sibilance;
     }
 
-    // The compressed envelopes are much larger than the previous raw levels;
-    // use a conservative summing scale to retain headroom across the selected filterbank.
-    wetOutput *= 0.45f * outputGain.load(std::memory_order_relaxed);
+    // Keep headroom while avoiding an unnecessarily quiet wet signal. The
+    // output stage still receives the user's master gain and downstream limiter.
+    wetOutput *= 0.55f * outputGain.load(std::memory_order_relaxed);
     const auto mix = dryWet.load(std::memory_order_relaxed);
     return wetOutput * mix + modulator * (1.0f - mix);
 }
