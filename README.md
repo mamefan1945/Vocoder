@@ -298,6 +298,12 @@ Use the same spoken material for each comparison:
 
 For a more objective check, record the output and ask someone who does not know the spoken words to transcribe it. A listener who already knows the script can unintentionally fill in missing syllables.
 
+### Harmonizer prerecorded-vocal test
+
+Select **The Road Goes On - Harmonizer** in the test selector and click **Run speech test**. The app loads and loops `TestAudio/the road goes on.mp3`, switches to Harmonizer mode, disables external MIDI and microphone monitoring, and holds a fixed C-major triad (C4, E4, G4). This gives a repeatable polyphonic test without a live microphone. The MP3 decoder is enabled in the build, and the Windows workflow stages this file with the other test audio.
+
+Use the same sample and settings when comparing builds. Listen for pitch stability, consonant preservation, grain artifacts, and whether the three target notes remain distinct. Stop the test to release the test notes and return to live microphone input.
+
 ### Harmonizer listening test
 
 Use a steady sung vowel so that changes are easier to hear:

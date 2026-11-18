@@ -72,6 +72,7 @@ target_sources(Vocoder PRIVATE
 target_compile_definitions(Vocoder PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
+    JUCE_USE_MP3AUDIOFORMAT=1
 )
 
 target_link_libraries(Vocoder PRIVATE

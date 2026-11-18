@@ -82,6 +82,7 @@ private:
     void chooseTestAudio();
     bool loadTestAudioFile(const juce::File& file, bool loop);
     juce::File findSpeechTestFile(const juce::String& voiceName) const;
+    juce::File findHarmonizerTestFile() const;
     void startSpeechTest();
     void stopSpeechTest();
     void savePreset();

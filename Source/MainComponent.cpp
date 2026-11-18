@@ -362,22 +362,34 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     };
     addAndMakeVisible(useTestAudioInput);
 
-    testVoiceSelector.addItem("Nova (female)", 1);
-    testVoiceSelector.addItem("Ash (male)", 2);
+    testVoiceSelector.addItem("Nova (female) - Vocoder", 1);
+    testVoiceSelector.addItem("Ash (male) - Vocoder", 2);
+    testVoiceSelector.addItem("The Road Goes On - Harmonizer", 3);
     testVoiceSelector.setSelectedId(1, juce::dontSendNotification);
-    testVoiceSelector.setTooltip("Select the bundled speech-test voice. The WAV files are found in Downloads or the app's TestAudio folder.");
+    testVoiceSelector.setTooltip("Choose a prerecorded voice test. Nova and Ash test Vocoder; The Road Goes On tests Harmonizer.");
     testVoiceSelector.onChange = [this]
     {
-        if (speechTestRunning)
+        if (!speechTestRunning)
+            return;
+
+        if (testVoiceSelector.getSelectedId() == 3)
         {
-            const auto voiceName = testVoiceSelector.getSelectedId() == 2 ? "ash" : "nova";
-            if (loadTestAudioFile(findSpeechTestFile(voiceName), true))
-                statusLabel.setText("Speech test: " + testVoiceSelector.getText() + " (looping)",
+            if (loadTestAudioFile(findHarmonizerTestFile(), true))
+                statusLabel.setText("Harmonizer test: The Road Goes On | C major chord | looping",
                                     juce::dontSendNotification);
             else
-                statusLabel.setText("Could not find vocoder_test_" + juce::String(voiceName)
-                    + ".wav in Downloads or the app TestAudio folder.", juce::dontSendNotification);
+                statusLabel.setText("Could not open TestAudio/the road goes on.mp3.",
+                                    juce::dontSendNotification);
+            return;
         }
+
+        const auto voiceName = testVoiceSelector.getSelectedId() == 2 ? "ash" : "nova";
+        if (loadTestAudioFile(findSpeechTestFile(voiceName), true))
+            statusLabel.setText("Vocoder speech test: " + testVoiceSelector.getText() + " (looping)",
+                                juce::dontSendNotification);
+        else
+            statusLabel.setText("Could not find vocoder_test_" + juce::String(voiceName)
+                + ".wav in Downloads or the app TestAudio folder.", juce::dontSendNotification);
     };
     addAndMakeVisible(testVoiceSelector);
 
@@ -648,6 +660,25 @@ juce::File MainComponent::findSpeechTestFile(const juce::String& voiceName) cons
     return {};
 }
 
+juce::File MainComponent::findHarmonizerTestFile() const
+{
+    const auto fileName = "the road goes on.mp3";
+    const auto executable = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+    const juce::Array<juce::File> candidates
+    {
+        executable.getSiblingFile("TestAudio").getChildFile(fileName),
+        executable.getSiblingFile(fileName),
+        juce::File::getSpecialLocation(juce::File::userHomeDirectory)
+            .getChildFile("Downloads").getChildFile(fileName)
+    };
+
+    for (const auto& candidate : candidates)
+        if (candidate.existsAsFile())
+            return candidate;
+
+    return {};
+}
+
 bool MainComponent::loadTestAudioFile(const juce::File& file, bool loop)
 {
     if (!file.existsAsFile())
@@ -679,43 +710,67 @@ bool MainComponent::loadTestAudioFile(const juce::File& file, bool loop)
 
 void MainComponent::startSpeechTest()
 {
+    const auto harmonizerTest = testVoiceSelector.getSelectedId() == 3;
     const auto voiceName = testVoiceSelector.getSelectedId() == 2 ? "ash" : "nova";
-    const auto file = findSpeechTestFile(voiceName);
+    const auto file = harmonizerTest ? findHarmonizerTestFile() : findSpeechTestFile(voiceName);
     if (!file.existsAsFile())
     {
         runSpeechTestButton.setToggleState(false, juce::dontSendNotification);
-        statusLabel.setText("Speech WAV not found. Download vocoder_test_nova.wav and vocoder_test_ash.wav "
-            "to your Downloads folder, then try again.", juce::dontSendNotification);
+        statusLabel.setText(harmonizerTest
+            ? "Harmonizer sample not found: TestAudio/the road goes on.mp3"
+            : "Speech WAV not found. Download vocoder_test_nova.wav and vocoder_test_ash.wav "
+              "to your Downloads folder, then try again.", juce::dontSendNotification);
         return;
     }
 
-    processingMode.setSelectedId(2, juce::sendNotificationSync);
-    carrierSource.setSelectedId(1, juce::sendNotificationSync);
-    carrierPreset.setSelectedId(2, juce::sendNotificationSync);
+    processingMode.setSelectedId(harmonizerTest ? 3 : 2, juce::sendNotificationSync);
+    if (!harmonizerTest)
+    {
+        carrierSource.setSelectedId(1, juce::sendNotificationSync);
+        carrierPreset.setSelectedId(2, juce::sendNotificationSync);
+        octave.setSelectedId(3, juce::sendNotificationSync);
+        attackTime.setValue(1.0, juce::sendNotificationSync);
+        releaseTime.setValue(10.0, juce::sendNotificationSync);
+    }
     octave.setSelectedId(3, juce::sendNotificationSync);
-    attackTime.setValue(1.0, juce::sendNotificationSync);
-    releaseTime.setValue(10.0, juce::sendNotificationSync);
     dryWetMix.setValue(100.0, juce::sendNotificationSync);
     outputLevel.setValue(0.75, juce::sendNotificationSync);
     microphoneMonitor.setToggleState(false, juce::dontSendNotification);
     monitorMicrophone.store(false, std::memory_order_relaxed);
     carrierPreview.setToggleState(false, juce::dontSendNotification);
     previewCarrier.store(false, std::memory_order_relaxed);
-    midiInput.setSelectedId(1, juce::sendNotificationSync); // Isolate the fixed test note from external MIDI.
+    midiInput.setSelectedId(1, juce::sendNotificationSync); // Isolate the test from external MIDI.
     for (int channel = 1; channel <= 16; ++channel)
         keyboardState.allNotesOff(channel);
-    keyboardState.noteOn(1, 48, 0.8f); // C3: stable, single-note carrier reference.
+
+    if (harmonizerTest)
+    {
+        // A fixed C-major triad makes this a repeatable polyphonic pitch-shift test.
+        keyboardState.noteOn(1, 60, 0.8f); // C4
+        keyboardState.noteOn(1, 64, 0.8f); // E4
+        keyboardState.noteOn(1, 67, 0.8f); // G4
+    }
+    else
+    {
+        keyboardState.noteOn(1, 48, 0.8f); // C3: stable, single-note vocoder carrier.
+    }
+
     if (!loadTestAudioFile(file, true))
     {
-        keyboardState.noteOff(1, 48, 0.0f);
+        for (int channel = 1; channel <= 16; ++channel)
+            keyboardState.allNotesOff(channel);
         runSpeechTestButton.setToggleState(false, juce::dontSendNotification);
-        statusLabel.setText("Could not open speech test WAV: " + file.getFileName(),
+        statusLabel.setText("Could not open test audio: " + file.getFileName(),
                             juce::dontSendNotification);
         return;
     }
+
     speechTestRunning = true;
-    statusLabel.setText("Speech test running: " + testVoiceSelector.getText()
-        + " | Rich PWM | C3 | 100% wet | looping", juce::dontSendNotification);
+    statusLabel.setText(harmonizerTest
+        ? "Harmonizer test running: The Road Goes On | C4 + E4 + G4 | 100% wet | looping"
+        : "Vocoder speech test running: " + testVoiceSelector.getText()
+            + " | Rich PWM | C3 | 100% wet | looping",
+        juce::dontSendNotification);
 }
 
 void MainComponent::stopSpeechTest()
@@ -728,6 +783,9 @@ void MainComponent::stopSpeechTest()
         testAudioTransport.setPosition(0.0);
     }
     keyboardState.noteOff(1, 48, 0.0f);
+    keyboardState.noteOff(1, 60, 0.0f);
+    keyboardState.noteOff(1, 64, 0.0f);
+    keyboardState.noteOff(1, 67, 0.0f);
     useTestAudio.store(false, std::memory_order_relaxed);
     useTestAudioInput.setToggleState(false, juce::dontSendNotification);
     statusLabel.setText("Speech test stopped. Live microphone input restored.", juce::dontSendNotification);
@@ -857,7 +915,7 @@ void MainComponent::resized()
     row.removeFromLeft(8);
     useTestAudioInput.setBounds(row.removeFromLeft(166));
     row.removeFromLeft(8);
-    testVoiceSelector.setBounds(row.removeFromLeft(125));
+    testVoiceSelector.setBounds(row.removeFromLeft(225));
     row.removeFromLeft(8);
     runSpeechTestButton.setBounds(row.removeFromLeft(130));
     area.removeFromTop(6);
