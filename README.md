@@ -300,7 +300,7 @@ For a more objective check, record the output and ask someone who does not know 
 
 ### Harmonizer prerecorded-vocal test
 
-Select **The Road Goes On - Harmonizer** in the test selector and click **Run speech test**. The app loads and loops `TestAudio/the road goes on.mp3`, switches to Harmonizer mode, disables external MIDI and microphone monitoring, and holds a fixed C-major triad (C4, E4, G4). This gives a repeatable polyphonic test without a live microphone. The MP3 decoder is enabled in the build, and the Windows workflow stages this file with the other test audio.
+Select **The Road Goes On - Harmonizer (fixed C4/E4/G4 comparison) and The Road Goes On - Harmonizer (vocal MIDI), which reads `TestAudio/the_road_goes_on_vocals.mid` and drives the on-screen keyboard from its timed note events while the MP3 loops.** in the test selector and click **Run speech test**. The app loads and loops `TestAudio/the road goes on.mp3`, switches to Harmonizer mode, disables external MIDI and microphone monitoring, and holds a fixed C-major triad (C4, E4, G4). This gives a repeatable polyphonic test without a live microphone. The MP3 decoder is enabled in the build, and the Windows workflow stages this file with the other test audio.
 
 Use the same sample and settings when comparing builds. Listen for pitch stability, consonant preservation, grain artifacts, and whether the three target notes remain distinct. Stop the test to release the test notes and return to live microphone input.
 
