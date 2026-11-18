@@ -769,8 +769,7 @@ void MainComponent::startSpeechTest()
                 const auto* midiEvent = sequence->getEventPointer(event);
                 if (midiEvent != nullptr
                     && (midiEvent->message.isNoteOn() || midiEvent->message.isNoteOff()))
-                    vocalMidiSequence.addEvent(midiEvent->message,
-                                               midiEvent->message.getTimeStamp());
+                    vocalMidiSequence.addEvent(midiEvent->message);
             }
         }
         if (vocalMidiSequence.getNumEvents() == 0)
