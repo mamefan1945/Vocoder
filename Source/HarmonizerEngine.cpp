@@ -56,6 +56,21 @@ void HarmonizerEngine::setTransientProtection(float amount) noexcept
     transientProtection.store(juce::jlimit(0.0f, 1.0f, amount), std::memory_order_relaxed);
 }
 
+void HarmonizerEngine::setPitchSensitivity(float amount) noexcept
+{
+    pitchSensitivity.store(juce::jlimit(0.0f, 1.0f, amount), std::memory_order_relaxed);
+}
+
+void HarmonizerEngine::setPitchHoldMs(float milliseconds) noexcept
+{
+    pitchHoldMs.store(juce::jlimit(0.0f, 300.0f, milliseconds), std::memory_order_relaxed);
+}
+
+void HarmonizerEngine::setPitchRecoveryMs(float milliseconds) noexcept
+{
+    pitchRecoveryMs.store(juce::jlimit(50.0f, 1000.0f, milliseconds), std::memory_order_relaxed);
+}
+
 void HarmonizerEngine::reset() noexcept
 {
     for (auto& voice : voices)
@@ -101,7 +116,7 @@ void HarmonizerEngine::reset() noexcept
     activeOctaveShift = 0;
 }
 
-float HarmonizerEngine::estimatePitch() const noexcept
+float HarmonizerEngine::estimatePitch(float sensitivity) const noexcept
 {
     // YIN-style difference analysis over a decimated ~43 ms window at 48 kHz.
     // The cumulative-mean normalized difference is less likely than a raw
@@ -152,9 +167,11 @@ float HarmonizerEngine::estimatePitch() const noexcept
                 ? static_cast<float>(sum * lag / cumulativeDifference) : 1.0f;
     }
 
-    // Select the first convincing local trough. Choosing the global trough
-    // alone often favours a multiple of the true period for harmonic voices.
-    constexpr float yinThreshold = 0.18f;
+    // Higher sensitivity accepts weaker periodicity, which can help breathy
+    // voices but also increases the chance of tracking consonant noise.
+    // Select the first convincing local trough rather than the global trough,
+    // which often favours a multiple of the true period for harmonic voices.
+    const auto yinThreshold = 0.10f + 0.16f * juce::jlimit(0.0f, 1.0f, sensitivity);
     int bestLag = 0;
     for (int lag = minLag; lag < maxLag; ++lag)
     {
@@ -181,7 +198,8 @@ float HarmonizerEngine::estimatePitch() const noexcept
                 bestLag = lag;
             }
         }
-        if (bestValue > 0.35f)
+        const auto fallbackLimit = 0.24f + 0.26f * juce::jlimit(0.0f, 1.0f, sensitivity);
+        if (bestValue > fallbackLimit)
             return 0.0f;
     }
 
@@ -537,6 +555,11 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
     const auto bendSmoothing = 1.0f - std::exp(-1.0f / (0.010f * sampleRate));
     const auto formantBlend = formantPreservation.load(std::memory_order_relaxed);
     const auto transientAmount = transientProtection.load(std::memory_order_relaxed);
+    const auto trackingSensitivity = pitchSensitivity.load(std::memory_order_relaxed);
+    const auto holdMilliseconds = pitchHoldMs.load(std::memory_order_relaxed);
+    const auto recoverySeconds = pitchRecoveryMs.load(std::memory_order_relaxed) * 0.001f;
+    const auto pitchHoldUpdates = static_cast<int>(std::ceil(
+        holdMilliseconds * 0.001f * sampleRate / static_cast<float>(updateInterval)));
 
     for (int i = 0; i < numSamples; ++i)
     {
@@ -578,7 +601,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             // very same audio sample that triggered the transient.
             if (!transientDetected && transientMix < 0.05f)
             {
-                const auto estimate = estimatePitch();
+                const auto estimate = estimatePitch(trackingSensitivity);
                 if (estimate >= minimumPitchHz && estimate <= maximumPitchHz)
                 {
                     pitchMissCount = 0;
@@ -596,11 +619,11 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                     // Keep the last reliable F0 through those gaps, then decay
                     // it with a 250 ms time constant instead of collapsing the
                     // pitch estimate in roughly 100 ms.
-                    if (pitchMissCount > 12)
+                    if (pitchMissCount > pitchHoldUpdates)
                     {
                         const auto elapsedSeconds =
                             static_cast<float>(updateInterval) / sampleRate;
-                        detectedPitchHz *= std::exp(-elapsedSeconds / 0.250f);
+                        detectedPitchHz *= std::exp(-elapsedSeconds / recoverySeconds);
                     }
                 }
                 if (detectedPitchHz < minimumPitchHz)
