@@ -364,9 +364,10 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
 
     testVoiceSelector.addItem("Nova (female) - Vocoder", 1);
     testVoiceSelector.addItem("Ash (male) - Vocoder", 2);
-    testVoiceSelector.addItem("The Road Goes On - Harmonizer", 3);
+    testVoiceSelector.addItem("The Road Goes On - Harmonizer (fixed triad)", 3);
+    testVoiceSelector.addItem("The Road Goes On - Harmonizer (vocal MIDI)", 4);
     testVoiceSelector.setSelectedId(1, juce::dontSendNotification);
-    testVoiceSelector.setTooltip("Choose a prerecorded voice test. Nova and Ash test Vocoder; The Road Goes On tests Harmonizer.");
+    testVoiceSelector.setTooltip("Nova and Ash test Vocoder. The Road Goes On offers a fixed-triad or vocal-MIDI-driven Harmonizer test.");
     testVoiceSelector.onChange = [this]
     {
         if (speechTestRunning)
@@ -390,7 +391,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     };
     addAndMakeVisible(runSpeechTestButton);
 
-    startTimerHz(20);
+    startTimerHz(60);
 
     keyboardComponent.setAvailableRange(36, 108);
     keyboardComponent.setKeyWidth(24.0f);
@@ -696,7 +697,9 @@ bool MainComponent::loadTestAudioFile(const juce::File& file, bool loop)
 
 void MainComponent::startSpeechTest()
 {
-    const auto harmonizerTest = testVoiceSelector.getSelectedId() == 3;
+    const auto selectedTest = testVoiceSelector.getSelectedId();
+    const auto harmonizerTest = selectedTest == 3 || selectedTest == 4;
+    const auto midiDrivenTest = selectedTest == 4;
     const auto voiceName = testVoiceSelector.getSelectedId() == 2 ? "ash" : "nova";
     const auto file = harmonizerTest ? findHarmonizerTestFile() : findSpeechTestFile(voiceName);
     if (!file.existsAsFile())
@@ -729,9 +732,52 @@ void MainComponent::startSpeechTest()
     for (int channel = 1; channel <= 16; ++channel)
         keyboardState.allNotesOff(channel);
 
-    if (harmonizerTest)
+    vocalMidiSequence.clear();
+    vocalMidiEventIndex = 0;
+    lastVocalMidiPosition = -1.0;
+    useVocalMidiTest = midiDrivenTest;
+
+    if (midiDrivenTest)
     {
-        // A fixed C-major triad makes this a repeatable polyphonic pitch-shift test.
+        const auto midiFile = file.getSiblingFile("the_road_goes_on_vocals.mid");
+        juce::FileInputStream midiStream(midiFile);
+        juce::MidiFile vocalMidiFile;
+        if (!midiStream.openedOk() || !vocalMidiFile.readFrom(midiStream))
+        {
+            useVocalMidiTest = false;
+            runSpeechTestButton.setToggleState(false, juce::dontSendNotification);
+            statusLabel.setText("Could not read vocal MIDI: " + midiFile.getFileName(),
+                                juce::dontSendNotification);
+            return;
+        }
+
+        vocalMidiFile.convertTimestampTicksToSeconds();
+        for (int track = 0; track < vocalMidiFile.getNumTracks(); ++track)
+        {
+            const auto* sequence = vocalMidiFile.getTrack(track);
+            if (sequence == nullptr)
+                continue;
+            for (int event = 0; event < sequence->getNumEvents(); ++event)
+            {
+                const auto* midiEvent = sequence->getEventPointer(event);
+                if (midiEvent != nullptr
+                    && (midiEvent->message.isNoteOn() || midiEvent->message.isNoteOff()))
+                    vocalMidiSequence.addEvent(midiEvent->message,
+                                               midiEvent->message.getTimeStamp());
+            }
+        }
+        if (vocalMidiSequence.getNumEvents() == 0)
+        {
+            useVocalMidiTest = false;
+            runSpeechTestButton.setToggleState(false, juce::dontSendNotification);
+            statusLabel.setText("The vocal MIDI file contains no note events.",
+                                juce::dontSendNotification);
+            return;
+        }
+    }
+    else if (harmonizerTest)
+    {
+        // Fixed C-major triad retained as a separate polyphonic comparison test.
         keyboardState.noteOn(1, 60, 0.8f); // C4
         keyboardState.noteOn(1, 64, 0.8f); // E4
         keyboardState.noteOn(1, 67, 0.8f); // G4
@@ -752,16 +798,22 @@ void MainComponent::startSpeechTest()
     }
 
     speechTestRunning = true;
-    statusLabel.setText(harmonizerTest
-        ? "Harmonizer test running: The Road Goes On | C4 + E4 + G4 | 100% wet | looping"
-        : "Vocoder speech test running: " + testVoiceSelector.getText()
-            + " | Rich PWM | C3 | 100% wet | looping",
+    statusLabel.setText(midiDrivenTest
+        ? "Harmonizer test running: The Road Goes On | vocal MIDI drives virtual keys | 100% wet | looping"
+        : (harmonizerTest
+            ? "Harmonizer test running: The Road Goes On | C4 + E4 + G4 | 100% wet | looping"
+            : "Vocoder speech test running: " + testVoiceSelector.getText()
+                + " | Rich PWM | C3 | 100% wet | looping"),
         juce::dontSendNotification);
 }
 
 void MainComponent::stopSpeechTest()
 {
     speechTestRunning = false;
+    useVocalMidiTest = false;
+    vocalMidiSequence.clear();
+    vocalMidiEventIndex = 0;
+    lastVocalMidiPosition = -1.0;
     testAudioTransport.stop();
     if (testAudioReaderSource != nullptr)
     {
@@ -772,6 +824,8 @@ void MainComponent::stopSpeechTest()
     keyboardState.noteOff(1, 60, 0.0f);
     keyboardState.noteOff(1, 64, 0.0f);
     keyboardState.noteOff(1, 67, 0.0f);
+    for (int channel = 1; channel <= 16; ++channel)
+        keyboardState.allNotesOff(channel);
     useTestAudio.store(false, std::memory_order_relaxed);
     useTestAudioInput.setToggleState(false, juce::dontSendNotification);
     statusLabel.setText("Speech test stopped. Live microphone input restored.", juce::dontSendNotification);
@@ -1248,6 +1302,27 @@ void MainComponent::sliderValueChanged(juce::Slider* slider)
 
 void MainComponent::timerCallback()
 {
+    if (speechTestRunning && useVocalMidiTest && vocalMidiSequence.getNumEvents() > 0)
+    {
+        const auto position = testAudioTransport.getCurrentPosition();
+        if (lastVocalMidiPosition >= 0.0 && position + 0.01 < lastVocalMidiPosition)
+        {
+            for (int channel = 1; channel <= 16; ++channel)
+                keyboardState.allNotesOff(channel);
+            vocalMidiEventIndex = 0;
+        }
+
+        while (vocalMidiEventIndex < vocalMidiSequence.getNumEvents())
+        {
+            const auto* event = vocalMidiSequence.getEventPointer(vocalMidiEventIndex);
+            if (event == nullptr || event->message.getTimeStamp() > position)
+                break;
+            keyboardState.processNextMidiEvent(event->message);
+            ++vocalMidiEventIndex;
+        }
+        lastVocalMidiPosition = position;
+    }
+
     const auto input = inputPeak.exchange(0.0f, std::memory_order_relaxed);
     const auto output = outputPeak.exchange(0.0f, std::memory_order_relaxed);
     const auto toDb = [](float peak)
