@@ -1323,7 +1323,13 @@ void MainComponent::timerCallback()
             const auto* event = vocalMidiSequence.getEventPointer(vocalMidiEventIndex);
             if (event == nullptr || event->message.getTimeStamp() > position)
                 break;
-            keyboardState.processNextMidiEvent(event->message);
+            const auto& message = event->message;
+            if (message.isNoteOn())
+                keyboardState.noteOn(message.getChannel(), message.getNoteNumber(),
+                                     message.getFloatVelocity());
+            else if (message.isNoteOff())
+                keyboardState.noteOff(message.getChannel(), message.getNoteNumber(),
+                                      message.getFloatVelocity());
             ++vocalMidiEventIndex;
         }
         lastVocalMidiPosition = position;
