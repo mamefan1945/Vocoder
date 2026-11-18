@@ -73,6 +73,7 @@ private:
     float pitchBendSemitones = 0.0f;
     float targetPitchBendSemitones = 0.0f;
     int latencySamples = 0;
+    int activeOctaveShift = 0;
     std::atomic<float> formantPreservation { 1.0f };
     std::atomic<float> transientProtection { 1.0f };
 
