@@ -98,6 +98,7 @@ void HarmonizerEngine::reset() noexcept
     pitchMarkPolarity = 1.0f;
     pitchBendSemitones = 0.0f;
     targetPitchBendSemitones = 0.0f;
+    activeOctaveShift = 0;
 }
 
 float HarmonizerEngine::estimatePitch() const noexcept
@@ -500,7 +501,25 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         return;
     }
 
-    handleMidi(midi, juce::jlimit(-2, 2, octaveShift) * 12);
+    const auto clampedOctaveShift = juce::jlimit(-2, 2, octaveShift);
+    if (clampedOctaveShift != activeOctaveShift)
+    {
+        const auto semitoneShift = clampedOctaveShift * 12;
+        for (auto& voice : voices)
+        {
+            // Retune only keys that are still held. Released voices retain
+            // their pitch during the short release tail.
+            if (voice.note >= 0 && !voice.releasing && voice.sourceNote >= 0)
+            {
+                voice.note = juce::jlimit(0, 127, voice.sourceNote + semitoneShift);
+                // Start a fresh synthesis-mark sequence at the new target
+                // period; the audio thread owns this state.
+                voice.synthesisMarkInitialized = false;
+            }
+        }
+        activeOctaveShift = clampedOctaveShift;
+    }
+    handleMidi(midi, clampedOctaveShift * 12);
     const auto mix = juce::jlimit(0.0f, 1.0f, dryWet);
     const auto sampleRate = static_cast<float>(currentSampleRate);
     const auto attackCoefficient = 1.0f - std::exp(-1.0f / (0.008f * sampleRate));
