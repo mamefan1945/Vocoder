@@ -739,7 +739,14 @@ void MainComponent::startSpeechTest()
 
     if (midiDrivenTest)
     {
-        const auto midiFile = file.getSiblingFile("the_road_goes_on_vocals.mid");
+        const auto executable = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+        const auto bundledMidi = executable.getSiblingFile("TestAudio")
+            .getChildFile("the_road_goes_on_vocals.mid");
+        const auto midiBesideAudio = file.getSiblingFile("the_road_goes_on_vocals.mid");
+        const auto downloadedMidi = juce::File::getSpecialLocation(juce::File::userHomeDirectory)
+            .getChildFile("Downloads").getChildFile("the_road_goes_on_vocals.mid");
+        const auto midiFile = bundledMidi.existsAsFile() ? bundledMidi
+            : (midiBesideAudio.existsAsFile() ? midiBesideAudio : downloadedMidi);
         juce::FileInputStream midiStream(midiFile);
         juce::MidiFile vocalMidiFile;
         if (!midiStream.openedOk() || !vocalMidiFile.readFrom(midiStream))
