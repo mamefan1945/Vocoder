@@ -573,8 +573,16 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                     // it instead of multiplying it by 0.60 and losing voicing in
                     // only two or three analysis updates.
                     pitchMissCount = juce::jmin(pitchMissCount + 1, 1000);
-                    if (pitchMissCount > 3)
-                        detectedPitchHz *= 0.88f;
+                    // Speech routinely contains 60-150 ms unvoiced gaps.
+                    // Keep the last reliable F0 through those gaps, then decay
+                    // it with a 250 ms time constant instead of collapsing the
+                    // pitch estimate in roughly 100 ms.
+                    if (pitchMissCount > 12)
+                    {
+                        const auto elapsedSeconds =
+                            static_cast<float>(updateInterval) / sampleRate;
+                        detectedPitchHz *= std::exp(-elapsedSeconds / 0.250f);
+                    }
                 }
                 if (detectedPitchHz < minimumPitchHz)
                     detectedPitchHz = 0.0f;
@@ -619,7 +627,11 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         // Do not feed broadband consonant peaks into the PSOLA mark train.
         // MIDI notes remain active; pitch tracking and synthesis restart when
         // a reliable voiced estimate returns after the transient.
-        if (!transientDetected && transientMix < 0.05f)
+        // Keep the PSOLA mark train advancing during consonant transients.
+        // Pitch estimation itself is frozen above while a transient is active,
+        // so this uses the last stable F0; the transient-aligned direct blend
+        // below preserves the plosive without letting it reset grain timing.
+        if (detectedPitchHz >= minimumPitchHz && detectedPitchHz <= maximumPitchHz)
             detectAndProcessPitchMark();
 
         const auto delayedAbsolute = absolute - latencySamples;
