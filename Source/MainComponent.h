@@ -156,6 +156,9 @@ private:
     juce::Label filterQLabel;
     juce::Slider formantPreservationSlider;
     juce::Slider transientProtectionSlider;
+    juce::Slider pitchSensitivitySlider;
+    juce::Slider pitchHoldSlider;
+    juce::Slider pitchRecoverySlider;
     juce::Label formantShiftLabel;
     juce::Label gateThresholdLabel;
     juce::Label articulationLiftLabel;
@@ -163,6 +166,9 @@ private:
     juce::Label sibilanceLabel;
     juce::Label formantPreservationLabel;
     juce::Label transientProtectionLabel;
+    juce::Label pitchSensitivityLabel;
+    juce::Label pitchHoldLabel;
+    juce::Label pitchRecoveryLabel;
     juce::Label inputMeterLabel;
     juce::Label outputMeterLabel;
     juce::ToggleButton microphoneMonitor;
