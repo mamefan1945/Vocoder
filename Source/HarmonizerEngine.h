@@ -12,6 +12,9 @@ public:
     void reset() noexcept;
     void setFormantPreservation(float amount) noexcept;
     void setTransientProtection(float amount) noexcept;
+    void setPitchSensitivity(float amount) noexcept;
+    void setPitchHoldMs(float milliseconds) noexcept;
+    void setPitchRecoveryMs(float milliseconds) noexcept;
     void processBlock(const float* input, float* output, int numSamples,
                       const juce::MidiBuffer& midi, float dryWet, float outputGain,
                       int octaveShift = 0) noexcept;
@@ -76,8 +79,11 @@ private:
     int activeOctaveShift = 0;
     std::atomic<float> formantPreservation { 1.0f };
     std::atomic<float> transientProtection { 1.0f };
+    std::atomic<float> pitchSensitivity { 0.5f };
+    std::atomic<float> pitchHoldMs { 120.0f };
+    std::atomic<float> pitchRecoveryMs { 250.0f };
 
-    float estimatePitch() const noexcept;
+    float estimatePitch(float sensitivity) const noexcept;
     void estimateFormantEnvelope() noexcept;
     void detectAndProcessPitchMark() noexcept;
     void processPitchMark(int64_t mark, double sourcePeriod, int64_t nextMark) noexcept;
