@@ -301,6 +301,12 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     filterQSlider.setTooltip("Higher Q narrows each band; lower Q increases overlap between adjacent bands.");
     configureControl(formantPreservationSlider, formantPreservationLabel, "Formant preserve", 0.0, 100.0, 1.0, 100.0, " %");
     configureControl(transientProtectionSlider, transientProtectionLabel, "Transient protect", 0.0, 100.0, 1.0, 100.0, " %");
+    configureControl(pitchSensitivitySlider, pitchSensitivityLabel, "Pitch sensitivity", 0.0, 100.0, 1.0, 50.0, " %");
+    pitchSensitivitySlider.setTooltip("Higher values track breathier voices but may mistake noisy consonants for pitch.");
+    configureControl(pitchHoldSlider, pitchHoldLabel, "Pitch hold", 0.0, 300.0, 5.0, 120.0, " ms");
+    pitchHoldSlider.setTooltip("How long the last reliable vocal pitch is retained through unvoiced gaps.");
+    configureControl(pitchRecoverySlider, pitchRecoveryLabel, "Pitch recovery", 50.0, 1000.0, 10.0, 250.0, " ms");
+    pitchRecoverySlider.setTooltip("How quickly the held pitch fades after the hold time expires.");
     inputMeterLabel.setText("Input: -120.0 dBFS", juce::dontSendNotification);
     outputMeterLabel.setText("Output: -120.0 dBFS", juce::dontSendNotification);
     addAndMakeVisible(inputMeterLabel);
@@ -453,6 +459,9 @@ MainComponent::~MainComponent()
     filterQSlider.removeListener(this);
     formantPreservationSlider.removeListener(this);
     transientProtectionSlider.removeListener(this);
+    pitchSensitivitySlider.removeListener(this);
+    pitchHoldSlider.removeListener(this);
+    pitchRecoverySlider.removeListener(this);
     stopTimer();
     deviceManager.closeAudioDevice();
 }
@@ -553,6 +562,12 @@ void MainComponent::updateModeControls()
     show(formantPreservationSlider, harmonizerMode);
     show(transientProtectionLabel, harmonizerMode);
     show(transientProtectionSlider, harmonizerMode);
+    show(pitchSensitivityLabel, harmonizerMode);
+    show(pitchSensitivitySlider, harmonizerMode);
+    show(pitchHoldLabel, harmonizerMode);
+    show(pitchHoldSlider, harmonizerMode);
+    show(pitchRecoveryLabel, harmonizerMode);
+    show(pitchRecoverySlider, harmonizerMode);
     show(microphoneMonitor, vocoderMode);
     show(carrierPreview, vocoderMode);
     const auto showMix = vocoderMode || harmonizerMode;
@@ -946,6 +961,16 @@ void MainComponent::resized()
         row.removeFromLeft(12);
         transientProtectionLabel.setBounds(row.removeFromLeft(126));
         transientProtectionSlider.setBounds(row.removeFromLeft(260));
+        area.removeFromTop(6);
+        row = area.removeFromTop(30);
+        pitchSensitivityLabel.setBounds(row.removeFromLeft(96));
+        pitchSensitivitySlider.setBounds(row.removeFromLeft(150));
+        row.removeFromLeft(10);
+        pitchHoldLabel.setBounds(row.removeFromLeft(72));
+        pitchHoldSlider.setBounds(row.removeFromLeft(140));
+        row.removeFromLeft(10);
+        pitchRecoveryLabel.setBounds(row.removeFromLeft(90));
+        pitchRecoverySlider.setBounds(row.removeFromLeft(150));
     }
     row = area.removeFromTop(24);
     inputMeterLabel.setBounds(row.removeFromLeft(180));
@@ -1010,6 +1035,9 @@ void MainComponent::savePreset()
             data->setProperty("filterQ", filterQSlider.getValue());
             data->setProperty("formantPreservation", formantPreservationSlider.getValue());
             data->setProperty("transientProtection", transientProtectionSlider.getValue());
+            data->setProperty("pitchSensitivity", pitchSensitivitySlider.getValue());
+            data->setProperty("pitchHold", pitchHoldSlider.getValue());
+            data->setProperty("pitchRecovery", pitchRecoverySlider.getValue());
             data->setProperty("microphoneMonitor", microphoneMonitor.getToggleState());
             data->setProperty("carrierPreview", carrierPreview.getToggleState());
 
@@ -1095,6 +1123,9 @@ void MainComponent::applyPreset(const juce::var& preset)
     setSlider(filterQSlider, "filterQ");
     setSlider(formantPreservationSlider, "formantPreservation");
     setSlider(transientProtectionSlider, "transientProtection");
+    setSlider(pitchSensitivitySlider, "pitchSensitivity");
+    setSlider(pitchHoldSlider, "pitchHold");
+    setSlider(pitchRecoverySlider, "pitchRecovery");
     carrierPreset.setSelectedId(juce::jlimit(1, 11,
         static_cast<int>(preset.getProperty("carrierPreset", 11))), juce::dontSendNotification);
 
@@ -1163,6 +1194,12 @@ void MainComponent::sliderValueChanged(juce::Slider* slider)
         harmonizer.setFormantPreservation(static_cast<float>(formantPreservationSlider.getValue() / 100.0));
     else if (slider == &transientProtectionSlider)
         harmonizer.setTransientProtection(static_cast<float>(transientProtectionSlider.getValue() / 100.0));
+    else if (slider == &pitchSensitivitySlider)
+        harmonizer.setPitchSensitivity(static_cast<float>(pitchSensitivitySlider.getValue() / 100.0));
+    else if (slider == &pitchHoldSlider)
+        harmonizer.setPitchHoldMs(static_cast<float>(pitchHoldSlider.getValue()));
+    else if (slider == &pitchRecoverySlider)
+        harmonizer.setPitchRecoveryMs(static_cast<float>(pitchRecoverySlider.getValue()));
 }
 
 void MainComponent::timerCallback()
