@@ -170,7 +170,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
                                    * gateGain;
 
         // Speech intelligibility depends heavily on upper-mid and high-frequency
-        // consonant detail. Apply a gentle upward tilt after the hard gate so
+        // consonant detail. Apply a gentle upward tilt after the soft gate so
         // quiet room noise is not amplified enough to open otherwise-closed bands.
         // The lift is 0 dB at 500 Hz and reaches about +3.5 dB at 8 kHz.
         const auto articulationPosition = juce::jlimit(0.0f, 1.0f,
@@ -189,8 +189,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         wetOutput += noiseBands[index] * noiseModulation * sibilance;
     }
 
-    // Keep headroom while avoiding an unnecessarily quiet wet signal. The
-    // output stage still receives the user's master gain and downstream limiter.
+    // Keep headroom while avoiding an unnecessarily quiet wet signal.
     wetOutput *= 0.55f * outputGain.load(std::memory_order_relaxed);
     const auto mix = dryWet.load(std::memory_order_relaxed);
     return wetOutput * mix + modulator * (1.0f - mix);
