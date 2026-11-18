@@ -133,6 +133,10 @@ private:
     juce::AudioTransportSource testAudioTransport;
     std::unique_ptr<juce::AudioFormatReaderSource> testAudioReaderSource;
     juce::AudioBuffer<float> testAudioBuffer;
+    juce::MidiMessageSequence vocalMidiSequence;
+    int vocalMidiEventIndex = 0;
+    double lastVocalMidiPosition = -1.0;
+    bool useVocalMidiTest = false;
     juce::Label modeLabel;
     juce::Label carrierLabel;
     juce::Label midiLabel;
