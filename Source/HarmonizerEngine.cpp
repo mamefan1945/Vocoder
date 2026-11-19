@@ -611,11 +611,28 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                 float frameConfidence = 0.0f;
                 const auto estimate = estimatePitch(trackingSensitivity, frameConfidence);
                 publishedPitchConfidence.store(frameConfidence, std::memory_order_relaxed);
-                if (estimate >= minimumPitchHz && estimate <= maximumPitchHz)
+                const auto inPitchRange = estimate >= minimumPitchHz && estimate <= maximumPitchHz;
+                const auto jumpSemitones = detectedPitchHz > 0.0f && inPitchRange
+                    ? std::abs(12.0f * std::log2(estimate / detectedPitchHz)) : 0.0f;
+                // A weak frame that suddenly moves by more than seven semitones
+                // is usually a harmonic/octave-selection error, not a human
+                // vocal transition. Keep the previous track rather than
+                // steering the PSOLA mark train toward that outlier.
+                const auto suspiciousJump = detectedPitchHz > 0.0f
+                    && jumpSemitones > 7.0f && frameConfidence < 0.90f;
+                if (inPitchRange && !suspiciousJump)
                 {
                     pitchMissCount = 0;
-                    detectedPitchHz = detectedPitchHz > 0.0f
-                        ? detectedPitchHz + 0.30f * (estimate - detectedPitchHz) : estimate;
+                    if (detectedPitchHz > 0.0f)
+                    {
+                        // Let strong periodic frames follow real vocal motion
+                        // more quickly; retain the existing smooth response
+                        // for marginal frames to avoid adding audible jitter.
+                        const auto smoothing = 0.12f + 0.35f * frameConfidence;
+                        detectedPitchHz += smoothing * (estimate - detectedPitchHz);
+                    }
+                    else
+                        detectedPitchHz = estimate;
                 }
                 else if (detectedPitchHz > 0.0f)
                 {
