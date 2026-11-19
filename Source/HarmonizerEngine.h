@@ -15,6 +15,9 @@ public:
     void setPitchSensitivity(float amount) noexcept;
     void setPitchHoldMs(float milliseconds) noexcept;
     void setPitchRecoveryMs(float milliseconds) noexcept;
+    float getDetectedPitchHz() const noexcept { return publishedPitchHz.load(std::memory_order_relaxed); }
+    float getPitchConfidence() const noexcept { return publishedPitchConfidence.load(std::memory_order_relaxed); }
+    float getGrainCoverage() const noexcept { return publishedGrainCoverage.load(std::memory_order_relaxed); }
     void processBlock(const float* input, float* output, int numSamples,
                       const juce::MidiBuffer& midi, float dryWet, float outputGain,
                       int octaveShift = 0) noexcept;
@@ -82,8 +85,11 @@ private:
     std::atomic<float> pitchSensitivity { 0.5f };
     std::atomic<float> pitchHoldMs { 120.0f };
     std::atomic<float> pitchRecoveryMs { 250.0f };
+    std::atomic<float> publishedPitchHz { 0.0f };
+    std::atomic<float> publishedPitchConfidence { 0.0f };
+    std::atomic<float> publishedGrainCoverage { 0.0f };
 
-    float estimatePitch(float sensitivity) const noexcept;
+    float estimatePitch(float sensitivity, float& confidence) const noexcept;
     void estimateFormantEnvelope() noexcept;
     void detectAndProcessPitchMark() noexcept;
     void processPitchMark(int64_t mark, double sourcePeriod, int64_t nextMark) noexcept;

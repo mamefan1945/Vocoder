@@ -311,6 +311,14 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     outputMeterLabel.setText("Output: -120.0 dBFS", juce::dontSendNotification);
     addAndMakeVisible(inputMeterLabel);
     addAndMakeVisible(outputMeterLabel);
+    harmonizerPitchLabel.setText("Pitch: waiting for voice", juce::dontSendNotification);
+    harmonizerPitchLabel.setTooltip("Live detected vocal fundamental, musical note, and PSOLA grain coverage.");
+    addAndMakeVisible(harmonizerPitchLabel);
+    harmonizerConfidenceLed.setText("●", juce::dontSendNotification);
+    harmonizerConfidenceLed.setFont(juce::Font(juce::FontOptions(20.0f, juce::Font::bold)));
+    harmonizerConfidenceLed.setColour(juce::Label::textColourId, juce::Colour(0xffd64545));
+    harmonizerConfidenceLed.setTooltip("Pitch confidence: red is low, yellow is moderate, green is high.");
+    addAndMakeVisible(harmonizerConfidenceLed);
 
     microphoneMonitor.setButtonText("Mic monitor");
     microphoneMonitor.setTooltip("Audition the microphone directly alongside the processed signal.");
@@ -632,6 +640,8 @@ void MainComponent::updateModeControls()
     show(pitchHoldSlider, harmonizerMode);
     show(pitchRecoveryLabel, harmonizerMode);
     show(pitchRecoverySlider, harmonizerMode);
+    show(harmonizerPitchLabel, harmonizerMode);
+    show(harmonizerConfidenceLed, harmonizerMode);
     show(microphoneMonitor, vocoderMode);
     show(carrierPreview, vocoderMode);
     const auto showMix = vocoderMode || harmonizerMode;
@@ -1144,6 +1154,13 @@ void MainComponent::resized()
     row = area.removeFromTop(24);
     inputMeterLabel.setBounds(row.removeFromLeft(180));
     outputMeterLabel.setBounds(row);
+    if (harmonizerMode)
+    {
+        area.removeFromTop(3);
+        row = area.removeFromTop(26);
+        harmonizerConfidenceLed.setBounds(row.removeFromLeft(28));
+        harmonizerPitchLabel.setBounds(row);
+    }
     if (vocoderMode)
     {
         area.removeFromTop(6);
@@ -1439,6 +1456,33 @@ void MainComponent::timerCallback()
     };
     inputMeterLabel.setText("Input: " + juce::String(toDb(input), 1) + " dBFS", juce::dontSendNotification);
     outputMeterLabel.setText("Output: " + juce::String(toDb(output), 1) + " dBFS", juce::dontSendNotification);
+
+    if (processingMode.getSelectedId() == 3)
+    {
+        const auto pitchHz = harmonizer.getDetectedPitchHz();
+        const auto confidence = harmonizer.getPitchConfidence();
+        const auto grainCoverage = harmonizer.getGrainCoverage();
+        if (pitchHz >= 50.0f)
+        {
+            const auto midiNote = juce::jlimit(0, 127,
+                static_cast<int>(std::lround(69.0 + 12.0 * std::log2(pitchHz / 440.0))));
+            const auto noteName = juce::MidiMessage::getMidiNoteName(midiNote, true, true, 3);
+            harmonizerPitchLabel.setText("Pitch: " + noteName + "  |  "
+                + juce::String(pitchHz, 1) + " Hz  |  PSOLA: "
+                + juce::String(grainCoverage * 100.0f, 0) + "%", juce::dontSendNotification);
+        }
+        else
+            harmonizerPitchLabel.setText("Pitch: no reliable voice  |  PSOLA: "
+                + juce::String(grainCoverage * 100.0f, 0) + "%", juce::dontSendNotification);
+
+        const auto ledColour = confidence >= 0.75f ? juce::Colour(0xff35a866)
+            : (confidence >= 0.55f ? juce::Colour(0xffe6b83f) : juce::Colour(0xffd64545));
+        harmonizerConfidenceLed.setColour(juce::Label::textColourId, ledColour);
+        harmonizerConfidenceLed.setTooltip("Pitch confidence: "
+            + juce::String(confidence * 100.0f, 0) + "% — "
+            + (confidence >= 0.75f ? "high" : (confidence >= 0.55f ? "moderate" : "low"))
+            + " confidence. Based on the YIN normalized-difference score.");
+    }
 }
 
 void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)

@@ -187,6 +187,8 @@ private:
     juce::Label pitchRecoveryLabel;
     juce::Label inputMeterLabel;
     juce::Label outputMeterLabel;
+    juce::Label harmonizerPitchLabel;
+    juce::Label harmonizerConfidenceLed;
     juce::ToggleButton microphoneMonitor;
     juce::ToggleButton carrierPreview;
     juce::Label attackLabel;

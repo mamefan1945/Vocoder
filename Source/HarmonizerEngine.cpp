@@ -114,9 +114,14 @@ void HarmonizerEngine::reset() noexcept
     pitchBendSemitones = 0.0f;
     targetPitchBendSemitones = 0.0f;
     activeOctaveShift = 0;
+    publishedPitchHz.store(0.0f, std::memory_order_relaxed);
+    publishedPitchConfidence.store(0.0f, std::memory_order_relaxed);
+    publishedGrainCoverage.store(0.0f, std::memory_order_relaxed);
 }
 
-float HarmonizerEngine::estimatePitch(float sensitivity) const noexcept
+float HarmonizerEngine::estimatePitch(float sensitivity, float& confidence) const noexcept
+{
+    confidence = 0.0f;
 {
     // YIN-style difference analysis over a decimated ~43 ms window at 48 kHz.
     // The cumulative-mean normalized difference is less likely than a raw
@@ -211,6 +216,9 @@ float HarmonizerEngine::estimatePitch(float sensitivity) const noexcept
         ? 0.5f * (left - right) / curvature : 0.0f;
     const auto refinedLag = static_cast<float>(bestLag)
         + juce::jlimit(-0.5f, 0.5f, offset);
+    // YIN confidence is the inverse of the selected normalized difference:
+    // 1.0 is a strong periodic match; values near 0 indicate weak periodicity.
+    confidence = juce::jlimit(0.0f, 1.0f, 1.0f - centre);
     return static_cast<float>(decimatedRate / refinedLag);
 }
 
@@ -601,7 +609,9 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             // very same audio sample that triggered the transient.
             if (!transientDetected && transientMix < 0.05f)
             {
-                const auto estimate = estimatePitch(trackingSensitivity);
+                float frameConfidence = 0.0f;
+                const auto estimate = estimatePitch(trackingSensitivity, frameConfidence);
+                publishedPitchConfidence.store(frameConfidence, std::memory_order_relaxed);
                 if (estimate >= minimumPitchHz && estimate <= maximumPitchHz)
                 {
                     pitchMissCount = 0;
@@ -628,7 +638,10 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                 }
                 if (detectedPitchHz < minimumPitchHz)
                     detectedPitchHz = 0.0f;
+                publishedPitchHz.store(detectedPitchHz, std::memory_order_relaxed);
             }
+            else
+                publishedPitchConfidence.store(0.0f, std::memory_order_relaxed);
         }
 
         if (++formantUpdateCounter >= updateInterval)
@@ -757,6 +770,8 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             ? static_cast<float>(psolaVoiceCount) / static_cast<float>(activeCount) : 0.0f;
         harmony = harmony * grainCoverage
                + delayedInput * unvoicedGain * (1.0f - grainCoverage);
+        if ((absolute % static_cast<uint64_t>(updateInterval)) == 0)
+            publishedGrainCoverage.store(grainCoverage, std::memory_order_relaxed);
         // Briefly favour the latency-aligned direct signal at detected attacks.
         // This avoids smearing plosives and sharp consonant onsets across PSOLA grains.
         harmony += transientMix * transientAmount
