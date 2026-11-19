@@ -122,7 +122,6 @@ void HarmonizerEngine::reset() noexcept
 float HarmonizerEngine::estimatePitch(float sensitivity, float& confidence) const noexcept
 {
     confidence = 0.0f;
-{
     // YIN-style difference analysis over a decimated ~43 ms window at 48 kHz.
     // The cumulative-mean normalized difference is less likely than a raw
     // autocorrelation maximum to lock onto a strong octave/subharmonic.
