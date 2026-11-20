@@ -87,7 +87,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     testAudioFormats.registerBasicFormats();
     testAudioReadAheadThread.startThread();
 
-    titleLabel.setText("VoiceForge   |   Vocoder + Vocal Harmonizer", juce::dontSendNotification);
+    titleLabel.setText("VoxTimbre   |   Vocoder + Vocal Harmonizer", juce::dontSendNotification);
     titleLabel.setFont(juce::Font(juce::FontOptions(24.0f, juce::Font::bold)));
     addAndMakeVisible(titleLabel);
 
