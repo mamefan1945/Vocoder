@@ -103,6 +103,7 @@ juce_add_console_app(HarmonizerDSPTests
     PRODUCT_NAME "Harmonizer DSP Tests"
 )
 juce_generate_juce_header(HarmonizerDSPTests)
+target_include_directories(HarmonizerDSPTests PRIVATE Source)
 target_sources(HarmonizerDSPTests PRIVATE
     Tests/HarmonizerDSPTests.cpp
     Source/HarmonizerEngine.h
