@@ -8,7 +8,7 @@ A real-time Windows voice-effects application built with C++17, JUCE 8.0.10, and
 
 The application is a standalone Windows x64 program. The DSP engines are separated from most of the UI/audio-device code, with a view to possible future reuse in a plug-in. A VST3 plug-in is **not currently provided**.
 
-> **Development status:** this is an actively developed instrument, not a finished commercial processor. The harmonizer uses a custom, early-stage time-domain PSOLA implementation. It can produce useful pitch-following harmony, but artifacts, roughness, crackling, tracking errors, and polyphony-related quality changes are still being evaluated. A successful build confirms compilation and packaging; it does not certify audio quality.
+> **Development status:** this is an actively developed instrument, not a finished commercial processor. The harmonizer currently exposes three selectable experimental pitch-shifting paths: TD-PSOLA (raw waveform grains), LP-PSOLA (LPC-residual grains with formant reconstruction), and FD-PSOLA (FFT-domain spectral remapping). These are provided so their sound and stability can be compared under the same input and MIDI conditions. They have not yet been established as production-quality algorithms; artifacts, pitch variation, transient handling, tracking errors, CPU use, and polyphony-related quality still require listening tests. A successful build confirms compilation and packaging; it does not certify audio quality.
 
 ## Contents
 
@@ -100,6 +100,7 @@ When using speakers, the microphone can pick up the processed output and feed it
 | **Instrument** | Select a preset from the loaded SoundFont. Visible when SoundFont (GM) is selected. |
 | **Load SF2...** | Load another SoundFont file. |
 | **Octave** | Shift internal carrier notes and harmonizer target notes by -2 to +2 octaves. |
+| **Harmonizer algorithm** | Select TD-PSOLA (raw waveform grains), LP-PSOLA (LPC residual/formant reconstruction), or FD-PSOLA (FFT-domain spectral remapping). The selector is shown only in Harmonizer mode. |
 | **Output level** | Master output gain, from 0 to 2.0. |
 | **Attack / Release** | Vocoder envelope response times, in milliseconds. |
 | **Low freq / High freq** | Lower and upper limits of the vocoder's analysis/synthesis band range. |
