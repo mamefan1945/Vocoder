@@ -192,7 +192,7 @@ bool testPolyphony(HarmonizerEngine::Algorithm algorithm, const char* name)
     const auto noteA = magnitudeAt(rendered, first, count, 440.0);
     const auto noteB = magnitudeAt(rendered, first, count, 523.251);
     std::cout << name << " polyphony: 440 Hz=" << noteA
-              << ", 523 Hz=" << noteB << '\\n';
+              << ", 523 Hz=" << noteB << '\n';
     return noteA > 0.5 && noteB > 0.5
         && std::isfinite(noteA) && std::isfinite(noteB);
 }
