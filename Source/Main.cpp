@@ -23,11 +23,15 @@ namespace
             g.setColour(juce::Colour(0xff2b303a));
             g.drawRoundedRectangle(bounds.reduced(12.0f), 10.0f, 1.0f);
 
-            static const auto logo = juce::Drawable::createFromSVG(
-                juce::String(voiceForgeLogoSvg));
+            static const auto logo = []
+            {
+                const auto xml = juce::XmlDocument::parse(juce::String(voiceForgeLogoSvg));
+                return xml != nullptr ? juce::Drawable::createFromSVG(*xml)
+                                      : std::unique_ptr<juce::Drawable>{};
+            }();
             if (logo != nullptr)
                 logo->drawWithin(g, juce::Rectangle<float>(getWidth() * 0.12f,
-                    getHeight() * 0.5f - 145.0f, getWidth() * 0.76f, 190.0f),
+                    68.0f, getWidth() * 0.76f, 232.0f),
                     juce::RectanglePlacement::centred, 1.0f);
 
             g.setColour(juce::Colour(0xffaeb8c6));
