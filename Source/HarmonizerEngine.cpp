@@ -27,6 +27,7 @@ void HarmonizerEngine::PitchVoice::start(int midiNote, int originalMidiNote, flo
     nextSynthesisMark = 0.0;
     synthesisMarkInitialized = false;
     releasing = false;
+    grainBlend = 0.0f;
     formantState.fill(0.0f);
 }
 
@@ -84,6 +85,7 @@ void HarmonizerEngine::reset() noexcept
         voice.nextSynthesisMark = 0.0;
         voice.synthesisMarkInitialized = false;
         voice.releasing = false;
+        voice.grainBlend = 0.0f;
         voice.formantState.fill(0.0f);
     }
 
@@ -555,6 +557,8 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
     const auto voicedRelease = 1.0f - std::exp(-1.0f / (0.025f * sampleRate));
     const auto updateInterval = juce::jmax(1, static_cast<int>(currentSampleRate * 0.010));
     const auto formantSmoothing = 1.0f - std::exp(-1.0f / (0.025f * sampleRate));
+    const auto grainBlendAttack = 1.0f - std::exp(-1.0f / (0.001f * sampleRate));
+    const auto grainBlendRelease = 1.0f - std::exp(-1.0f / (0.006f * sampleRate));
     const auto transientAttack = 1.0f - std::exp(-1.0f / (0.0015f * sampleRate));
     const auto transientRelease = 1.0f - std::exp(-1.0f / (0.010f * sampleRate));
     const auto fastEnergyCoefficient = 1.0f - std::exp(-1.0f / (0.0015f * sampleRate));
@@ -711,7 +715,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         float voicedHarmony = 0.0f;
         float unvoicedGain = 0.0f;
         int activeCount = 0;
-        int psolaVoiceCount = 0;
+        float grainFallbackGain = 0.0f;
 
         for (auto& voice : voices)
         {
@@ -762,11 +766,18 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             voice.formantState[0] = reconstructed;
             const auto formantOutput = psola + (reconstructed - psola) * formantBlend;
 
+            // Grain availability can change sample-by-sample, especially for a
+            // single voice. Smooth the transition instead of hard-switching
+            // between a pitch-shifted grain and the latency-aligned source.
+            const auto targetGrainBlend = hasPsolaGrain ? 1.0f : 0.0f;
+            voice.grainBlend += (targetGrainBlend - voice.grainBlend)
+                * (hasPsolaGrain ? grainBlendAttack : grainBlendRelease);
+
             const auto voiceLevel = voice.velocity * voice.envelope;
-            voicedHarmony += formantOutput * voiceLevel;
+            voicedHarmony += formantOutput * voice.grainBlend * voiceLevel;
+            grainFallbackGain = juce::jmax(grainFallbackGain,
+                voiceLevel * (1.0f - voice.grainBlend));
             unvoicedGain = juce::jmax(unvoicedGain, voiceLevel);
-            if (hasPsolaGrain)
-                ++psolaVoiceCount;
             ++activeCount;
         }
 
@@ -775,19 +786,20 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         // consonant through every voice (which boosts S/SH/F levels by sqrt(N)).
         const auto normalization = activeCount > 0
             ? 1.0f / std::sqrt(static_cast<float>(activeCount)) : 0.0f;
-        auto harmony = voicedHarmony * normalization * voicedMix
-                     + delayedInput * (1.0f - voicedMix) * unvoicedGain;
-
-        // Pitch can reacquire before the first valid PSOLA grains are available,
-        // and a lost mark train can otherwise leave a held MIDI note nearly silent.
-        // Fall back to the latency-aligned vocal only for voices that have no
-        // scheduled grain at this output sample; retain full PSOLA whenever present.
-        const auto grainCoverage = activeCount > 0
-            ? static_cast<float>(psolaVoiceCount) / static_cast<float>(activeCount) : 0.0f;
-        harmony = harmony * grainCoverage
-               + delayedInput * unvoicedGain * (1.0f - grainCoverage);
+        // Unvoiced consonants remain shared across the chord. During voiced
+        // sections, each voice crossfades smoothly to the delayed source only
+        // when its PSOLA grain train is unavailable. The fallback gain uses
+        // the loudest voice to avoid summing duplicate copies of the same vocal.
+        const auto harmony = voicedHarmony * normalization * voicedMix
+            + delayedInput * ((1.0f - voicedMix) * unvoicedGain
+                              + voicedMix * grainFallbackGain);
         if ((absolute % static_cast<uint64_t>(updateInterval)) == 0)
-            publishedGrainCoverage.store(grainCoverage, std::memory_order_relaxed);
+        {
+            const auto coverage = activeCount > 0
+                ? juce::jlimit(0.0f, 1.0f, 1.0f - grainFallbackGain
+                    / juce::jmax(1.0e-5f, unvoicedGain)) : 0.0f;
+            publishedGrainCoverage.store(coverage, std::memory_order_relaxed);
+        }
         // Briefly favour the latency-aligned direct signal at detected attacks.
         // This avoids smearing plosives and sharp consonant onsets across PSOLA grains.
         harmony += transientMix * transientAmount
