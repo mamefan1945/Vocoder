@@ -267,6 +267,24 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     };
     addAndMakeVisible(octave);
 
+    harmonizerAlgorithmLabel.setText("Algorithm", juce::dontSendNotification);
+    addAndMakeVisible(harmonizerAlgorithmLabel);
+    harmonizerAlgorithm.addItem("TD-PSOLA (waveform)", 1);
+    harmonizerAlgorithm.addItem("LP-PSOLA (formant)", 2);
+    harmonizerAlgorithm.setSelectedId(2);
+    harmonizerAlgorithm.setTooltip("TD-PSOLA shifts raw waveform grains. LP-PSOLA shifts the LPC residual and reconstructs the vocal-tract envelope.");
+    harmonizerAlgorithm.onChange = [this]
+    {
+        harmonizer.setAlgorithm(harmonizerAlgorithm.getSelectedId() == 1
+            ? HarmonizerEngine::Algorithm::timeDomain
+            : HarmonizerEngine::Algorithm::lpc);
+        harmonizer.reset();
+        statusLabel.setText(harmonizerAlgorithm.getSelectedId() == 1
+            ? "Harmonizer: TD-PSOLA waveform mode"
+            : "Harmonizer: LP-PSOLA formant mode", juce::dontSendNotification);
+    };
+    addAndMakeVisible(harmonizerAlgorithm);
+
     outputLevelLabel.setText("Output level", juce::dontSendNotification);
     addAndMakeVisible(outputLevelLabel);
     outputLevel.setRange(0.0, 2.0, 0.01);
@@ -629,6 +647,8 @@ void MainComponent::updateModeControls()
     show(refreshMidiButton, hasKeyboard);
     show(octaveLabel, hasKeyboard);
     show(octave, hasKeyboard);
+    show(harmonizerAlgorithmLabel, harmonizerMode);
+    show(harmonizerAlgorithm, harmonizerMode);
     show(keyboardComponent, hasKeyboard);
     show(attackLabel, vocoderMode);
     show(attackTime, vocoderMode);
@@ -1100,6 +1120,9 @@ void MainComponent::resized()
         row = area.removeFromTop(32);
         octaveLabel.setBounds(row.removeFromLeft(55));
         octave.setBounds(row.removeFromLeft(90));
+        row.removeFromLeft(14);
+        harmonizerAlgorithmLabel.setBounds(row.removeFromLeft(76));
+        harmonizerAlgorithm.setBounds(row.removeFromLeft(220));
     }
     area.removeFromTop(8);
     outputLevelLabel.setBounds(area.removeFromTop(22));
