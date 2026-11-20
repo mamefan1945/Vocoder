@@ -43,6 +43,7 @@ private:
         double nextSynthesisMark = 0.0;
         bool synthesisMarkInitialized = false;
         bool releasing = false;
+        float grainBlend = 0.0f;
         std::array<float, lpcOrder> formantState {};
 
         void prepare();
