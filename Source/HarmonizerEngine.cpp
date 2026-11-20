@@ -339,6 +339,73 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
     const auto halfWindow = juce::jlimit(8, 1024,
         static_cast<int>(std::ceil(requiredHalfWindow)));
     const auto inverseHalf = 1.0f / static_cast<float>(halfWindow);
+    const auto algorithm = getAlgorithm();
+
+    if (algorithm == Algorithm::frequencyDomain)
+    {
+        // Frequency-domain PSOLA: transform one pitch-synchronous, windowed
+        // source grain, remap its complex spectrum by the target/source F0
+        // ratio, inverse-transform, then overlap-add at the synthesis mark.
+        // The fixed stack buffers avoid allocation or locking on the audio thread.
+        std::array<float, fdFftSize * 2> fftData {};
+        std::array<float, fdFftSize + 2> sourceSpectrum {};
+        const auto ratio = juce::jlimit(0.25,
+            4.0, sourcePeriod / juce::jmax(1.0, targetPeriod));
+        for (int n = 0; n < fdFftSize; ++n)
+        {
+            const auto offset = n - fdFftSize / 2;
+            const auto absolute = sourceCentre + offset;
+            const auto index = static_cast<size_t>(juce::jmax<int64_t>(0, absolute))
+                             & inputRingMask;
+            const auto window = 0.5f - 0.5f * std::cos(
+                2.0f * pi * static_cast<float>(n)
+                / static_cast<float>(fdFftSize - 1));
+            fftData[static_cast<size_t>(n)] =
+                (absolute >= 0 ? residualHistory[index] : 0.0f) * window;
+        }
+        fdPsolaFft.performRealOnlyForwardTransform(fftData.data());
+        for (int bin = 0; bin <= fdFftSize / 2; ++bin)
+        {
+            sourceSpectrum[static_cast<size_t>(2 * bin)] = fftData[static_cast<size_t>(2 * bin)];
+            sourceSpectrum[static_cast<size_t>(2 * bin + 1)] = fftData[static_cast<size_t>(2 * bin + 1)];
+        }
+        std::fill(fftData.begin(), fftData.end(), 0.0f);
+        for (int bin = 0; bin <= fdFftSize / 2; ++bin)
+        {
+            const auto destination = static_cast<double>(bin) * ratio;
+            const auto lower = static_cast<int>(std::floor(destination));
+            const auto fraction = static_cast<float>(destination - lower);
+            if (lower < 0 || lower >= fdFftSize / 2)
+                continue;
+            const auto sourceReal = sourceSpectrum[static_cast<size_t>(2 * bin)];
+            const auto sourceImag = sourceSpectrum[static_cast<size_t>(2 * bin + 1)];
+            const auto lowerIndex = static_cast<size_t>(2 * lower);
+            fftData[lowerIndex] += sourceReal * (1.0f - fraction);
+            fftData[lowerIndex + 1] += sourceImag * (1.0f - fraction);
+            if (lower + 1 < fdFftSize / 2)
+            {
+                const auto upperIndex = static_cast<size_t>(2 * (lower + 1));
+                fftData[upperIndex] += sourceReal * fraction;
+                fftData[upperIndex + 1] += sourceImag * fraction;
+            }
+        }
+        fdPsolaFft.performRealOnlyInverseTransform(fftData.data());
+        const auto outputHalf = juce::jmin(halfWindow, fdFftSize / 2 - 1);
+        for (int offset = -outputHalf; offset <= outputHalf; ++offset)
+        {
+            const auto outputAbsolute = synthesisCentre + offset;
+            if (outputAbsolute < 0)
+                continue;
+            const auto outputIndex = static_cast<size_t>(outputAbsolute) & outputRingMask;
+            const auto frameIndex = static_cast<size_t>(offset + fdFftSize / 2);
+            const auto window = 0.5f + 0.5f * std::cos(
+                pi * static_cast<float>(offset) / static_cast<float>(outputHalf));
+            const auto sample = fftData[frameIndex] / static_cast<float>(fdFftSize);
+            voice.overlap[outputIndex] += sample * window;
+            voice.weights[outputIndex] += window;
+        }
+        return;
+    }
 
     for (int offset = -halfWindow; offset <= halfWindow; ++offset)
     {
@@ -354,7 +421,6 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
             continue;
         const auto outputIndex = static_cast<size_t>(outputAbsolute) & outputRingMask;
 
-        const auto algorithm = getAlgorithm();
         const auto grainSample = algorithm == Algorithm::timeDomain
             ? inputHistory[sourceIndex] : residualHistory[sourceIndex];
         voice.overlap[outputIndex] += grainSample * window;
