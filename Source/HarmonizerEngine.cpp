@@ -354,7 +354,10 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
             continue;
         const auto outputIndex = static_cast<size_t>(outputAbsolute) & outputRingMask;
 
-        voice.overlap[outputIndex] += residualHistory[sourceIndex] * window;
+        const auto algorithm = getAlgorithm();
+        const auto grainSample = algorithm == Algorithm::timeDomain
+            ? inputHistory[sourceIndex] : residualHistory[sourceIndex];
+        voice.overlap[outputIndex] += grainSample * window;
         voice.weights[outputIndex] += window;
     }
 }
@@ -437,11 +440,15 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
     for (auto candidate = first; candidate <= last; ++candidate)
     {
         const auto index = static_cast<size_t>(candidate) & inputRingMask;
-        const auto sample = residualHistory[index] * pitchMarkPolarity;
-        const auto before = residualHistory[static_cast<size_t>(candidate - 1) & inputRingMask]
-                          * pitchMarkPolarity;
-        const auto after = residualHistory[static_cast<size_t>(candidate + 1) & inputRingMask]
-                         * pitchMarkPolarity;
+        const auto markSource = getAlgorithm() == Algorithm::timeDomain
+            ? inputHistory[index] : residualHistory[index];
+        const auto sample = markSource * pitchMarkPolarity;
+        const auto beforeIndex = static_cast<size_t>(candidate - 1) & inputRingMask;
+        const auto afterIndex = static_cast<size_t>(candidate + 1) & inputRingMask;
+        const auto before = (getAlgorithm() == Algorithm::timeDomain
+            ? inputHistory[beforeIndex] : residualHistory[beforeIndex]) * pitchMarkPolarity;
+        const auto after = (getAlgorithm() == Algorithm::timeDomain
+            ? inputHistory[afterIndex] : residualHistory[afterIndex]) * pitchMarkPolarity;
         if (sample < before || sample < after)
             continue;
         const auto proximity = static_cast<float>(std::abs(candidate - expected))
@@ -458,8 +465,9 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
     {
         for (auto candidate = first; candidate <= last; ++candidate)
         {
-            const auto sample = residualHistory[static_cast<size_t>(candidate) & inputRingMask]
-                              * pitchMarkPolarity;
+            const auto index = static_cast<size_t>(candidate) & inputRingMask;
+            const auto sample = (getAlgorithm() == Algorithm::timeDomain
+                ? inputHistory[index] : residualHistory[index]) * pitchMarkPolarity;
             if (sample > bestPeak)
             {
                 bestPeak = sample;
@@ -474,8 +482,9 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
         bestPeak = -std::numeric_limits<float>::max();
         for (auto candidate = first; candidate <= last; ++candidate)
         {
-            const auto sample = residualHistory[static_cast<size_t>(candidate) & inputRingMask]
-                              * pitchMarkPolarity;
+            const auto index = static_cast<size_t>(candidate) & inputRingMask;
+            const auto sample = (getAlgorithm() == Algorithm::timeDomain
+                ? inputHistory[index] : residualHistory[index]) * pitchMarkPolarity;
             if (sample > bestPeak)
             {
                 bestPeak = sample;
