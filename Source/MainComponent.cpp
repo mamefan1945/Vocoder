@@ -271,16 +271,19 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     addAndMakeVisible(harmonizerAlgorithmLabel);
     harmonizerAlgorithm.addItem("TD-PSOLA (waveform)", 1);
     harmonizerAlgorithm.addItem("LP-PSOLA (formant)", 2);
+    harmonizerAlgorithm.addItem("FD-PSOLA (FFT)", 3);
     harmonizerAlgorithm.setSelectedId(2);
-    harmonizerAlgorithm.setTooltip("TD-PSOLA shifts raw waveform grains. LP-PSOLA shifts the LPC residual and reconstructs the vocal-tract envelope.");
+    harmonizerAlgorithm.setTooltip("TD uses raw waveform grains; LP shifts the LPC residual and reconstructs formants; FD remaps the complex spectrum of pitch-synchronous grains.");
     harmonizerAlgorithm.onChange = [this]
     {
-        harmonizer.setAlgorithm(harmonizerAlgorithm.getSelectedId() == 1
-            ? HarmonizerEngine::Algorithm::timeDomain
-            : HarmonizerEngine::Algorithm::lpc);
-        statusLabel.setText(harmonizerAlgorithm.getSelectedId() == 1
-            ? "Harmonizer: TD-PSOLA waveform mode"
-            : "Harmonizer: LP-PSOLA formant mode", juce::dontSendNotification);
+        const auto selected = harmonizerAlgorithm.getSelectedId();
+        const auto algorithm = selected == 1 ? HarmonizerEngine::Algorithm::timeDomain
+            : (selected == 3 ? HarmonizerEngine::Algorithm::frequencyDomain
+                             : HarmonizerEngine::Algorithm::lpc);
+        harmonizer.setAlgorithm(algorithm);
+        const auto description = selected == 1 ? "TD-PSOLA waveform mode"
+            : (selected == 3 ? "FD-PSOLA FFT mode" : "LP-PSOLA formant mode");
+        statusLabel.setText("Harmonizer: " + description, juce::dontSendNotification);
     };
     addAndMakeVisible(harmonizerAlgorithm);
 
