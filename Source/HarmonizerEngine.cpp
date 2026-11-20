@@ -400,7 +400,7 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
             const auto frameIndex = static_cast<size_t>(offset + fdFftSize / 2);
             const auto window = 0.5f + 0.5f * std::cos(
                 pi * static_cast<float>(offset) / static_cast<float>(outputHalf));
-            const auto sample = fftData[frameIndex] / static_cast<float>(fdFftSize);
+            const auto sample = fftData[frameIndex];
             voice.overlap[outputIndex] += sample * window;
             voice.weights[outputIndex] += window;
         }
