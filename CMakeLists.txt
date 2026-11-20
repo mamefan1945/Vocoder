@@ -89,13 +89,38 @@ if(MSVC)
     target_compile_options(VoxTimbre PRIVATE /W4 /permissive-)
 endif()
 
-
 add_custom_command(TARGET VoxTimbre POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:VoxTimbre>/SoundFonts"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${GENERALUSER_SF2}" "$<TARGET_FILE_DIR:VoxTimbre>/SoundFonts/GeneralUser-GS.sf2"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GENERALUSER_LICENSE}" "$<TARGET_FILE_DIR:VoxTimbre>/SoundFonts/GeneralUser-GS-LICENSE.txt"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSES/FluidSynth-LGPL-2.1.txt" "$<TARGET_FILE_DIR:VoxTimbre>/FluidSynth-LGPL-2.1.txt"
+        "${GENERALUSER_LICENSE}" "$<TARGET_FILE_DIR:VoxTimbre>/FluidSynth-LGPL-2.1.txt"
 )
+
+# A standalone, deterministic DSP test runner. It exercises the three
+# harmonizer algorithms without requiring an audio device or GUI session.
+juce_add_console_app(HarmonizerDSPTests
+    PRODUCT_NAME "Harmonizer DSP Tests"
+)
+juce_generate_juce_header(HarmonizerDSPTests)
+target_sources(HarmonizerDSPTests PRIVATE
+    Tests/HarmonizerDSPTests.cpp
+    Source/HarmonizerEngine.h
+    Source/HarmonizerEngine.cpp
+)
+target_compile_definitions(HarmonizerDSPTests PRIVATE
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+)
+target_link_libraries(HarmonizerDSPTests PRIVATE
+    juce::juce_audio_basics
+    juce::juce_dsp
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags
+)
+if(MSVC)
+    target_compile_options(HarmonizerDSPTests PRIVATE /W4 /permissive-)
+endif()
+
+enable_testing()
+add_test(NAME HarmonizerDSPTests COMMAND $<TARGET_FILE:HarmonizerDSPTests>)
