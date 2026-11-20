@@ -112,6 +112,90 @@ bool testPitchShift(HarmonizerEngine::Algorithm algorithm, const char* name)
         && result.peak < 2.0f;
 }
 
+
+bool testPitchBend(HarmonizerEngine::Algorithm algorithm, const char* name)
+{
+    HarmonizerEngine engine;
+    engine.setAlgorithm(algorithm);
+    engine.prepare(sampleRate, blockSize);
+    constexpr size_t total = static_cast<size_t>(sampleRate * 1.5);
+    std::vector<float> rendered(total, 0.0f);
+    std::array<float, blockSize> input {};
+    std::array<float, blockSize> output {};
+    juce::MidiBuffer midi;
+    midi.addEvent(juce::MidiMessage::pitchWheel(1, 16383), 0);
+    midi.addEvent(juce::MidiMessage::noteOn(1, 69, 0.9f), 0);
+    size_t position = 0;
+    while (position < total)
+    {
+        const auto count = static_cast<int>(std::min(
+            static_cast<size_t>(blockSize), total - position));
+        for (int i = 0; i < count; ++i)
+        {
+            const auto t = static_cast<double>(position + static_cast<size_t>(i)) / sampleRate;
+            input[static_cast<size_t>(i)] = 0.6f * static_cast<float>(
+                std::sin(2.0 * pi * 220.0 * t));
+        }
+        engine.processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
+        midi.clear();
+        std::copy_n(output.data(), count, rendered.data() + position);
+        position += static_cast<size_t>(count);
+    }
+    const auto first = static_cast<size_t>(sampleRate * 0.30);
+    const auto count = static_cast<size_t>(sampleRate * 0.80);
+    double bestMagnitude = 0.0;
+    double measuredHz = 0.0;
+    for (int hz = 470; hz <= 515; ++hz)
+    {
+        const auto magnitude = magnitudeAt(rendered, first, count, static_cast<double>(hz));
+        if (magnitude > bestMagnitude)
+        {
+            bestMagnitude = magnitude;
+            measuredHz = static_cast<double>(hz);
+        }
+    }
+    std::cout << name << " +2-semitone pitch bend: " << measuredHz << " Hz\\n";
+    return measuredHz >= 480.0 && measuredHz <= 505.0 && bestMagnitude > 1.0;
+}
+
+bool testPolyphony(HarmonizerEngine::Algorithm algorithm, const char* name)
+{
+    HarmonizerEngine engine;
+    engine.setAlgorithm(algorithm);
+    engine.prepare(sampleRate, blockSize);
+    constexpr size_t total = static_cast<size_t>(sampleRate * 1.5);
+    std::vector<float> rendered(total, 0.0f);
+    std::array<float, blockSize> input {};
+    std::array<float, blockSize> output {};
+    juce::MidiBuffer midi;
+    midi.addEvent(juce::MidiMessage::noteOn(1, 69, 0.8f), 0);
+    midi.addEvent(juce::MidiMessage::noteOn(1, 72, 0.8f), 0);
+    size_t position = 0;
+    while (position < total)
+    {
+        const auto count = static_cast<int>(std::min(
+            static_cast<size_t>(blockSize), total - position));
+        for (int i = 0; i < count; ++i)
+        {
+            const auto t = static_cast<double>(position + static_cast<size_t>(i)) / sampleRate;
+            input[static_cast<size_t>(i)] = 0.6f * static_cast<float>(
+                std::sin(2.0 * pi * 220.0 * t));
+        }
+        engine.processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
+        midi.clear();
+        std::copy_n(output.data(), count, rendered.data() + position);
+        position += static_cast<size_t>(count);
+    }
+    const auto first = static_cast<size_t>(sampleRate * 0.30);
+    const auto count = static_cast<size_t>(sampleRate * 0.80);
+    const auto noteA = magnitudeAt(rendered, first, count, 440.0);
+    const auto noteB = magnitudeAt(rendered, first, count, 523.251);
+    std::cout << name << " polyphony: 440 Hz=" << noteA
+              << ", 523 Hz=" << noteB << '\\n';
+    return noteA > 1.0 && noteB > 1.0
+        && std::isfinite(noteA) && std::isfinite(noteB);
+}
+
 bool testSilenceProducesSilence()
 {
     HarmonizerEngine engine;
@@ -163,6 +247,12 @@ int main()
     passed &= testPitchShift(HarmonizerEngine::Algorithm::timeDomain, "TD-PSOLA");
     passed &= testPitchShift(HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
     passed &= testPitchShift(HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
+    passed &= testPitchBend(HarmonizerEngine::Algorithm::timeDomain, "TD-PSOLA");
+    passed &= testPitchBend(HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
+    passed &= testPitchBend(HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
+    passed &= testPolyphony(HarmonizerEngine::Algorithm::timeDomain, "TD-PSOLA");
+    passed &= testPolyphony(HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
+    passed &= testPolyphony(HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
     passed &= testSilenceProducesSilence();
     passed &= testNoMidiProducesNoWetOutput();
     std::cout << (passed ? "All harmonizer DSP tests passed.\n"
