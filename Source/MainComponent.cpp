@@ -278,7 +278,6 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
         harmonizer.setAlgorithm(harmonizerAlgorithm.getSelectedId() == 1
             ? HarmonizerEngine::Algorithm::timeDomain
             : HarmonizerEngine::Algorithm::lpc);
-        harmonizer.reset();
         statusLabel.setText(harmonizerAlgorithm.getSelectedId() == 1
             ? "Harmonizer: TD-PSOLA waveform mode"
             : "Harmonizer: LP-PSOLA formant mode", juce::dontSendNotification);
