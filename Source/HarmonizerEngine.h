@@ -55,6 +55,9 @@ private:
         void stop() noexcept;
     };
 
+    static constexpr int fdFftOrder = 11;
+    static constexpr int fdFftSize = 1 << fdFftOrder;
+    juce::dsp::FFT fdPsolaFft { fdFftOrder };
     std::array<PitchVoice, voiceCount> voices {};
     std::array<float, inputRingSize> inputHistory {};
     std::array<float, inputRingSize> residualHistory {};
