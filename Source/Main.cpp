@@ -25,14 +25,16 @@ namespace
 
             static const auto logo = []
             {
-                const auto xml = juce::XmlDocument::parse(juce::String(voiceForgeLogoSvg));
-                return xml != nullptr ? juce::Drawable::createFromSVG(*xml)
-                                      : std::unique_ptr<juce::Drawable>{};
+                juce::MemoryOutputStream encoded;
+                encoded.writeText(juce::String(voiceForgeLogoPngBase64), false, false, nullptr);
+                juce::MemoryInputStream input(encoded.getMemoryBlock(), false);
+                juce::PNGImageFormat png;
+                return png.decodeImage(input);
             }();
-            if (logo != nullptr)
-                logo->drawWithin(g, juce::Rectangle<float>(getWidth() * 0.12f,
-                    68.0f, getWidth() * 0.76f, 232.0f),
-                    juce::RectanglePlacement::centred, 1.0f);
+            if (!logo.isNull())
+                g.drawImageWithin(logo, juce::roundToInt(getWidth() * 0.12f),
+                    54, juce::roundToInt(getWidth() * 0.76f), 254,
+                    juce::RectanglePlacement::centred);
 
             g.setColour(juce::Colour(0xffaeb8c6));
             g.setFont(juce::Font(juce::FontOptions(14.0f)));
@@ -46,8 +48,6 @@ namespace
             g.setColour(juce::Colour(0xff343b48));
             g.drawRoundedRectangle(waveArea, 8.0f, 1.0f);
 
-            // Indeterminate startup activity bar: startup stages have very
-            // different durations, so avoid presenting a misleading percentage.
             const auto progressArea = juce::Rectangle<float>(
                 waveArea.getX(), waveArea.getBottom() + 16.0f,
                 waveArea.getWidth(), 4.0f);
@@ -60,11 +60,6 @@ namespace
             g.fillRoundedRectangle({ segmentX, progressArea.getY(),
                                      segmentWidth, progressArea.getHeight() }, 2.0f);
 
-            // A speech-shaped, harmonized waveform based on the synthesized
-            // phrase "Vocoder. Harmonizer." The envelope preserves the
-            // consonant bursts, changing vowel energy and short word gap.
-            // 20x zoom-out: fewer carrier cycles, with enough variation to
-            // read as a vocal phrase rather than a uniform band.
             const auto twoPi = juce::MathConstants<float>::twoPi;
             const std::array<float, 3> voiceCycles { 124.0f, 156.0f, 186.0f };
             const std::array<float, 3> voiceOffsets { -4.0f, 0.0f, 4.0f };
@@ -72,9 +67,6 @@ namespace
             const std::array<juce::uint32, 3> voiceColours {
                 0x887bc8ff, 0xff62b5ff, 0x887fe0c4
             };
-
-            // Relative RMS profile across "Vocoder" then "Harmonizer".
-            // The low section near the middle is the deliberately short pause.
             constexpr std::array<float, 33> speechEnvelope {
                 0.05f, 0.10f, 0.16f, 0.32f, 0.78f, 0.94f, 0.62f, 0.30f,
                 0.16f, 0.10f, 0.28f, 0.48f, 0.34f, 0.18f, 0.38f, 0.52f,
@@ -82,7 +74,6 @@ namespace
                 0.46f, 0.32f, 0.20f, 0.52f, 0.88f, 0.60f, 0.38f, 0.26f,
                 0.12f
             };
-
             const auto sampleEnvelope = [&speechEnvelope](float position)
             {
                 const auto scaled = juce::jlimit(0.0f, 1.0f, position)
@@ -93,7 +84,6 @@ namespace
                 return juce::jmap(fraction, speechEnvelope[static_cast<size_t>(index)],
                     speechEnvelope[static_cast<size_t>(index + 1)]);
             };
-
             const auto columns = juce::jmax(1, juce::roundToInt(waveArea.getWidth()));
             for (size_t voice = 0; voice < voiceCycles.size(); ++voice)
             {
@@ -102,8 +92,6 @@ namespace
                 {
                     const auto t = static_cast<float>(i) / static_cast<float>(columns);
                     const auto x = waveArea.getX() + waveArea.getWidth() * t;
-                    // Advancing the source position makes the complete vocal
-                    // shape drift smoothly from right to left across the frame.
                     const auto sourceT = std::fmod(t + scrollPhase, 1.0f);
                     const auto carrierPhase = twoPi * voiceCycles[voice] * sourceT
                         - phase * (1.0f + 0.035f * static_cast<float>(voice))
@@ -120,15 +108,11 @@ namespace
                         + 0.08f * std::sin(carrierPhase * 3.97f - 0.2f);
                     const auto centre = waveArea.getCentreY() + voiceOffsets[voice];
                     const auto y = centre - harmonic * envelope * 22.0f;
-                    if (i == 0)
-                        waveform.startNewSubPath(x, y);
-                    else
-                        waveform.lineTo(x, y);
+                    if (i == 0) waveform.startNewSubPath(x, y);
+                    else waveform.lineTo(x, y);
                 }
-
                 g.setColour(juce::Colour(voiceColours[voice]));
-                g.strokePath(waveform, juce::PathStrokeType(
-                    voice == 1 ? 1.8f : 1.3f));
+                g.strokePath(waveform, juce::PathStrokeType(voice == 1 ? 1.8f : 1.3f));
             }
         }
 
@@ -180,16 +164,10 @@ private:
             setResizable(true, true);
             centreWithSize(900, 620);
             setVisible(true);
-
-            // Let the splash paint, then construct the application component
-            // asynchronously while keeping the animated splash visible.
             startTimer(250);
         }
 
-        ~MainWindow() override
-        {
-            stopTimer();
-        }
+        ~MainWindow() override { stopTimer(); }
 
         void closeButtonPressed() override
         {
