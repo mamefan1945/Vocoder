@@ -15,4 +15,4 @@ inline constexpr const char* voiceForgeLogoSvg = R"SVG(
  <text x="450" y="263" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif"
        font-size="21" font-weight="500" letter-spacing="3.1" fill="#aebbc8">VOCODER  /  VOCAL HARMONIZER</text>
 </svg>
-)SVG
+)SVG";

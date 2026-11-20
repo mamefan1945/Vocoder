@@ -96,6 +96,7 @@ private:
     void detectAndProcessPitchMark() noexcept;
     void processPitchMark(int64_t mark, double sourcePeriod, int64_t nextMark) noexcept;
     void scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
-                       double sourcePeriod, int64_t synthesisCentre) noexcept;
+                       double sourcePeriod, double targetPeriod,
+                       int64_t synthesisCentre) noexcept;
     void handleMidiMessage(const juce::MidiMessage& message, int octaveShift) noexcept;
 };

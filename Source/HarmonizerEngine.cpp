@@ -329,14 +329,15 @@ void HarmonizerEngine::estimateFormantEnvelope() noexcept
 }
 
 void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
-                                     double sourcePeriod, int64_t synthesisCentre) noexcept
+                                     double sourcePeriod, double targetPeriod,
+                                     int64_t synthesisCentre) noexcept
 {
-    // TD-PSOLA grains span two source periods. Their centres are spaced at
-    // the target period; changing the window to the target period as well
-    // changes the source waveform segment and creates avoidable timbral
-    // modulation during large pitch shifts.
+    // Keep the normal two-source-period analysis grain, but widen it when a
+    // downward shift makes synthesis marks farther apart. Without this
+    // overlap margin, low notes can expose gaps between adjacent grains.
+    const auto requiredHalfWindow = juce::jmax(sourcePeriod, targetPeriod * 0.60);
     const auto halfWindow = juce::jlimit(8, 1024,
-        static_cast<int>(std::ceil(sourcePeriod)));
+        static_cast<int>(std::ceil(requiredHalfWindow)));
     const auto inverseHalf = 1.0f / static_cast<float>(halfWindow);
 
     for (int offset = -halfWindow; offset <= halfWindow; ++offset)
@@ -389,7 +390,7 @@ void HarmonizerEngine::processPitchMark(int64_t mark, double sourcePeriod,
         while (voice.nextSynthesisMark - latencySamples <= midpoint
                && scheduled++ < 256)
         {
-            scheduleGrain(voice, mark, sourcePeriod,
+            scheduleGrain(voice, mark, sourcePeriod, targetPeriod,
                 static_cast<int64_t>(std::llround(voice.nextSynthesisMark)));
             voice.nextSynthesisMark += targetPeriod;
         }
@@ -559,9 +560,18 @@ void HarmonizerEngine::handleMidiMessage(const juce::MidiMessage& message,
             }
         }
 
-        // Do not let queued grains from a previous note leak into a retrigger.
-        std::fill(slot->overlap.begin(), slot->overlap.end(), 0.0f);
-        std::fill(slot->weights.begin(), slot->weights.end(), 0.0f);
+        // Clear only the future scheduling horizon. Clearing both 32768-sample
+        // rings on every MIDI note-on can stall the real-time audio callback
+        // when a chord is played; grains outside this horizon are already spent.
+        const auto clearHorizon = juce::jmin<int64_t>(
+            static_cast<int64_t>(outputRingSize),
+            static_cast<int64_t>(latencySamples) + 2048);
+        for (int64_t offset = 0; offset < clearHorizon; ++offset)
+        {
+            const auto index = static_cast<size_t>(totalSamples + offset) & outputRingMask;
+            slot->overlap[index] = 0.0f;
+            slot->weights[index] = 0.0f;
+        }
         slot->start(note, sourceNote, message.getChannel(),
                     message.getFloatVelocity());
     }
@@ -705,7 +715,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                 // vocal transition. Keep the previous track rather than
                 // steering the PSOLA mark train toward that outlier.
                 const auto suspiciousJump = detectedPitchHz > 0.0f
-                    && jumpSemitones > 7.0f && frameConfidence < 0.90f;
+                    && jumpSemitones > 7.0f && frameConfidence < 0.97f;
                 if (inPitchRange && !suspiciousJump)
                 {
                     pitchMissCount = 0;
@@ -797,7 +807,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         float voicedHarmony = 0.0f;
         float unvoicedGain = 0.0f;
         int activeCount = 0;
-        float voicePower = 0.0f;
+        float voiceLevelSum = 0.0f;
         float grainFallbackGain = 0.0f;
 
         for (auto& voice : voices)
@@ -862,17 +872,18 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             grainFallbackGain = juce::jmax(grainFallbackGain,
                 voiceLevel * (1.0f - voice.grainBlend));
             unvoicedGain = juce::jmax(unvoicedGain, voiceLevel);
-            voicePower += voiceLevel * voiceLevel;
+            voiceLevelSum += voiceLevel;
             ++activeCount;
         }
 
         // Unvoiced consonants contain no stable pitch to transpose. Route them
         // once, shared by the active chord, instead of summing an identical dry
         // consonant through every voice (which boosts S/SH/F levels by sqrt(N)).
-        // Normalize by the actual active voice energy, not merely voice
-        // count. This keeps chord loudness stable when velocities differ.
-        const auto normalization = voicePower > 1.0e-8f
-            ? 1.0f / std::sqrt(voicePower) : 0.0f;
+        // Average the active voices by their velocity/envelope weights. An
+        // RMS normalization lets coherent notes add up and can clip as more
+        // keys are held; a weighted mean keeps chord level predictable.
+        const auto normalization = voiceLevelSum > 1.0e-8f
+            ? 1.0f / voiceLevelSum : 0.0f;
         // Unvoiced consonants remain shared across the chord. During voiced
         // sections, each voice crossfades smoothly to the delayed source only
         // when its PSOLA grain train is unavailable. The fallback gain uses
