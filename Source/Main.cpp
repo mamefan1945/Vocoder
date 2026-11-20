@@ -1,6 +1,6 @@
 #include <JuceHeader.h>
 #include "MainComponent.h"
-#include "VoxTimbreLogo.h"
+#include "VoiceForgeLogo.h"
 
 namespace
 {
