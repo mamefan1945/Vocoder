@@ -18,10 +18,12 @@ void HarmonizerEngine::PitchVoice::prepare()
     weights.assign(outputRingSize, 0.0f);
 }
 
-void HarmonizerEngine::PitchVoice::start(int midiNote, int originalMidiNote, float noteVelocity) noexcept
+void HarmonizerEngine::PitchVoice::start(int midiNote, int originalMidiNote,
+                                           int channel, float noteVelocity) noexcept
 {
     note = midiNote;
     sourceNote = originalMidiNote;
+    midiChannel = juce::jlimit(1, 16, channel);
     velocity = noteVelocity;
     envelope = 0.0f;
     nextSynthesisMark = 0.0;
@@ -80,6 +82,7 @@ void HarmonizerEngine::reset() noexcept
         std::fill(voice.weights.begin(), voice.weights.end(), 0.0f);
         voice.note = -1;
         voice.sourceNote = -1;
+        voice.midiChannel = 1;
         voice.velocity = 0.0f;
         voice.envelope = 0.0f;
         voice.nextSynthesisMark = 0.0;
@@ -113,8 +116,8 @@ void HarmonizerEngine::reset() noexcept
     voicedMix = 0.0f;
     havePitchMark = false;
     pitchMarkPolarity = 1.0f;
-    pitchBendSemitones = 0.0f;
-    targetPitchBendSemitones = 0.0f;
+    pitchBendSemitones.fill(0.0f);
+    targetPitchBendSemitones.fill(0.0f);
     activeOctaveShift = 0;
     publishedPitchHz.store(0.0f, std::memory_order_relaxed);
     publishedPitchConfidence.store(0.0f, std::memory_order_relaxed);
@@ -179,30 +182,45 @@ float HarmonizerEngine::estimatePitch(float sensitivity, float& confidence) cons
     // which often favours a multiple of the true period for harmonic voices.
     const auto yinThreshold = 0.10f + 0.16f * juce::jlimit(0.0f, 1.0f, sensitivity);
     int bestLag = 0;
-    for (int lag = minLag; lag < maxLag; ++lag)
+    float bestScore = std::numeric_limits<float>::max();
+    const auto expectedLag = detectedPitchHz >= minimumPitchHz
+        ? static_cast<float>(decimatedRate / detectedPitchHz) : 0.0f;
+    const auto continuityWeight = expectedLag > 0.0f ? 0.075f : 0.0f;
+
+    // Prefer a convincing trough near the previous F0 instead of blindly
+    // taking the first trough. This reduces octave flips on harmonically rich
+    // vowels while still allowing genuine pitch movement.
+    for (int lag = minLag; lag <= maxLag; ++lag)
     {
         const auto value = normalizedDifference[static_cast<size_t>(lag)];
-        if (value < yinThreshold
-            && value <= normalizedDifference[static_cast<size_t>(lag + 1)])
+        const auto isTrough = lag == maxLag
+            ? value <= normalizedDifference[static_cast<size_t>(lag - 1)]
+            : value <= normalizedDifference[static_cast<size_t>(lag - 1)]
+              && value <= normalizedDifference[static_cast<size_t>(lag + 1)];
+        if (!isTrough)
+            continue;
+        const auto continuity = expectedLag > 0.0f
+            ? std::abs(std::log2(static_cast<float>(lag) / expectedLag)) : 0.0f;
+        const auto score = value + continuityWeight * continuity;
+        if (value <= yinThreshold && score < bestScore)
         {
+            bestScore = score;
             bestLag = lag;
-            break;
         }
     }
 
-    // Some breathy/noisy voices never cross the strict threshold. Permit the
-    // best trough only when it still has reasonable periodicity confidence.
+    // No strict trough: use the best credible local minimum, with continuity
+    // as a tie-breaker rather than accepting a weak harmonic by default.
     if (bestLag == 0)
     {
         float bestValue = 1.0f;
         for (int lag = minLag; lag <= maxLag; ++lag)
         {
             const auto value = normalizedDifference[static_cast<size_t>(lag)];
-            if (value < bestValue)
-            {
-                bestValue = value;
-                bestLag = lag;
-            }
+            if (value >= bestValue)
+                continue;
+            bestValue = value;
+            bestLag = lag;
         }
         const auto fallbackLimit = 0.24f + 0.26f * juce::jlimit(0.0f, 1.0f, sensitivity);
         if (bestValue > fallbackLimit)
@@ -258,7 +276,7 @@ void HarmonizerEngine::estimateFormantEnvelope() noexcept
             autocorrelation[static_cast<size_t>(lag)] +=
                 frame[static_cast<size_t>(i)] * frame[static_cast<size_t>(i - lag)];
 
-    if (autocorrelation[0] < 1.0e-8)
+    if (!std::isfinite(autocorrelation[0]) || autocorrelation[0] < 1.0e-8)
     {
         targetFormantCoefficients.fill(0.0f);
         return;
@@ -276,8 +294,19 @@ void HarmonizerEngine::estimateFormantEnvelope() noexcept
             residual += predictor[static_cast<size_t>(j)]
                       * autocorrelation[static_cast<size_t>(order - j)];
 
-        const auto reflection = juce::jlimit(-0.98, 0.98,
-            -residual / juce::jmax(1.0e-12, predictionError));
+        if (!std::isfinite(residual) || !std::isfinite(predictionError)
+            || predictionError <= 1.0e-12)
+        {
+            targetFormantCoefficients.fill(0.0f);
+            return;
+        }
+        const auto reflectionValue = -residual / predictionError;
+        if (!std::isfinite(reflectionValue))
+        {
+            targetFormantCoefficients.fill(0.0f);
+            return;
+        }
+        const auto reflection = juce::jlimit(-0.98, 0.98, reflectionValue);
         updated = predictor;
         for (int j = 1; j < order; ++j)
             updated[static_cast<size_t>(j)] =
@@ -285,7 +314,8 @@ void HarmonizerEngine::estimateFormantEnvelope() noexcept
                 + reflection * predictor[static_cast<size_t>(order - j)];
         updated[static_cast<size_t>(order)] = reflection;
         predictor = updated;
-        predictionError *= 1.0 - reflection * reflection;
+        predictionError = juce::jmax(1.0e-12,
+            predictionError * (1.0 - reflection * reflection));
     }
 
     constexpr double bandwidthExpansion = 0.994;
@@ -342,8 +372,10 @@ void HarmonizerEngine::processPitchMark(int64_t mark, double sourcePeriod,
         if (voice.note < 0 || voice.releasing)
             continue;
 
+        const auto bend = pitchBendSemitones[static_cast<size_t>(
+            juce::jlimit(1, 16, voice.midiChannel) - 1)];
         const auto targetHz = 440.0 * std::pow(2.0,
-            (static_cast<double>(voice.note - 69) + pitchBendSemitones) / 12.0);
+            (static_cast<double>(voice.note - 69) + bend) / 12.0);
         const auto targetPeriod = currentSampleRate / targetHz;
         if (!voice.synthesisMarkInitialized)
         {
@@ -391,22 +423,47 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
         return;
 
     const auto expected = static_cast<int64_t>(std::llround(nextExpectedPitchMark));
-    const auto first = juce::jmax<int64_t>(0, expected - searchRadius);
-    const auto last = juce::jmin<int64_t>(static_cast<int64_t>(totalSamples) - 1,
+    const auto first = juce::jmax<int64_t>(1, expected - searchRadius);
+    const auto last = juce::jmin<int64_t>(static_cast<int64_t>(totalSamples) - 2,
                                           expected + searchRadius);
     auto bestMark = expected;
     float bestPeak = -std::numeric_limits<float>::max();
+    float bestScore = -std::numeric_limits<float>::max();
 
-    // Keep marks on one waveform polarity. This avoids alternating between
-    // positive and negative peaks, which can invert adjacent PSOLA grains.
+    // Select a same-polarity local peak near the predicted phase. The small
+    // proximity bias prevents a louder neighbouring cycle peak from pulling
+    // the mark train toward the edge of its search window.
     for (auto candidate = first; candidate <= last; ++candidate)
     {
-        const auto sample = residualHistory[static_cast<size_t>(candidate) & inputRingMask]
+        const auto index = static_cast<size_t>(candidate) & inputRingMask;
+        const auto sample = residualHistory[index] * pitchMarkPolarity;
+        const auto before = residualHistory[static_cast<size_t>(candidate - 1) & inputRingMask]
                           * pitchMarkPolarity;
-        if (sample > bestPeak)
+        const auto after = residualHistory[static_cast<size_t>(candidate + 1) & inputRingMask]
+                         * pitchMarkPolarity;
+        if (sample < before || sample < after)
+            continue;
+        const auto proximity = static_cast<float>(std::abs(candidate - expected))
+                             / static_cast<float>(searchRadius);
+        const auto score = sample * (1.0f - 0.20f * proximity);
+        if (score > bestScore)
         {
+            bestScore = score;
             bestPeak = sample;
             bestMark = candidate;
+        }
+    }
+    if (bestPeak == -std::numeric_limits<float>::max())
+    {
+        for (auto candidate = first; candidate <= last; ++candidate)
+        {
+            const auto sample = residualHistory[static_cast<size_t>(candidate) & inputRingMask]
+                              * pitchMarkPolarity;
+            if (sample > bestPeak)
+            {
+                bestPeak = sample;
+                bestMark = candidate;
+            }
         }
     }
 
@@ -430,11 +487,12 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
     if (previousPitchMark >= 0 && bestMark > previousPitchMark)
     {
         const auto measuredPeriod = static_cast<double>(bestMark - previousPitchMark);
-        // Reject implausible half/double-cycle jumps, but let actual mark
-        // spacing gently correct the analysis estimate between pitch updates.
-        if (measuredPeriod >= estimatedPeriod * 0.70
-            && measuredPeriod <= estimatedPeriod * 1.30)
-            sourcePeriod = 0.70 * estimatedPeriod + 0.30 * measuredPeriod;
+        // Use a robust blend of the F0 estimate and measured residual-mark
+        // spacing. A wider rejection gate tolerates vibrato but prevents
+        // accidental half/double-cycle marks from corrupting the grain train.
+        if (measuredPeriod >= estimatedPeriod * 0.72
+            && measuredPeriod <= estimatedPeriod * 1.28)
+            sourcePeriod = 0.55 * estimatedPeriod + 0.45 * measuredPeriod;
     }
 
     if (previousPitchMark >= 0 && bestMark <= previousPitchMark)
@@ -461,62 +519,72 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
     nextExpectedPitchMark = static_cast<double>(bestMark) + sourcePeriod;
 }
 
-void HarmonizerEngine::handleMidi(const juce::MidiBuffer& midi, int octaveShift) noexcept
+void HarmonizerEngine::handleMidiMessage(const juce::MidiMessage& message,
+                                                int octaveShift) noexcept
 {
-    for (const auto metadata : midi)
+    if (message.isNoteOn())
     {
-        const auto message = metadata.getMessage();
-        if (message.isNoteOn())
+        const auto sourceNote = message.getNoteNumber();
+        const auto note = juce::jlimit(0, 127, sourceNote + octaveShift);
+        PitchVoice* slot = nullptr;
+        for (auto& voice : voices)
         {
-            const auto sourceNote = message.getNoteNumber();
-            const auto note = juce::jlimit(0, 127, sourceNote + octaveShift);
-            bool found = false;
-            for (auto& voice : voices)
+            if (voice.sourceNote == sourceNote
+                && voice.midiChannel == message.getChannel())
             {
-                if (voice.sourceNote == sourceNote)
+                slot = &voice;
+                break;
+            }
+        }
+
+        if (slot == nullptr)
+            for (auto& voice : voices)
+                if (voice.note < 0)
                 {
-                    voice.start(note, sourceNote, message.getFloatVelocity());
-                    found = true;
+                    slot = &voice;
                     break;
                 }
-            }
 
-            if (!found)
+        if (slot == nullptr)
+        {
+            slot = &voices[0];
+            for (auto& voice : voices)
             {
-                auto* slot = &voices[0];
-                for (auto& voice : voices)
-                {
-                    if (voice.note < 0)
-                    {
-                        slot = &voice;
-                        break;
-                    }
-                    if (voice.releasing && voice.envelope < slot->envelope)
-                        slot = &voice;
-                }
-                slot->start(note, sourceNote, message.getFloatVelocity());
+                const auto candidatePriority = voice.releasing ? 0.0f : 1.0f;
+                const auto slotPriority = slot->releasing ? 0.0f : 1.0f;
+                if (candidatePriority < slotPriority
+                    || (candidatePriority == slotPriority
+                        && voice.envelope < slot->envelope))
+                    slot = &voice;
             }
         }
-        else if (message.isNoteOff())
-        {
-            for (auto& voice : voices)
-                if (voice.sourceNote == message.getNoteNumber())
-                    voice.stop();
-        }
-        else if (message.isPitchWheel())
-        {
-            // Standard two-semitone bend range, centred at MIDI value 8192.
-            targetPitchBendSemitones = (static_cast<float>(message.getPitchWheelValue())
-                                      - 8192.0f) * (2.0f / 8192.0f);
-        }
-        else if (message.isAllNotesOff() || message.isAllSoundOff())
-        {
-            for (auto& voice : voices)
+
+        // Do not let queued grains from a previous note leak into a retrigger.
+        std::fill(slot->overlap.begin(), slot->overlap.end(), 0.0f);
+        std::fill(slot->weights.begin(), slot->weights.end(), 0.0f);
+        slot->start(note, sourceNote, message.getChannel(),
+                    message.getFloatVelocity());
+    }
+    else if (message.isNoteOff())
+    {
+        for (auto& voice : voices)
+            if (voice.sourceNote == message.getNoteNumber()
+                && voice.midiChannel == message.getChannel())
                 voice.stop();
-        }
+    }
+    else if (message.isPitchWheel())
+    {
+        targetPitchBendSemitones[static_cast<size_t>(message.getChannel() - 1)] =
+            (static_cast<float>(message.getPitchWheelValue()) - 8192.0f)
+            * (2.0f / 8192.0f);
+    }
+    else if (message.isAllNotesOff() || message.isAllSoundOff())
+    {
+        for (auto& voice : voices)
+            if (voice.midiChannel == message.getChannel())
+                voice.stop();
     }
 }
-
 void HarmonizerEngine::processBlock(const float* input, float* output, int numSamples,
                                     const juce::MidiBuffer& midi, float dryWet,
                                     float outputGain, int octaveShift) noexcept
@@ -546,7 +614,10 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         }
         activeOctaveShift = clampedOctaveShift;
     }
-    handleMidi(midi, clampedOctaveShift * 12);
+    juce::MidiBuffer::Iterator midiIterator(midi);
+    juce::MidiMessage nextMidiMessage;
+    int nextMidiSample = 0;
+    auto hasNextMidiEvent = midiIterator.getNextEvent(nextMidiMessage, nextMidiSample);
     const auto mix = juce::jlimit(0.0f, 1.0f, dryWet);
     const auto sampleRate = static_cast<float>(currentSampleRate);
     const auto attackCoefficient = 1.0f - std::exp(-1.0f / (0.008f * sampleRate));
@@ -574,9 +645,20 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
 
     for (int i = 0; i < numSamples; ++i)
     {
-        pitchBendSemitones += (targetPitchBendSemitones - pitchBendSemitones) * bendSmoothing;
+        // Apply note/controller events at their actual sample offsets.
+        while (hasNextMidiEvent && nextMidiSample <= i)
+        {
+            handleMidiMessage(nextMidiMessage, clampedOctaveShift * 12);
+            hasNextMidiEvent = midiIterator.getNextEvent(nextMidiMessage, nextMidiSample);
+        }
+
+        for (size_t channel = 0; channel < pitchBendSemitones.size(); ++channel)
+            pitchBendSemitones[channel] +=
+                (targetPitchBendSemitones[channel] - pitchBendSemitones[channel])
+                * bendSmoothing;
         const auto absolute = static_cast<int64_t>(totalSamples);
-        const auto source = input != nullptr ? input[i] : 0.0f;
+        const auto rawSource = input != nullptr ? input[i] : 0.0f;
+        const auto source = std::isfinite(rawSource) ? rawSource : 0.0f;
         inputHistory[static_cast<size_t>(totalSamples) & inputRingMask] = source;
         ++totalSamples;
 
@@ -715,6 +797,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         float voicedHarmony = 0.0f;
         float unvoicedGain = 0.0f;
         int activeCount = 0;
+        float voicePower = 0.0f;
         float grainFallbackGain = 0.0f;
 
         for (auto& voice : voices)
@@ -737,6 +820,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                 {
                     voice.note = -1;
                     voice.sourceNote = -1;
+                    voice.midiChannel = 1;
                     voice.velocity = 0.0f;
                     voice.envelope = 0.0f;
                     voice.releasing = false;
@@ -778,21 +862,27 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             grainFallbackGain = juce::jmax(grainFallbackGain,
                 voiceLevel * (1.0f - voice.grainBlend));
             unvoicedGain = juce::jmax(unvoicedGain, voiceLevel);
+            voicePower += voiceLevel * voiceLevel;
             ++activeCount;
         }
 
         // Unvoiced consonants contain no stable pitch to transpose. Route them
         // once, shared by the active chord, instead of summing an identical dry
         // consonant through every voice (which boosts S/SH/F levels by sqrt(N)).
-        const auto normalization = activeCount > 0
-            ? 1.0f / std::sqrt(static_cast<float>(activeCount)) : 0.0f;
+        // Normalize by the actual active voice energy, not merely voice
+        // count. This keeps chord loudness stable when velocities differ.
+        const auto normalization = voicePower > 1.0e-8f
+            ? 1.0f / std::sqrt(voicePower) : 0.0f;
         // Unvoiced consonants remain shared across the chord. During voiced
         // sections, each voice crossfades smoothly to the delayed source only
         // when its PSOLA grain train is unavailable. The fallback gain uses
         // the loudest voice to avoid summing duplicate copies of the same vocal.
+        // The wet path contains pitch-shifted voiced material plus the
+        // unvoiced consonants needed for intelligibility. Never substitute a
+        // delayed copy of the pitched vowel when a PSOLA grain is missing:
+        // that was perceived as dry vocal leaking through at 100% wet.
         auto harmony = voicedHarmony * normalization * voicedMix
-            + delayedInput * ((1.0f - voicedMix) * unvoicedGain
-                              + voicedMix * grainFallbackGain);
+            + delayedInput * ((1.0f - voicedMix) * unvoicedGain);
         if ((absolute % static_cast<uint64_t>(updateInterval)) == 0)
         {
             const auto coverage = activeCount > 0
@@ -802,8 +892,10 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         }
         // Briefly favour the latency-aligned direct signal at detected attacks.
         // This avoids smearing plosives and sharp consonant onsets across PSOLA grains.
+        const auto unvoicedTransient = delayedInput * unvoicedGain
+                                      * (1.0f - voicedMix);
         harmony += transientMix * transientAmount
-                 * (delayedInput * unvoicedGain - harmony);
+                 * (unvoicedTransient - harmony);
         output[i] = (delayedInput * (1.0f - mix)
                    + harmony * mix) * outputGain;
     }

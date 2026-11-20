@@ -38,6 +38,7 @@ private:
         std::vector<float> weights;
         int note = -1;
         int sourceNote = -1;
+        int midiChannel = 1;
         float velocity = 0.0f;
         float envelope = 0.0f;
         double nextSynthesisMark = 0.0;
@@ -47,7 +48,7 @@ private:
         std::array<float, lpcOrder> formantState {};
 
         void prepare();
-        void start(int midiNote, int originalMidiNote, float noteVelocity) noexcept;
+        void start(int midiNote, int originalMidiNote, int channel, float noteVelocity) noexcept;
         void stop() noexcept;
     };
 
@@ -77,8 +78,8 @@ private:
     float transientMix = 0.0f;
     int transientHoldSamples = 0;
     int transientCooldownSamples = 0;
-    float pitchBendSemitones = 0.0f;
-    float targetPitchBendSemitones = 0.0f;
+    std::array<float, 16> pitchBendSemitones {};
+    std::array<float, 16> targetPitchBendSemitones {};
     int latencySamples = 0;
     int activeOctaveShift = 0;
     std::atomic<float> formantPreservation { 1.0f };
@@ -96,5 +97,5 @@ private:
     void processPitchMark(int64_t mark, double sourcePeriod, int64_t nextMark) noexcept;
     void scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
                        double sourcePeriod, int64_t synthesisCentre) noexcept;
-    void handleMidi(const juce::MidiBuffer& midi, int octaveShift) noexcept;
+    void handleMidiMessage(const juce::MidiMessage& message, int octaveShift) noexcept;
 };
