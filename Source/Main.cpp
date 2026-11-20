@@ -1,6 +1,6 @@
 #include <JuceHeader.h>
 #include "MainComponent.h"
-#include "VoiceForgeLogo.h"
+#include "VoxTimbreLogo.h"
 
 namespace
 {
@@ -134,7 +134,7 @@ namespace
 class VocoderApplication final : public juce::JUCEApplication
 {
 public:
-    const juce::String getApplicationName() override { return "VoiceForge"; }
+    const juce::String getApplicationName() override { return "VoxTimbre"; }
     const juce::String getApplicationVersion() override { return "0.1.0"; }
     bool moreThanOneInstanceAllowed() override { return true; }
 
