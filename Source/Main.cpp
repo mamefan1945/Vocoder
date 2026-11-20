@@ -37,6 +37,20 @@ namespace
             g.setColour(juce::Colour(0xff343b48));
             g.drawRoundedRectangle(waveArea, 8.0f, 1.0f);
 
+            // Indeterminate startup activity bar: startup stages have very
+            // different durations, so avoid presenting a misleading percentage.
+            const auto progressArea = juce::Rectangle<float>(
+                waveArea.getX(), waveArea.getBottom() + 16.0f,
+                waveArea.getWidth(), 4.0f);
+            g.setColour(juce::Colour(0xff303744));
+            g.fillRoundedRectangle(progressArea, 2.0f);
+            const auto segmentWidth = progressArea.getWidth() * 0.22f;
+            const auto travel = progressArea.getWidth() - segmentWidth;
+            const auto segmentX = progressArea.getX() + travel * progressPhase;
+            g.setColour(juce::Colour(0xff62b5ff));
+            g.fillRoundedRectangle({ segmentX, progressArea.getY(),
+                                     segmentWidth, progressArea.getHeight() }, 2.0f);
+
             // A speech-shaped, harmonized waveform based on the synthesized
             // phrase "Vocoder. Harmonizer." The envelope preserves the
             // consonant bursts, changing vowel energy and short word gap.
@@ -79,16 +93,19 @@ namespace
                 {
                     const auto t = static_cast<float>(i) / static_cast<float>(columns);
                     const auto x = waveArea.getX() + waveArea.getWidth() * t;
-                    const auto carrierPhase = twoPi * voiceCycles[voice] * t
+                    // Advancing the source position makes the complete vocal
+                    // shape drift smoothly from right to left across the frame.
+                    const auto sourceT = std::fmod(t + scrollPhase, 1.0f);
+                    const auto carrierPhase = twoPi * voiceCycles[voice] * sourceT
                         - phase * (1.0f + 0.035f * static_cast<float>(voice))
                         + voicePhase[voice];
                     const auto formantMotion = 0.82f
-                        + 0.12f * std::sin(twoPi * (2.0f * t) - phase * 0.31f)
-                        + 0.06f * std::sin(twoPi * (5.0f * t) + phase * 0.23f);
+                        + 0.12f * std::sin(twoPi * (2.0f * sourceT) - phase * 0.31f)
+                        + 0.06f * std::sin(twoPi * (5.0f * sourceT) + phase * 0.23f);
                     const auto breathMotion = 0.90f
-                        + 0.10f * std::sin(phase * 0.7f + t * twoPi * 3.0f
+                        + 0.10f * std::sin(phase * 0.7f + sourceT * twoPi * 3.0f
                             + static_cast<float>(voice) * 0.4f);
-                    const auto envelope = sampleEnvelope(t) * formantMotion * breathMotion;
+                    const auto envelope = sampleEnvelope(sourceT) * formantMotion * breathMotion;
                     const auto harmonic = std::sin(carrierPhase)
                         + 0.20f * std::sin(carrierPhase * 2.01f + 0.4f)
                         + 0.08f * std::sin(carrierPhase * 3.97f - 0.2f);
@@ -110,10 +127,14 @@ namespace
         void timerCallback() override
         {
             phase = std::fmod(phase + 0.22f, juce::MathConstants<float>::twoPi);
+            scrollPhase = std::fmod(scrollPhase + 0.0025f, 1.0f);
+            progressPhase = std::fmod(progressPhase + 0.018f, 1.0f);
             repaint();
         }
 
         float phase = 0.0f;
+        float scrollPhase = 0.0f;
+        float progressPhase = 0.0f;
     };
 }
 
