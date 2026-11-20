@@ -1,5 +1,27 @@
 #include "MainComponent.h"
 
+namespace
+{
+    class ControlInfoButton final : public juce::TextButton
+    {
+    public:
+        ControlInfoButton() : juce::TextButton("i")
+        {
+            setTooltip("What this control does");
+        }
+
+        void paintButton(juce::Graphics& graphics, bool mouseOver, bool buttonDown) override
+        {
+            auto circle = getLocalBounds().toFloat().reduced(1.5f);
+            graphics.setColour(mouseOver || buttonDown
+                ? juce::Colour(0xffc2d5e8) : juce::Colour(0xff89919c));
+            graphics.drawEllipse(circle, 1.1f);
+            graphics.setFont(juce::Font(juce::FontOptions(9.5f, juce::Font::bold)));
+            graphics.drawText("i", circle.toNearestInt(), juce::Justification::centred);
+        }
+    };
+}
+
 int MainComponent::LockableMidiKeyboard::noteAt(juce::Point<float> position) const
 {
     // Black keys overlap the white-key rectangles, so test them first.
@@ -1202,14 +1224,7 @@ void MainComponent::resized()
 void MainComponent::addControlInfo(juce::Component& target, const juce::String& title,
                                      const juce::String& details)
 {
-    auto* button = controlInfoButtons.add(new juce::TextButton("\xe2\x93\x98"));
-    button->setTooltip("What this control does");
-    button->setFont(juce::Font(juce::FontOptions(12.0f, juce::Font::bold)));
-    button->setBorderSize(juce::BorderSize<int>(0));
-    button->setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
-    button->setColour(juce::TextButton::buttonOnColourId, juce::Colours::transparentBlack);
-    button->setColour(juce::TextButton::textColourOffId, juce::Colour(0xff89919c));
-    button->setColour(juce::TextButton::textColourOnId, juce::Colour(0xff89919c));
+    auto* button = controlInfoButtons.add(new ControlInfoButton());
     button->onClick = [title, details]
     {
         juce::DialogWindow::LaunchOptions options;
