@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Vocoder VERSION 0.1.0 LANGUAGES CXX)
+project(VoiceForge VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -49,15 +49,15 @@ if(NOT EXISTS "${GENERALUSER_LICENSE}")
     endif()
 endif()
 
-juce_add_gui_app(Vocoder
-    PRODUCT_NAME "Vocoder"
+juce_add_gui_app(VoiceForge
+    PRODUCT_NAME "VoiceForge"
     COMPANY_NAME "Personal Audio Tools"
-    BUNDLE_ID "com.personalaudiotools.vocoder"
+    BUNDLE_ID "com.personalaudiotools.voiceforge"
 )
 
-juce_generate_juce_header(Vocoder)
+juce_generate_juce_header(VoiceForge)
 
-target_sources(Vocoder PRIVATE
+target_sources(VoiceForge PRIVATE
     Source/Main.cpp
     Source/MainComponent.h
     Source/MainComponent.cpp
@@ -69,13 +69,13 @@ target_sources(Vocoder PRIVATE
     Source/VocoderEngine.cpp
 )
 
-target_compile_definitions(Vocoder PRIVATE
+target_compile_definitions(VoiceForge PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_USE_MP3AUDIOFORMAT=1
 )
 
-target_link_libraries(Vocoder PRIVATE
+target_link_libraries(VoiceForge PRIVATE
     juce::juce_gui_extra
     juce::juce_audio_utils
     juce::juce_dsp
@@ -86,16 +86,16 @@ target_link_libraries(Vocoder PRIVATE
 )
 
 if(MSVC)
-    target_compile_options(Vocoder PRIVATE /W4 /permissive-)
+    target_compile_options(VoiceForge PRIVATE /W4 /permissive-)
 endif()
 
 
-add_custom_command(TARGET Vocoder POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:Vocoder>/SoundFonts"
+add_custom_command(TARGET VoiceForge POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:VoiceForge>/SoundFonts"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GENERALUSER_SF2}" "$<TARGET_FILE_DIR:Vocoder>/SoundFonts/GeneralUser-GS.sf2"
+        "${GENERALUSER_SF2}" "$<TARGET_FILE_DIR:VoiceForge>/SoundFonts/GeneralUser-GS.sf2"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GENERALUSER_LICENSE}" "$<TARGET_FILE_DIR:Vocoder>/SoundFonts/GeneralUser-GS-LICENSE.txt"
+        "${GENERALUSER_LICENSE}" "$<TARGET_FILE_DIR:VoiceForge>/SoundFonts/GeneralUser-GS-LICENSE.txt"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSES/FluidSynth-LGPL-2.1.txt" "$<TARGET_FILE_DIR:Vocoder>/FluidSynth-LGPL-2.1.txt"
+        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSES/FluidSynth-LGPL-2.1.txt" "$<TARGET_FILE_DIR:VoiceForge>/FluidSynth-LGPL-2.1.txt"
 )

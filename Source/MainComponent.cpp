@@ -87,7 +87,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     testAudioFormats.registerBasicFormats();
     testAudioReadAheadThread.startThread();
 
-    titleLabel.setText("VOCODER  |  REAL-TIME AUDIO", juce::dontSendNotification);
+    titleLabel.setText("VoiceForge   |   Vocoder + Vocal Harmonizer", juce::dontSendNotification);
     titleLabel.setFont(juce::Font(juce::FontOptions(24.0f, juce::Font::bold)));
     addAndMakeVisible(titleLabel);
 

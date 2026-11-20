@@ -37,8 +37,8 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path "TestAudio") {
-            $exe = Get-ChildItem "build" -Filter "Vocoder.exe" -Recurse | Select-Object -First 1
-            if (-not $exe) { throw "Vocoder.exe was not found after the build." }
+            $exe = Get-ChildItem "build" -Filter "VoiceForge.exe" -Recurse | Select-Object -First 1
+            if (-not $exe) { throw "VoiceForge.exe was not found after the build." }
             $target = Join-Path $exe.DirectoryName "TestAudio"
             New-Item -ItemType Directory -Force -Path $target | Out-Null
             Copy-Item "TestAudio/*" -Destination $target -Recurse -Force
@@ -47,10 +47,10 @@ jobs:
       - name: Upload application
         uses: actions/upload-artifact@v4
         with:
-          name: Vocoder-Windows-x64-build-${{ github.run_number }}
+          name: VoiceForge-Windows-x64-build-${{ github.run_number }}
           path: |
-            build/**/Vocoder.exe
-            build/**/Vocoder_artefacts/Release/SoundFonts/**
+            build/**/VoiceForge.exe
+            build/**/VoiceForge_artefacts/Release/SoundFonts/**
             build/**/TestAudio/**
             build/**/fluidsynth*.dll
             build/**/libfluidsynth*.dll

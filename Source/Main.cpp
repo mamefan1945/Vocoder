@@ -1,5 +1,6 @@
 #include <JuceHeader.h>
 #include "MainComponent.h"
+#include "VoiceForgeLogo.h"
 
 namespace
 {
@@ -16,19 +17,23 @@ namespace
         {
             const auto bounds = getLocalBounds().toFloat();
             g.fillAll(juce::Colour(0xff171a20));
+            g.setColour(juce::Colour(0xff202936));
+            g.fillRect(bounds);
 
             g.setColour(juce::Colour(0xff2b303a));
             g.drawRoundedRectangle(bounds.reduced(12.0f), 10.0f, 1.0f);
 
-            g.setColour(juce::Colour(0xfff0f2f5));
-            g.setFont(juce::Font(juce::FontOptions(30.0f, juce::Font::bold)));
-            g.drawFittedText("VOCODER", getLocalBounds().withY(getHeight() / 2 - 78)
-                                .withHeight(42), juce::Justification::centred, 1);
+            static const auto logo = juce::Drawable::createFromSVG(
+                juce::String(voiceForgeLogoSvg));
+            if (logo != nullptr)
+                logo->drawWithin(g, juce::Rectangle<float>(getWidth() * 0.12f,
+                    getHeight() * 0.5f - 145.0f, getWidth() * 0.76f, 190.0f),
+                    juce::RectanglePlacement::centred, 1.0f);
 
-            g.setColour(juce::Colour(0xff9ba5b4));
+            g.setColour(juce::Colour(0xffaeb8c6));
             g.setFont(juce::Font(juce::FontOptions(14.0f)));
             g.drawFittedText("Starting audio engine and loading instruments...",
-                             getLocalBounds().withY(getHeight() / 2 - 24).withHeight(28),
+                             getLocalBounds().withY(getHeight() / 2 + 52).withHeight(26),
                              juce::Justification::centred, 1);
 
             const auto waveArea = juce::Rectangle<float>(
@@ -141,7 +146,7 @@ namespace
 class VocoderApplication final : public juce::JUCEApplication
 {
 public:
-    const juce::String getApplicationName() override { return "Vocoder"; }
+    const juce::String getApplicationName() override { return "VoiceForge"; }
     const juce::String getApplicationVersion() override { return "0.1.0"; }
     bool moreThanOneInstanceAllowed() override { return true; }
 
