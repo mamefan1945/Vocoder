@@ -790,7 +790,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         // sections, each voice crossfades smoothly to the delayed source only
         // when its PSOLA grain train is unavailable. The fallback gain uses
         // the loudest voice to avoid summing duplicate copies of the same vocal.
-        const auto harmony = voicedHarmony * normalization * voicedMix
+        auto harmony = voicedHarmony * normalization * voicedMix
             + delayedInput * ((1.0f - voicedMix) * unvoicedGain
                               + voicedMix * grainFallbackGain);
         if ((absolute % static_cast<uint64_t>(updateInterval)) == 0)
