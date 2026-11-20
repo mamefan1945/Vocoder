@@ -283,7 +283,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
         harmonizer.setAlgorithm(algorithm);
         const auto description = selected == 1 ? "TD-PSOLA waveform mode"
             : (selected == 3 ? "FD-PSOLA FFT mode" : "LP-PSOLA formant mode");
-        statusLabel.setText(juce::String("Harmonizer: ") + description, juce::dontSendNotification);
+        statusLabel.setText(juce::String("Harmonizer: ") + juce::String(description), juce::dontSendNotification);
     };
     addAndMakeVisible(harmonizerAlgorithm);
 
