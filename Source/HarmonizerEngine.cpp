@@ -501,10 +501,28 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
                  + juce::jmax(1, static_cast<int>(std::llround(estimatedPeriod)));
 
     // A PSOLA grain reads residual samples on both sides of its source centre.
-    // Wait until the complete right half has actually arrived before scheduling
-    // it; otherwise scheduleGrain() consumes unwritten/stale ring-buffer data,
-    // which creates truncated grains and audible dropouts.
-    const auto sourceHalfWindow = static_cast<int64_t>(std::ceil(sourcePeriod));
+    // The required half-window depends on each active target pitch: downward
+    // shifts need a wider source segment than the source period alone. Wait
+    // until the widest grain is fully present before scheduling any voice,
+    // otherwise low harmony notes can read unwritten ring-buffer samples.
+    auto sourceHalfWindow = juce::jmax<int64_t>(8,
+        static_cast<int64_t>(std::ceil(sourcePeriod)));
+    for (const auto& voice : voices)
+    {
+        if (voice.note < 0 || voice.releasing)
+            continue;
+        const auto bend = pitchBendSemitones[static_cast<size_t>(
+            juce::jlimit(1, 16, voice.midiChannel) - 1)];
+        const auto targetHz = 440.0 * std::pow(2.0,
+            (static_cast<double>(voice.note - 69) + bend) / 12.0);
+        if (targetHz <= 0.0)
+            continue;
+        const auto targetPeriod = currentSampleRate / targetHz;
+        const auto requiredHalfWindow = juce::jmax(sourcePeriod, targetPeriod * 0.60);
+        sourceHalfWindow = juce::jmax(sourceHalfWindow,
+            static_cast<int64_t>(juce::jlimit(8.0, 1024.0,
+                std::ceil(requiredHalfWindow))));
+    }
     if (static_cast<int64_t>(totalSamples) - 1 < bestMark + sourceHalfWindow)
         return;
 
