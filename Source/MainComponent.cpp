@@ -1179,8 +1179,8 @@ void MainComponent::resized()
     deviceViewport.setBounds(area);
     deviceSelector.setBounds(0, 0, juce::jmax(320, deviceViewport.getWidth() - 18),
                              juce::jmax(300, deviceViewport.getHeight()));
-    // Place help buttons at the right edge of their associated label/control.
-    // Bounds are freshly assigned above on every resize, so this remains stable.
+    // Keep help affordances compact and aligned like superscript markers.
+    // The small reserved width prevents them from covering the label/control.
     for (const auto& item : controlInfo)
     {
         if (item.target == nullptr || item.button == nullptr || !item.target->isVisible())
@@ -1190,23 +1190,47 @@ void MainComponent::resized()
             continue;
         }
         auto bounds = item.target->getBounds();
-        const auto buttonWidth = juce::jmin(18, bounds.getWidth());
-        item.button->setBounds(bounds.getRight() - buttonWidth, bounds.getY() + 1,
-                               buttonWidth, juce::jmax(18, bounds.getHeight() - 2));
+        constexpr int iconSize = 14;
+        constexpr int reservedWidth = 16;
+        item.button->setBounds(bounds.getRight() - iconSize,
+                               bounds.getY() - 1, iconSize, iconSize);
         item.button->setVisible(true);
-        item.target->setBounds(bounds.withWidth(juce::jmax(1, bounds.getWidth() - buttonWidth - 2)));
+        item.target->setBounds(bounds.withWidth(juce::jmax(1, bounds.getWidth() - reservedWidth)));
     }
 }
 
 void MainComponent::addControlInfo(juce::Component& target, const juce::String& title,
                                      const juce::String& details)
 {
-    auto* button = controlInfoButtons.add(new juce::TextButton("i"));
+    auto* button = controlInfoButtons.add(new juce::TextButton("\xe2\x93\xa5"));
     button->setTooltip("What this control does");
-    button->setLookAndFeel(nullptr);
+    button->setFont(juce::Font(juce::FontOptions(12.0f, juce::Font::bold)));
+    button->setBorderSize(juce::BorderSize<int>(0));
+    button->setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
+    button->setColour(juce::TextButton::buttonOnColourId, juce::Colours::transparentBlack);
+    button->setColour(juce::TextButton::textColourOffId, juce::Colour(0xff89919c));
+    button->setColour(juce::TextButton::textColourOnId, juce::Colour(0xff89919c));
     button->onClick = [title, details]
     {
-        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon, title, details);
+        juce::DialogWindow::LaunchOptions options;
+        auto* message = new juce::TextEditor();
+        message->setMultiLine(true, true);
+        message->setReadOnly(true);
+        message->setScrollbarsShown(true);
+        message->setCaretVisible(false);
+        message->setPopupMenuEnabled(false);
+        message->setText(details, juce::dontSendNotification);
+        message->setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff20242a));
+        message->setColour(juce::TextEditor::textColourId, juce::Colour(0xffe6e9ed));
+        message->setColour(juce::TextEditor::outlineColourId, juce::Colours::transparentBlack);
+        message->setSize(440, 170);
+        options.content.setOwned(message);
+        options.dialogTitle = title;
+        options.dialogBackgroundColour = juce::Colour(0xff20242a);
+        options.escapeKeyTriggersCloseButton = true;
+        options.useNativeTitleBar = false;
+        options.resizable = false;
+        options.launchAsync();
     };
     addAndMakeVisible(button);
     controlInfo.push_back({ &target, button });
