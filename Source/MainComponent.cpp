@@ -1202,7 +1202,7 @@ void MainComponent::resized()
 void MainComponent::addControlInfo(juce::Component& target, const juce::String& title,
                                      const juce::String& details)
 {
-    auto* button = controlInfoButtons.add(new juce::TextButton("\xe2\x93\xa5"));
+    auto* button = controlInfoButtons.add(new juce::TextButton("\xe2\x93\x98"));
     button->setTooltip("What this control does");
     button->setFont(juce::Font(juce::FontOptions(12.0f, juce::Font::bold)));
     button->setBorderSize(juce::BorderSize<int>(0));
