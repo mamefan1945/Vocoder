@@ -128,6 +128,7 @@ private:
     juce::ComboBox waveform;
     juce::ComboBox carrierPreset;
     juce::ComboBox octave;
+    juce::ComboBox harmonizerAlgorithm;
     juce::ComboBox soundFontInstrument;
     juce::Label soundFontInstrumentLabel;
     juce::TextButton loadSoundFontButton { "Load SF2..." };
