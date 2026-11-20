@@ -8,6 +8,9 @@
 class HarmonizerEngine
 {
 public:
+    enum class Algorithm : int { timeDomain = 0, lpc = 1, frequencyDomain = 2 };
+    void setAlgorithm(Algorithm algorithm) noexcept { selectedAlgorithm.store(static_cast<int>(algorithm), std::memory_order_relaxed); }
+    Algorithm getAlgorithm() const noexcept { return static_cast<Algorithm>(selectedAlgorithm.load(std::memory_order_relaxed)); }
     void prepare(double sampleRate, int maximumBlockSize = 2048) noexcept;
     void reset() noexcept;
     void setFormantPreservation(float amount) noexcept;
@@ -82,6 +85,7 @@ private:
     std::array<float, 16> targetPitchBendSemitones {};
     int latencySamples = 0;
     int activeOctaveShift = 0;
+    std::atomic<int> selectedAlgorithm { static_cast<int>(Algorithm::lpc) };
     std::atomic<float> formantPreservation { 1.0f };
     std::atomic<float> transientProtection { 1.0f };
     std::atomic<float> pitchSensitivity { 0.5f };
