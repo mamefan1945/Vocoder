@@ -3,6 +3,7 @@
 #include <array>
 #include <cmath>
 #include <iostream>
+#include <memory>
 #include <vector>
 
 namespace
@@ -69,9 +70,9 @@ Measurement measure(const std::vector<float>& samples)
 
 bool testPitchShift(HarmonizerEngine::Algorithm algorithm, const char* name)
 {
-    HarmonizerEngine engine;
-    engine.setAlgorithm(algorithm);
-    engine.prepare(sampleRate, blockSize);
+    auto engine = std::make_unique<HarmonizerEngine>();
+    engine->setAlgorithm(algorithm);
+    engine->prepare(sampleRate, blockSize);
 
     constexpr size_t total = static_cast<size_t>(sampleRate * 1.5);
     std::vector<float> rendered(total, 0.0f);
@@ -93,7 +94,7 @@ bool testPitchShift(HarmonizerEngine::Algorithm algorithm, const char* name)
               + 0.22f * static_cast<float>(std::sin(2.0 * pi * 440.0 * t))
               + 0.10f * static_cast<float>(std::sin(2.0 * pi * 660.0 * t));
         }
-        engine.processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
+        engine->processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
         midi.clear();
         std::copy_n(output.data(), count, rendered.data() + position);
         position += static_cast<size_t>(count);
@@ -115,9 +116,9 @@ bool testPitchShift(HarmonizerEngine::Algorithm algorithm, const char* name)
 
 bool testPitchBend(HarmonizerEngine::Algorithm algorithm, const char* name)
 {
-    HarmonizerEngine engine;
-    engine.setAlgorithm(algorithm);
-    engine.prepare(sampleRate, blockSize);
+    auto engine = std::make_unique<HarmonizerEngine>();
+    engine->setAlgorithm(algorithm);
+    engine->prepare(sampleRate, blockSize);
     constexpr size_t total = static_cast<size_t>(sampleRate * 1.5);
     std::vector<float> rendered(total, 0.0f);
     std::array<float, blockSize> input {};
@@ -136,7 +137,7 @@ bool testPitchBend(HarmonizerEngine::Algorithm algorithm, const char* name)
             input[static_cast<size_t>(i)] = 0.6f * static_cast<float>(
                 std::sin(2.0 * pi * 220.0 * t));
         }
-        engine.processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
+        engine->processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
         midi.clear();
         std::copy_n(output.data(), count, rendered.data() + position);
         position += static_cast<size_t>(count);
@@ -160,9 +161,9 @@ bool testPitchBend(HarmonizerEngine::Algorithm algorithm, const char* name)
 
 bool testPolyphony(HarmonizerEngine::Algorithm algorithm, const char* name)
 {
-    HarmonizerEngine engine;
-    engine.setAlgorithm(algorithm);
-    engine.prepare(sampleRate, blockSize);
+    auto engine = std::make_unique<HarmonizerEngine>();
+    engine->setAlgorithm(algorithm);
+    engine->prepare(sampleRate, blockSize);
     constexpr size_t total = static_cast<size_t>(sampleRate * 1.5);
     std::vector<float> rendered(total, 0.0f);
     std::array<float, blockSize> input {};
@@ -181,7 +182,7 @@ bool testPolyphony(HarmonizerEngine::Algorithm algorithm, const char* name)
             input[static_cast<size_t>(i)] = 0.6f * static_cast<float>(
                 std::sin(2.0 * pi * 220.0 * t));
         }
-        engine.processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
+        engine->processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
         midi.clear();
         std::copy_n(output.data(), count, rendered.data() + position);
         position += static_cast<size_t>(count);
@@ -198,8 +199,8 @@ bool testPolyphony(HarmonizerEngine::Algorithm algorithm, const char* name)
 
 bool testSilenceProducesSilence()
 {
-    HarmonizerEngine engine;
-    engine.prepare(sampleRate, blockSize);
+    auto engine = std::make_unique<HarmonizerEngine>();
+    engine->prepare(sampleRate, blockSize);
     std::array<float, blockSize> input {};
     std::array<float, blockSize> output {};
     juce::MidiBuffer midi;
@@ -207,7 +208,7 @@ bool testSilenceProducesSilence()
     float peak = 0.0f;
     for (int block = 0; block < 80; ++block)
     {
-        engine.processBlock(input.data(), output.data(), blockSize, midi, 1.0f, 1.0f, 0);
+        engine->processBlock(input.data(), output.data(), blockSize, midi, 1.0f, 1.0f, 0);
         midi.clear();
         for (const auto value : output)
             peak = std::max(peak, std::abs(value));
@@ -218,8 +219,8 @@ bool testSilenceProducesSilence()
 
 bool testNoMidiProducesNoWetOutput()
 {
-    HarmonizerEngine engine;
-    engine.prepare(sampleRate, blockSize);
+    auto engine = std::make_unique<HarmonizerEngine>();
+    engine->prepare(sampleRate, blockSize);
     std::array<float, blockSize> input {};
     std::array<float, blockSize> output {};
     juce::MidiBuffer midi;
@@ -232,7 +233,7 @@ bool testNoMidiProducesNoWetOutput()
             input[static_cast<size_t>(i)] =
                 0.5f * static_cast<float>(std::sin(2.0 * pi * 220.0 * t));
         }
-        engine.processBlock(input.data(), output.data(), blockSize, midi, 1.0f, 1.0f, 0);
+        engine->processBlock(input.data(), output.data(), blockSize, midi, 1.0f, 1.0f, 0);
         for (const auto value : output)
             peak = std::max(peak, std::abs(value));
     }
