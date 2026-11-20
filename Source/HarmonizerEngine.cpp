@@ -885,7 +885,8 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                 voice.formantState[static_cast<size_t>(coefficient)] =
                     voice.formantState[static_cast<size_t>(coefficient - 1)];
             voice.formantState[0] = reconstructed;
-            const auto formantOutput = psola + (reconstructed - psola) * formantBlend;
+            const auto formantOutput = getAlgorithm() == Algorithm::timeDomain
+                ? psola : psola + (reconstructed - psola) * formantBlend;
 
             // Grain availability can change sample-by-sample, especially for a
             // single voice. Smooth the transition instead of hard-switching
