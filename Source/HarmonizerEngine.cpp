@@ -406,6 +406,8 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
             inverseEnergy += static_cast<double>(sample.real()) * sample.real();
         publishedFdInverseRms.store(static_cast<float>(std::sqrt(inverseEnergy / fdFftSize)), std::memory_order_relaxed);
         float inversePeak = 0.0f;
+        double extractedEnergy = 0.0;
+        int extractedSamples = 0;
         const auto outputHalf = juce::jmin(halfWindow, fdFftSize / 2 - 1);
         for (int offset = -outputHalf; offset <= outputHalf; ++offset)
         {
@@ -418,9 +420,13 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
                 pi * static_cast<float>(offset) / static_cast<float>(outputHalf));
             const auto sample = fftInput[frameIndex].real();
             inversePeak = juce::jmax(inversePeak, std::abs(sample));
+            extractedEnergy += static_cast<double>(sample) * sample;
+            ++extractedSamples;
             voice.overlap[outputIndex] += sample * window;
             voice.weights[outputIndex] += window;
         }
+        if (extractedSamples > 0)
+            publishedFdExtractedRms.store(static_cast<float>(std::sqrt(extractedEnergy / extractedSamples)), std::memory_order_relaxed);
         publishedFdInversePeak.store(juce::jmax(publishedFdInversePeak.load(std::memory_order_relaxed), inversePeak), std::memory_order_relaxed);
         return;
     }

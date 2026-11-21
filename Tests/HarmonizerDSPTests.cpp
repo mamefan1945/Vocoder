@@ -363,6 +363,7 @@ bool testAlgorithmSwitching()
                   << maximumCoverage[static_cast<size_t>(segment)]
                   << "; FD frame RMS analysis/inverse="
                   << engine->getFdAnalysisRms() << "/" << engine->getFdInverseRms()
+                  << "; extracted RMS=" << engine->getFdExtractedRms()
                   << "; FD peaks inverse/PSOLA/reconstructed="
                   << engine->getFdInversePeak() << "/" << engine->getFdPsolaPeak()
                   << "/" << engine->getFdReconstructedPeak()

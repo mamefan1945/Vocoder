@@ -24,6 +24,7 @@ public:
     float getFdInversePeak() const noexcept { return publishedFdInversePeak.load(std::memory_order_relaxed); }
     float getFdAnalysisRms() const noexcept { return publishedFdAnalysisRms.load(std::memory_order_relaxed); }
     float getFdInverseRms() const noexcept { return publishedFdInverseRms.load(std::memory_order_relaxed); }
+    float getFdExtractedRms() const noexcept { return publishedFdExtractedRms.load(std::memory_order_relaxed); }
     float getFdPsolaPeak() const noexcept { return publishedFdPsolaPeak.load(std::memory_order_relaxed); }
     float getFdReconstructedPeak() const noexcept { return publishedFdReconstructedPeak.load(std::memory_order_relaxed); }
     float getFdPsolaRms() const noexcept { return publishedFdPsolaRms.load(std::memory_order_relaxed); }
@@ -109,6 +110,7 @@ private:
     std::atomic<float> publishedFdInversePeak { 0.0f };
     std::atomic<float> publishedFdAnalysisRms { 0.0f };
     std::atomic<float> publishedFdInverseRms { 0.0f };
+    std::atomic<float> publishedFdExtractedRms { 0.0f };
     std::atomic<float> publishedFdPsolaPeak { 0.0f };
     std::atomic<float> publishedFdReconstructedPeak { 0.0f };
     std::atomic<float> publishedFdPsolaRms { 0.0f };
