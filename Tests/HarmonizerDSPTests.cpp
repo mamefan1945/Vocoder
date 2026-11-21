@@ -107,7 +107,35 @@ bool testPitchShift(HarmonizerEngine::Algorithm algorithm, const char* name)
               << " Hz; RMS " << result.rms << "; peak " << result.peak
               << "; 440/220 magnitude ratio " << ratio << '\n';
 
-    return result.dominantHz >= 425.0 && result.dominantHz <= 455.0
+    // Check pitch in three separate steady-state windows, not only one
+    // aggregate window that could hide short-lived pitch excursions.
+    std::array<double, 3> windowPeakHz {};
+    bool pitchStable = true;
+    for (size_t window = 0; window < windowPeakHz.size(); ++window)
+    {
+        const auto windowFirst = static_cast<size_t>(
+            sampleRate * (0.25 + 0.40 * static_cast<double>(window)));
+        constexpr size_t windowCount = static_cast<size_t>(sampleRate * 0.40);
+        double strongest = 0.0;
+        for (int hz = 430; hz <= 450; ++hz)
+        {
+            const auto magnitude = magnitudeAt(rendered, windowFirst, windowCount,
+                                               static_cast<double>(hz));
+            if (magnitude > strongest)
+            {
+                strongest = magnitude;
+                windowPeakHz[window] = static_cast<double>(hz);
+            }
+        }
+        pitchStable = pitchStable && windowPeakHz[window] >= 435.0
+                                   && windowPeakHz[window] <= 445.0;
+    }
+    std::cout << name << " pitch windows: "
+              << windowPeakHz[0] << ", " << windowPeakHz[1] << ", "
+              << windowPeakHz[2] << " Hz; stable=" << pitchStable << '\n';
+
+    return pitchStable
+        && result.dominantHz >= 425.0 && result.dominantHz <= 455.0
         && result.rms > 0.005f
         && std::isfinite(result.rms) && std::isfinite(result.peak)
         && result.peak < 2.0f;
@@ -152,7 +180,7 @@ bool testPureToneLeakage(HarmonizerEngine::Algorithm algorithm, const char* name
     const auto ratio = source > 1.0e-9 ? target / source : 1.0e9;
     std::cout << name << " pure-tone leakage: target 440 Hz=" << target
               << ", source 220 Hz=" << source
-              << ", target/source ratio=" << ratio << '\\n';
+              << ", target/source ratio=" << ratio << '\n';
 
     // The input contains only 220 Hz. At 100% wet, the shifted 440 Hz
     // component must clearly dominate the original fundamental.
