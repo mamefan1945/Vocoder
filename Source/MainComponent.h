@@ -9,6 +9,7 @@
 #include <vector>
 
 class MainComponent final : public juce::Component,
+                            public juce::KeyListener,
                             public juce::AudioIODeviceCallback,
                             private juce::Slider::Listener,
                             private juce::Timer
@@ -19,6 +20,8 @@ public:
 
     void paint(juce::Graphics& graphics) override;
     void resized() override;
+    bool keyPressed(const juce::KeyPress& key, juce::Component* originatingComponent) override;
+    bool keyStateChanged(bool isKeyDown, juce::Component* originatingComponent) override;
 
     void audioDeviceAboutToStart(juce::AudioIODevice* device) override;
     void audioDeviceStopped() override;
@@ -115,6 +118,7 @@ private:
     juce::MidiMessageCollector externalMidiCollector;
     MidiInputRouter midiInputRouter;
     LockableMidiKeyboard keyboardComponent;
+    std::array<bool, 17> computerKeysDown {};
     juce::StringArray midiInputIdentifiers;
 
     juce::ComboBox processingMode;
