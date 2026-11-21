@@ -641,6 +641,7 @@ int main()
     passed &= testSpeechFile("vocoder_test_nova.wav", HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
     passed &= testSpeechFile("vocoder_test_nova.wav", HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
     passed &= testAlgorithmSwitching();
+    passed &= testFdPolyphonyPerformanceProfile();
     passed &= testSilenceProducesSilence();
     passed &= testNoMidiProducesNoWetOutput();
     std::cout << (passed ? "All harmonizer DSP tests passed.\n"
