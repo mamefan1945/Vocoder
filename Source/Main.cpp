@@ -1,4 +1,9 @@
 #include <JuceHeader.h>
+#if JUCE_WINDOWS
+ #include <windows.h>
+ #include <dwmapi.h>
+ #pragma comment(lib, "dwmapi.lib")
+#endif
 #include "MainComponent.h"
 #include "PrismaVoxLogo.h"
 
@@ -179,6 +184,7 @@ private:
             setResizeLimits(1180, 700, 1920, 1200);
             centreWithSize(1380, 790);
             setVisible(true);
+            applySystemTitleBarTheme();
         }
 
         void closeButtonPressed() override
@@ -187,6 +193,30 @@ private:
         }
 
     private:
+        void applySystemTitleBarTheme()
+        {
+#if JUCE_WINDOWS
+            if (getPeer() == nullptr)
+                return;
+
+            DWORD useLightTheme = 1;
+            DWORD valueSize = sizeof(useLightTheme);
+            const auto keyResult = RegGetValueW(
+                HKEY_CURRENT_USER,
+                L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr,
+                &useLightTheme, &valueSize);
+            const BOOL useDarkTitleBar =
+                keyResult == ERROR_SUCCESS && useLightTheme == 0;
+            const auto hwnd = static_cast<HWND>(getPeer()->getNativeHandle());
+
+            if (DwmSetWindowAttribute(hwnd, 20, &useDarkTitleBar,
+                                      sizeof(useDarkTitleBar)) != S_OK)
+                DwmSetWindowAttribute(hwnd, 19, &useDarkTitleBar,
+                                      sizeof(useDarkTitleBar));
+#endif
+        }
+
         void startMainComponent()
         {
             if (pendingMainComponent != nullptr || mainComponentInstalled)
