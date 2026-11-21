@@ -25,10 +25,6 @@ permissions:
 jobs:
   build:
     runs-on: windows-2022
-    env:
-      # vcpkg uses this directory for compiled package archives. actions/cache
-      # restores it before install and saves it after the job on cache misses.
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}/vcpkg-binary-cache
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -46,10 +42,19 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           Write-Host "Using $version"
 
+      - name: Prepare vcpkg binary cache directory
+        id: vcpkg-cache
+        shell: pwsh
+        run: |
+          $cache = Join-Path $env:RUNNER_TEMP 'vcpkg-binary-cache'
+          New-Item -ItemType Directory -Force -Path $cache | Out-Null
+          "VCPKG_DEFAULT_BINARY_CACHE=$cache" >> $env:GITHUB_ENV
+          "path=$cache" >> $env:GITHUB_OUTPUT
+
       - name: Restore FluidSynth binary cache
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/vcpkg-binary-cache
+          path: ${{ steps.vcpkg-cache.outputs.path }}
           # Bump the fluidsynth cache revision when intentionally upgrading it.
           key: vcpkg-${{ runner.os }}-x64-${{ steps.vcpkg-version.outputs.version }}-fluidsynth-r1
 
