@@ -191,12 +191,16 @@ bool testPureToneLeakage(HarmonizerEngine::Algorithm algorithm, const char* name
               << ", source 220 Hz=" << source
               << ", target/source ratio=" << ratio
               << ", RMS=" << rms << ", peak=" << peak;
-    if (algorithm == HarmonizerEngine::Algorithm::frequencyDomain)
-        std::cout << "; FD stage RMS PSOLA/reconstructed/voiced/harmony="
+    if (algorithm != HarmonizerEngine::Algorithm::timeDomain)
+        std::cout << "; LPC/FD stage RMS PSOLA/reconstructed/voiced/harmony="
                   << engine->getFdPsolaRms() << "/"
                   << engine->getFdReconstructedRms() << "/"
                   << engine->getFdVoicedRms() << "/"
                   << engine->getFdHarmonyRms()
+                  << "; detected F0/confidence/coverage="
+                  << engine->getDetectedPitchHz() << "/"
+                  << engine->getPitchConfidence() << "/"
+                  << engine->getGrainCoverage()
                   << "; inverse/extracted peaks="
                   << engine->getFdInversePeak() << "/"
                   << engine->getFdPsolaPeak() << "/"

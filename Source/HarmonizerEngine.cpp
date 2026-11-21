@@ -991,7 +991,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             const auto hasPsolaGrain = weight > 1.0e-5f;
             const auto psola = hasPsolaGrain
                 ? voice.overlap[ringIndex] / weight : 0.0f;
-            if (getAlgorithm() == Algorithm::frequencyDomain)
+            if (getAlgorithm() != Algorithm::timeDomain)
             {
                 publishedFdPsolaPeak.store(juce::jmax(publishedFdPsolaPeak.load(std::memory_order_relaxed), std::abs(psola)), std::memory_order_relaxed);
                 fdSamplePsolaEnergy += static_cast<double>(psola) * psola;
@@ -1066,7 +1066,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             }
             const auto formantOutput = getAlgorithm() == Algorithm::timeDomain
                 ? psola : psola + (reconstructed - psola) * formantBlend;
-            if (getAlgorithm() == Algorithm::frequencyDomain)
+            if (getAlgorithm() != Algorithm::timeDomain)
             {
                 publishedFdReconstructedPeak.store(juce::jmax(publishedFdReconstructedPeak.load(std::memory_order_relaxed), std::abs(formantOutput)), std::memory_order_relaxed);
                 fdSampleReconstructedEnergy += static_cast<double>(formantOutput) * formantOutput;
@@ -1091,7 +1091,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         // Aggregate per-voice measurements once per output sample. These
         // counters feed the FD-PSOLA stage RMS diagnostics used by regression
         // tests; omitting this step leaves their block totals permanently zero.
-        if (getAlgorithm() == Algorithm::frequencyDomain)
+        if (getAlgorithm() != Algorithm::timeDomain)
         {
             fdPsolaEnergy += fdSamplePsolaEnergy;
             fdReconstructedEnergy += fdSampleReconstructedEnergy;
@@ -1128,7 +1128,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                                       * (1.0f - voicedMix);
         harmony += transientMix * transientAmount
                  * (unvoicedTransient - harmony);
-        if (getAlgorithm() == Algorithm::frequencyDomain)
+        if (getAlgorithm() != Algorithm::timeDomain)
         {
             const auto voicedSample = voicedHarmony * normalization * voicedMix;
             fdVoicedEnergy += static_cast<double>(voicedSample) * voicedSample;
