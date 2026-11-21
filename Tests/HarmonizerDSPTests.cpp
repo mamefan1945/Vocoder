@@ -1,4 +1,5 @@
 #include "HarmonizerEngine.h"
+#include <juce_audio_formats/juce_audio_formats.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -178,9 +179,18 @@ bool testPureToneLeakage(HarmonizerEngine::Algorithm algorithm, const char* name
     const auto target = magnitudeAt(rendered, first, count, 440.0);
     const auto source = magnitudeAt(rendered, first, count, 220.0);
     const auto ratio = source > 1.0e-9 ? target / source : 1.0e9;
+    double squareSum = 0.0;
+    float peak = 0.0f;
+    for (size_t i = first; i < first + count; ++i)
+    {
+        squareSum += static_cast<double>(rendered[i]) * rendered[i];
+        peak = std::max(peak, std::abs(rendered[i]));
+    }
+    const auto rms = std::sqrt(squareSum / static_cast<double>(count));
     std::cout << name << " pure-tone leakage: target 440 Hz=" << target
               << ", source 220 Hz=" << source
-              << ", target/source ratio=" << ratio << '\n';
+              << ", target/source ratio=" << ratio
+              << ", RMS=" << rms << ", peak=" << peak << '\n';
 
     // The input contains only 220 Hz. At 100% wet, the shifted 440 Hz
     // component must clearly dominate the original fundamental.
@@ -377,6 +387,70 @@ bool testAlgorithmSwitching()
     return passed;
 }
 
+bool testSpeechFile(const char* fileName, HarmonizerEngine::Algorithm algorithm,
+                    const char* algorithmName)
+{
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    const juce::File file(juce::String(VOXTIMBRE_TEST_AUDIO_DIR) + "/" + fileName);
+    std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
+    if (reader == nullptr || reader->sampleRate <= 0.0 || reader->numChannels == 0)
+    {
+        std::cout << "Speech test could not open " << file.getFullPathName() << "\\n";
+        return false;
+    }
+    constexpr double durationSeconds = 6.0;
+    const auto sourceCount = static_cast<int>(std::min<juce::int64>(
+        reader->lengthInSamples, static_cast<juce::int64>(std::ceil(reader->sampleRate * durationSeconds))));
+    if (sourceCount < 1024) return false;
+    juce::AudioBuffer<float> source(static_cast<int>(reader->numChannels), sourceCount);
+    if (!reader->read(&source, 0, sourceCount, 0, true, true)) return false;
+    const auto outputCount = static_cast<size_t>(std::ceil(sourceCount * sampleRate / reader->sampleRate));
+    std::vector<float> rendered(outputCount, 0.0f);
+    auto engine = std::make_unique<HarmonizerEngine>();
+    engine->setAlgorithm(algorithm);
+    engine->prepare(sampleRate, blockSize);
+    std::array<float, blockSize> input {};
+    std::array<float, blockSize> output {};
+    juce::MidiBuffer midi;
+    midi.addEvent(juce::MidiMessage::noteOn(1, 69, 0.9f), 0);
+    size_t position = 0;
+    while (position < outputCount)
+    {
+        const auto count = static_cast<int>(std::min(static_cast<size_t>(blockSize), outputCount - position));
+        for (int i = 0; i < count; ++i)
+        {
+            const auto sourcePosition = static_cast<double>(position + static_cast<size_t>(i)) * reader->sampleRate / sampleRate;
+            const auto index = static_cast<int>(sourcePosition);
+            const auto fraction = static_cast<float>(sourcePosition - index);
+            const auto next = std::min(index + 1, sourceCount - 1);
+            float sample = 0.0f;
+            for (int channel = 0; channel < source.getNumChannels(); ++channel)
+            {
+                const auto* data = source.getReadPointer(channel);
+                sample += data[index] + (data[next] - data[index]) * fraction;
+            }
+            input[static_cast<size_t>(i)] = sample / static_cast<float>(source.getNumChannels());
+        }
+        engine->processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
+        midi.clear();
+        std::copy_n(output.data(), count, rendered.data() + position);
+        position += static_cast<size_t>(count);
+    }
+    double energy = 0.0;
+    float peak = 0.0f;
+    bool finite = true;
+    for (const auto sample : rendered)
+    {
+        finite = finite && std::isfinite(sample);
+        energy += static_cast<double>(sample) * sample;
+        peak = std::max(peak, std::abs(sample));
+    }
+    const auto rms = static_cast<float>(std::sqrt(energy / rendered.size()));
+    std::cout << "Speech " << fileName << " / " << algorithmName << ": RMS=" << rms
+              << "; peak=" << peak << "; finite=" << finite << "\\n";
+    return finite && rms > 0.001f && peak < 2.0f;
+}
 bool testSilenceProducesSilence()
 {
     auto engine = std::make_unique<HarmonizerEngine>();
@@ -437,6 +511,12 @@ int main()
     passed &= testPolyphony(HarmonizerEngine::Algorithm::timeDomain, "TD-PSOLA");
     passed &= testPolyphony(HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
     passed &= testPolyphony(HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
+    passed &= testSpeechFile("vocoder_test_ash.wav", HarmonizerEngine::Algorithm::timeDomain, "TD-PSOLA");
+    passed &= testSpeechFile("vocoder_test_ash.wav", HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
+    passed &= testSpeechFile("vocoder_test_ash.wav", HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
+    passed &= testSpeechFile("vocoder_test_nova.wav", HarmonizerEngine::Algorithm::timeDomain, "TD-PSOLA");
+    passed &= testSpeechFile("vocoder_test_nova.wav", HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
+    passed &= testSpeechFile("vocoder_test_nova.wav", HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
     passed &= testAlgorithmSwitching();
     passed &= testSilenceProducesSilence();
     passed &= testNoMidiProducesNoWetOutput();

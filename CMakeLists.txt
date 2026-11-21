@@ -112,9 +112,11 @@ target_sources(HarmonizerDSPTests PRIVATE
 target_compile_definitions(HarmonizerDSPTests PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
+    VOXTIMBRE_TEST_AUDIO_DIR="${CMAKE_SOURCE_DIR}/TestAudio"
 )
 target_link_libraries(HarmonizerDSPTests PRIVATE
     juce::juce_audio_basics
+    juce::juce_audio_formats
     juce::juce_dsp
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags
@@ -125,3 +127,4 @@ endif()
 
 enable_testing()
 add_test(NAME HarmonizerDSPTests COMMAND $<TARGET_FILE:HarmonizerDSPTests>)
+set_tests_properties(HarmonizerDSPTests PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
