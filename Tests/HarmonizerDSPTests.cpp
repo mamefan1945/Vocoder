@@ -114,6 +114,52 @@ bool testPitchShift(HarmonizerEngine::Algorithm algorithm, const char* name)
 }
 
 
+
+bool testPureToneLeakage(HarmonizerEngine::Algorithm algorithm, const char* name)
+{
+    auto engine = std::make_unique<HarmonizerEngine>();
+    engine->setAlgorithm(algorithm);
+    engine->prepare(sampleRate, blockSize);
+
+    constexpr size_t total = static_cast<size_t>(sampleRate * 1.5);
+    std::vector<float> rendered(total, 0.0f);
+    std::array<float, blockSize> input {};
+    std::array<float, blockSize> output {};
+    juce::MidiBuffer midi;
+    midi.addEvent(juce::MidiMessage::noteOn(1, 69, 0.9f), 0);
+
+    size_t position = 0;
+    while (position < total)
+    {
+        const auto count = static_cast<int>(std::min(
+            static_cast<size_t>(blockSize), total - position));
+        for (int i = 0; i < count; ++i)
+        {
+            const auto t = static_cast<double>(position + static_cast<size_t>(i)) / sampleRate;
+            input[static_cast<size_t>(i)] =
+                0.6f * static_cast<float>(std::sin(2.0 * pi * 220.0 * t));
+        }
+        engine->processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
+        midi.clear();
+        std::copy_n(output.data(), count, rendered.data() + position);
+        position += static_cast<size_t>(count);
+    }
+
+    constexpr size_t first = static_cast<size_t>(sampleRate * 0.30);
+    constexpr size_t count = static_cast<size_t>(sampleRate * 0.80);
+    const auto target = magnitudeAt(rendered, first, count, 440.0);
+    const auto source = magnitudeAt(rendered, first, count, 220.0);
+    const auto ratio = source > 1.0e-9 ? target / source : 1.0e9;
+    std::cout << name << " pure-tone leakage: target 440 Hz=" << target
+              << ", source 220 Hz=" << source
+              << ", target/source ratio=" << ratio << '\\n';
+
+    // The input contains only 220 Hz. At 100% wet, the shifted 440 Hz
+    // component must clearly dominate the original fundamental.
+    return std::isfinite(target) && std::isfinite(source)
+        && target > 1.0 && ratio > 3.0;
+}
+
 bool testPitchBend(HarmonizerEngine::Algorithm algorithm, const char* name)
 {
     auto engine = std::make_unique<HarmonizerEngine>();
@@ -248,6 +294,9 @@ int main()
     passed &= testPitchShift(HarmonizerEngine::Algorithm::timeDomain, "TD-PSOLA");
     passed &= testPitchShift(HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
     passed &= testPitchShift(HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
+    passed &= testPureToneLeakage(HarmonizerEngine::Algorithm::timeDomain, "TD-PSOLA");
+    passed &= testPureToneLeakage(HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
+    passed &= testPureToneLeakage(HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
     passed &= testPitchBend(HarmonizerEngine::Algorithm::timeDomain, "TD-PSOLA");
     passed &= testPitchBend(HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
     passed &= testPitchBend(HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
