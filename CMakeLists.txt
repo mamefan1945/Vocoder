@@ -57,6 +57,9 @@ juce_add_gui_app(PrismaVox
 
 juce_generate_juce_header(PrismaVox)
 
+# Embed the original full-resolution splash artwork in the application.
+juce_add_binary_data(PrismaVoxArtwork SOURCES PrismaVox-Splash.png)
+
 target_sources(PrismaVox PRIVATE
     Source/Main.cpp
     Source/MainComponent.h
@@ -69,6 +72,10 @@ target_sources(PrismaVox PRIVATE
     Source/VocoderEngine.cpp
 )
 
+if(WIN32)
+    target_sources(PrismaVox PRIVATE PrismaVox.rc)
+endif()
+
 target_compile_definitions(PrismaVox PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
@@ -80,6 +87,7 @@ target_link_libraries(PrismaVox PRIVATE
     juce::juce_audio_utils
     juce::juce_dsp
     FluidSynth::libfluidsynth
+    PrismaVoxArtwork
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags
