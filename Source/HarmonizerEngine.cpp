@@ -598,6 +598,13 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
             static_cast<int64_t>(juce::jlimit(8.0, 1024.0,
                 std::ceil(requiredHalfWindow))));
     }
+    // FD-PSOLA analyses a full 2048-sample FFT frame centred on the
+    // source mark. Do not schedule it until the complete future half of that
+    // frame has actually arrived in residualHistory; otherwise stale ring
+    // contents can severely attenuate or corrupt the shifted grain.
+    if (getAlgorithm() == Algorithm::frequencyDomain)
+        sourceHalfWindow = juce::jmax<int64_t>(sourceHalfWindow, fdFftSize / 2);
+
     if (static_cast<int64_t>(totalSamples) - 1 < bestMark + sourceHalfWindow)
         return;
 

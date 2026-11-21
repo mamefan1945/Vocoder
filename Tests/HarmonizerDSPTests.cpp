@@ -346,12 +346,12 @@ bool testAlgorithmSwitching()
         }
 
         const auto rms = std::sqrt(squareSum / static_cast<double>(count));
-        const auto segmentPassed = finite && peak < 2.0f && rms > 0.005
+        const auto segmentPassed = finite && peak < 2.0f && rms > 0.02
             && dominantHz >= 425.0 && dominantHz <= 455.0;
         std::cout << "Runtime switch " << names[static_cast<size_t>(segment)]
                   << ": dominant " << dominantHz << " Hz; RMS " << rms
                   << "; peak " << peak << "; finite=" << finite
-                  << "; passed=" << segmentPassed << '\\n';
+                  << "; passed=" << (segmentPassed ? "true" : "false") << '\n';
         passed = passed && segmentPassed;
     }
     return passed;
