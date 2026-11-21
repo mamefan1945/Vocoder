@@ -364,6 +364,7 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
         std::array<Complex, fdFftSize> shiftedSpectrum {};
         const auto ratio = juce::jlimit(0.25,
             4.0, sourcePeriod / juce::jmax(1.0, targetPeriod));
+        double analysisEnergy = 0.0;
         for (int n = 0; n < fdFftSize; ++n)
         {
             const auto offset = n - fdFftSize / 2;
@@ -376,7 +377,9 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
             const auto sample = (absolute >= 0 ? residualHistory[index] : 0.0f)
                               * window;
             fftInput[static_cast<size_t>(n)] = Complex(sample, 0.0f);
+            analysisEnergy += static_cast<double>(sample) * sample;
         }
+        publishedFdAnalysisRms.store(static_cast<float>(std::sqrt(analysisEnergy / fdFftSize)), std::memory_order_relaxed);
         fdPsolaFft.perform(fftInput.data(), sourceSpectrum.data(), false);
         for (int bin = 0; bin <= fdFftSize / 2; ++bin)
         {
@@ -398,6 +401,10 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
             shiftedSpectrum[static_cast<size_t>(fdFftSize - bin)] =
                 std::conj(shiftedSpectrum[static_cast<size_t>(bin)]);
         fdPsolaFft.perform(shiftedSpectrum.data(), fftInput.data(), true);
+        double inverseEnergy = 0.0;
+        for (const auto& sample : fftInput)
+            inverseEnergy += static_cast<double>(sample.real()) * sample.real();
+        publishedFdInverseRms.store(static_cast<float>(std::sqrt(inverseEnergy / fdFftSize)), std::memory_order_relaxed);
         float inversePeak = 0.0f;
         const auto outputHalf = juce::jmin(halfWindow, fdFftSize / 2 - 1);
         for (int offset = -outputHalf; offset <= outputHalf; ++offset)
