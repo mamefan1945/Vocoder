@@ -28,7 +28,7 @@ jobs:
     env:
       # vcpkg uses this directory for compiled package archives. actions/cache
       # restores it before install and saves it after the job on cache misses.
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}\\vcpkg-binary-cache
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}/vcpkg-binary-cache
     steps:
       - name: Check out source
         uses: actions/checkout@v4
