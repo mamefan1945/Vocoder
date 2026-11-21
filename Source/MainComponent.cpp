@@ -1695,6 +1695,16 @@ void MainComponent::processAudio(const float* const* inputChannelData,
     const auto externalCarrier = selectedCarrier.load() == 1;
     const auto monitorMic = monitorMicrophone.load(std::memory_order_relaxed);
     const auto preview = previewCarrier.load(std::memory_order_relaxed);
+
+    // The internal synth is silent between MIDI notes, but filter/envelope
+    // state can otherwise leave a residual vocoder signal. Require a held
+    // MIDI note before processing the internal-carrier path. External carrier
+    // mode remains independently usable without MIDI keys.
+    bool hasActiveMidiNote = false;
+    if (!externalCarrier)
+        for (int note = 0; note < 128 && !hasActiveMidiNote; ++note)
+            hasActiveMidiNote = keyboardState.isNoteOnForChannels(0xffff, note);
+
     float blockInputPeak = 0.0f;
     float blockOutputPeak = 0.0f;
 
@@ -1711,7 +1721,8 @@ void MainComponent::processAudio(const float* const* inputChannelData,
         // Each processing mode must use its own engine output. In particular,
         // do not fall back to the dry microphone in Harmonizer mode: the
         // harmonizer buffer already contains the dry/wet mix and output gain.
-        const auto vocoderOutput = vocoderEnabled
+        const auto carrierReady = externalCarrier || hasActiveMidiNote;
+        const auto vocoderOutput = vocoderEnabled && carrierReady
             ? vocoder.processSample(voice, external, externalCarrier, synth)
             : 0.0f;
         const auto harmonizerOutput = harmonizerEnabled
