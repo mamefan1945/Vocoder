@@ -1,0 +1,4 @@
+#include <windows.h>
+
+#define IDI_PRISMAVOX 101
+IDI_PRISMAVOX ICON "PrismaVox.ico"
