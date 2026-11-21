@@ -364,6 +364,9 @@ bool testAlgorithmSwitching()
                   << "; FD peaks inverse/PSOLA/reconstructed="
                   << engine->getFdInversePeak() << "/" << engine->getFdPsolaPeak()
                   << "/" << engine->getFdReconstructedPeak()
+                  << "; FD RMS PSOLA/reconstructed/voiced/harmony="
+                  << engine->getFdPsolaRms() << "/" << engine->getFdReconstructedRms()
+                  << "/" << engine->getFdVoicedRms() << "/" << engine->getFdHarmonyRms()
                   << "; finite=" << finite
                   << "; passed=" << (segmentPassed ? "true" : "false") << '\n';
         passed = passed && segmentPassed;

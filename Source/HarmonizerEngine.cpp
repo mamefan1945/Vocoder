@@ -125,6 +125,10 @@ void HarmonizerEngine::reset() noexcept
     publishedFdInversePeak.store(0.0f, std::memory_order_relaxed);
     publishedFdPsolaPeak.store(0.0f, std::memory_order_relaxed);
     publishedFdReconstructedPeak.store(0.0f, std::memory_order_relaxed);
+    publishedFdPsolaRms.store(0.0f, std::memory_order_relaxed);
+    publishedFdReconstructedRms.store(0.0f, std::memory_order_relaxed);
+    publishedFdVoicedRms.store(0.0f, std::memory_order_relaxed);
+    publishedFdHarmonyRms.store(0.0f, std::memory_order_relaxed);
 }
 
 float HarmonizerEngine::estimatePitch(float sensitivity, float& confidence) const noexcept
@@ -761,6 +765,11 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
     const auto pitchHoldUpdates = static_cast<int>(std::ceil(
         holdMilliseconds * 0.001f * sampleRate / static_cast<float>(updateInterval)));
 
+    double fdPsolaEnergy = 0.0;
+    double fdReconstructedEnergy = 0.0;
+    double fdVoicedEnergy = 0.0;
+    double fdHarmonyEnergy = 0.0;
+    int fdMeasuredSamples = 0;
     for (int i = 0; i < numSamples; ++i)
     {
         // Apply note/controller events at their actual sample offsets.
@@ -920,6 +929,8 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         int activeCount = 0;
         float voiceLevelSum = 0.0f;
         float grainFallbackGain = 0.0f;
+        double fdSamplePsolaEnergy = 0.0;
+        double fdSampleReconstructedEnergy = 0.0;
 
         for (auto& voice : voices)
         {
@@ -929,7 +940,10 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             const auto psola = hasPsolaGrain
                 ? voice.overlap[ringIndex] / weight : 0.0f;
             if (getAlgorithm() == Algorithm::frequencyDomain)
+            {
                 publishedFdPsolaPeak.store(juce::jmax(publishedFdPsolaPeak.load(std::memory_order_relaxed), std::abs(psola)), std::memory_order_relaxed);
+                fdSamplePsolaEnergy += static_cast<double>(psola) * psola;
+            }
             voice.overlap[ringIndex] = 0.0f;
             voice.weights[ringIndex] = 0.0f;
 
@@ -974,7 +988,10 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             const auto formantOutput = getAlgorithm() == Algorithm::timeDomain
                 ? psola : psola + (reconstructed - psola) * formantBlend;
             if (getAlgorithm() == Algorithm::frequencyDomain)
+            {
                 publishedFdReconstructedPeak.store(juce::jmax(publishedFdReconstructedPeak.load(std::memory_order_relaxed), std::abs(formantOutput)), std::memory_order_relaxed);
+                fdSampleReconstructedEnergy += static_cast<double>(formantOutput) * formantOutput;
+            }
 
             // Grain availability can change sample-by-sample, especially for a
             // single voice. Smooth the transition instead of hard-switching
@@ -1026,4 +1043,13 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         output[i] = (delayedInput * (1.0f - mix)
                    + harmony * mix) * outputGain;
     }
+    if (fdMeasuredSamples > 0)
+    {
+        const auto divisor = static_cast<double>(fdMeasuredSamples);
+        publishedFdPsolaRms.store(static_cast<float>(std::sqrt(fdPsolaEnergy / divisor)), std::memory_order_relaxed);
+        publishedFdReconstructedRms.store(static_cast<float>(std::sqrt(fdReconstructedEnergy / divisor)), std::memory_order_relaxed);
+        publishedFdVoicedRms.store(static_cast<float>(std::sqrt(fdVoicedEnergy / divisor)), std::memory_order_relaxed);
+        publishedFdHarmonyRms.store(static_cast<float>(std::sqrt(fdHarmonyEnergy / divisor)), std::memory_order_relaxed);
+    }
+
 }

@@ -24,6 +24,10 @@ public:
     float getFdInversePeak() const noexcept { return publishedFdInversePeak.load(std::memory_order_relaxed); }
     float getFdPsolaPeak() const noexcept { return publishedFdPsolaPeak.load(std::memory_order_relaxed); }
     float getFdReconstructedPeak() const noexcept { return publishedFdReconstructedPeak.load(std::memory_order_relaxed); }
+    float getFdPsolaRms() const noexcept { return publishedFdPsolaRms.load(std::memory_order_relaxed); }
+    float getFdReconstructedRms() const noexcept { return publishedFdReconstructedRms.load(std::memory_order_relaxed); }
+    float getFdVoicedRms() const noexcept { return publishedFdVoicedRms.load(std::memory_order_relaxed); }
+    float getFdHarmonyRms() const noexcept { return publishedFdHarmonyRms.load(std::memory_order_relaxed); }
     void processBlock(const float* input, float* output, int numSamples,
                       const juce::MidiBuffer& midi, float dryWet, float outputGain,
                       int octaveShift = 0) noexcept;
@@ -103,6 +107,10 @@ private:
     std::atomic<float> publishedFdInversePeak { 0.0f };
     std::atomic<float> publishedFdPsolaPeak { 0.0f };
     std::atomic<float> publishedFdReconstructedPeak { 0.0f };
+    std::atomic<float> publishedFdPsolaRms { 0.0f };
+    std::atomic<float> publishedFdReconstructedRms { 0.0f };
+    std::atomic<float> publishedFdVoicedRms { 0.0f };
+    std::atomic<float> publishedFdHarmonyRms { 0.0f };
 
     float estimatePitch(float sensitivity, float& confidence) const noexcept;
     void estimateFormantEnvelope() noexcept;
