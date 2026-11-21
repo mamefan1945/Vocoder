@@ -1059,9 +1059,9 @@ bool MainComponent::keyPressed(const juce::KeyPress&, juce::Component*)
 
 bool MainComponent::keyStateChanged(bool, juce::Component*)
 {
-    static constexpr const char* keyMap = "awsedftgyhujkolp;";
+    static constexpr const char* keyMap = "awsedftgyhujkolp;\'";
     bool handled = false;
-    for (int i = 0; i < 17; ++i)
+    for (int i = 0; i < 18; ++i)
     {
         const juce::KeyPress key(static_cast<juce::juce_wchar>(keyMap[i]), 0, 0);
         const bool isDown = key.isCurrentlyDown();
