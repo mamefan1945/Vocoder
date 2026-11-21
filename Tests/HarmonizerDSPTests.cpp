@@ -487,6 +487,91 @@ bool testSpeechFile(const char* fileName, HarmonizerEngine::Algorithm algorithm,
               << "%; p99 budget=" << 100.0 * p99CallbackMs / blockBudgetMs << "%\\n";
     return finite && rms > 0.001f && peak < 2.0f;
 }
+bool testLpSustainedFullLevelStability()
+{
+    auto engine = std::make_unique<HarmonizerEngine>();
+    engine->setAlgorithm(HarmonizerEngine::Algorithm::lpc);
+    engine->prepare(sampleRate, blockSize);
+
+    constexpr double fundamental = 180.0;
+    constexpr int harmonicCount = 16;
+    constexpr double durationSeconds = 3.0;
+    constexpr float targetPeak = 0.90f;
+    double harmonicSum = 0.0;
+    for (int harmonic = 1; harmonic <= harmonicCount; ++harmonic)
+        harmonicSum += 1.0 / harmonic;
+    const auto scale = static_cast<double>(targetPeak) / harmonicSum;
+
+    std::array<float, blockSize> input {};
+    std::array<float, blockSize> output {};
+    juce::MidiBuffer midi;
+    midi.addEvent(juce::MidiMessage::noteOn(1, 72, 1.0f), 0);
+
+    const auto totalSamples = static_cast<size_t>(sampleRate * durationSeconds);
+    double outputEnergy = 0.0;
+    double differenceEnergy = 0.0;
+    double inputEnergy = 0.0;
+    float peak = 0.0f;
+    float maximumStep = 0.0f;
+    float previous = 0.0f;
+    double windowDifferenceEnergy = 0.0;
+    float maximumWindowDifferenceRms = 0.0f;
+    int windowSamples = 0;
+    size_t position = 0;
+    while (position < totalSamples)
+    {
+        const auto count = static_cast<int>(std::min(
+            static_cast<size_t>(blockSize), totalSamples - position));
+        for (int i = 0; i < count; ++i)
+        {
+            const auto t = static_cast<double>(position + static_cast<size_t>(i))
+                         / sampleRate;
+            double sample = 0.0;
+            for (int harmonic = 1; harmonic <= harmonicCount; ++harmonic)
+                sample += std::sin(2.0 * pi * fundamental * harmonic * t) / harmonic;
+            input[static_cast<size_t>(i)] = static_cast<float>(scale * sample);
+            inputEnergy += static_cast<double>(input[static_cast<size_t>(i)])
+                         * input[static_cast<size_t>(i)];
+        }
+
+        engine->processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
+        midi.clear();
+        for (int i = 0; i < count; ++i)
+        {
+            const auto value = output[static_cast<size_t>(i)];
+            const auto step = std::abs(value - previous);
+            previous = value;
+            peak = std::max(peak, std::abs(value));
+            maximumStep = std::max(maximumStep, step);
+            outputEnergy += static_cast<double>(value) * value;
+            differenceEnergy += static_cast<double>(step) * step;
+            windowDifferenceEnergy += static_cast<double>(step) * step;
+            if (++windowSamples >= sampleRate / 50)
+            {
+                const auto windowRms = std::sqrt(windowDifferenceEnergy / windowSamples);
+                maximumWindowDifferenceRms = std::max(maximumWindowDifferenceRms,
+                    static_cast<float>(windowRms));
+                windowDifferenceEnergy = 0.0;
+                windowSamples = 0;
+            }
+        }
+        position += static_cast<size_t>(count);
+    }
+
+    const auto outputRms = std::sqrt(outputEnergy / totalSamples);
+    const auto inputRms = std::sqrt(inputEnergy / totalSamples);
+    const auto differenceRms = std::sqrt(differenceEnergy / totalSamples);
+    std::cout << "LP-PSOLA full-level sustained note: input RMS=" << inputRms
+              << "; output RMS=" << outputRms
+              << "; peak=" << peak
+              << "; max sample step=" << maximumStep
+              << "; difference RMS=" << differenceRms
+              << "; max 20ms difference RMS=" << maximumWindowDifferenceRms
+              << "; finite=" << std::isfinite(outputRms) << '\\n';
+    return std::isfinite(outputRms) && std::isfinite(maximumWindowDifferenceRms)
+        && outputRms > 0.001 && peak < 2.0f;
+}
+
 bool testFdPolyphonyPerformanceProfile()
 {
     struct Profile
@@ -641,6 +726,7 @@ int main()
     passed &= testSpeechFile("vocoder_test_nova.wav", HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
     passed &= testSpeechFile("vocoder_test_nova.wav", HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
     passed &= testAlgorithmSwitching();
+    passed &= testLpSustainedFullLevelStability();
     passed &= testFdPolyphonyPerformanceProfile();
     passed &= testSilenceProducesSilence();
     passed &= testNoMidiProducesNoWetOutput();
