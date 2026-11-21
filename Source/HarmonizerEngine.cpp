@@ -286,7 +286,7 @@ void HarmonizerEngine::estimateFormantEnvelope() noexcept
 
     if (!std::isfinite(autocorrelation[0]) || autocorrelation[0] < 1.0e-8)
     {
-        targetFormantCoefficients.fill(0.0f);
+        targetFormantReflectionCoefficients.fill(0.0f);
         return;
     }
 
