@@ -1,6 +1,6 @@
 #include <JuceHeader.h>
 #include "MainComponent.h"
-#include "VoiceForgeLogo.h"
+#include "PrismaVoxLogo.h"
 
 namespace
 {
@@ -26,15 +26,15 @@ namespace
             static const auto logo = []
             {
                 juce::MemoryOutputStream encoded;
-                encoded.writeText(juce::String(voiceForgeLogoPngBase64), false, false, nullptr);
-                juce::MemoryInputStream input(encoded.getMemoryBlock(), false);
-                juce::PNGImageFormat png;
-                return png.decodeImage(input);
+                encoded.writeText(juce::String(prismaVoxLogoSvg), false, false, nullptr);
+                auto xml = juce::XmlDocument::parse(encoded.toString());
+                return xml != nullptr ? juce::Drawable::createFromSVG(*xml)
+                                      : std::unique_ptr<juce::Drawable> {};
             }();
-            if (!logo.isNull())
-                g.drawImageWithin(logo, juce::roundToInt(getWidth() * 0.12f),
-                    54, juce::roundToInt(getWidth() * 0.76f), 254,
-                    juce::RectanglePlacement::centred);
+            if (logo != nullptr)
+                logo->drawWithin(g, juce::Rectangle<float>(
+                    getWidth() * 0.12f, 54.0f, getWidth() * 0.76f, 254.0f),
+                    juce::RectanglePlacement::centred, 1.0f);
 
             g.setColour(juce::Colour(0xffaeb8c6));
             g.setFont(juce::Font(juce::FontOptions(14.0f)));
@@ -134,7 +134,7 @@ namespace
 class VocoderApplication final : public juce::JUCEApplication
 {
 public:
-    const juce::String getApplicationName() override { return "VoxTimbre"; }
+    const juce::String getApplicationName() override { return "PrismaVox"; }
     const juce::String getApplicationVersion() override { return "0.1.0"; }
     bool moreThanOneInstanceAllowed() override { return true; }
 

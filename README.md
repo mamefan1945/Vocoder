@@ -1,4 +1,4 @@
-# VoxTimbre — Vocoder & Vocal Harmonizer
+# PrismaVox — Vocoder & Vocal Harmonizer
 
 A real-time Windows voice-effects application built with C++17, JUCE 8.0.10, and FluidSynth. It currently provides three processing modes:
 
@@ -43,13 +43,13 @@ The application is a standalone Windows x64 program. The DSP engines are separat
 
 ## Download and run
 
-Prebuilt Windows packages are published as the **VoxTimbre-Windows-x64** artifact on successful GitHub Actions runs:
+Prebuilt Windows packages are published as the **PrismaVox-Windows-x64** artifact on successful GitHub Actions runs:
 
 1. Open the repository's [Actions page](https://github.com/mamefan1945/Vocoder/actions).
 2. Select a successful **Windows build** run for the commit you want.
-3. Download the VoxTimbre-Windows-x64 artifact.
+3. Download the PrismaVox-Windows-x64 artifact.
 4. Extract the complete artifact to a folder.
-5. Run VoxTimbre.exe from that folder.
+5. Run PrismaVox.exe from that folder.
 
 Keep the package contents together. Do not separate the executable from its SoundFonts directory or the FluidSynth runtime DLLs. The application looks for the default SoundFont relative to the executable.
 
@@ -173,7 +173,7 @@ For a simple harmonizer test:
 
 The main window includes a **Nova (female) / Ash (male)** selector and a **Run speech test** button. This is a repeatable vocoder test setup: it selects Vocoder mode, the internal carrier, the Rich PWM carrier profile, a held C3 note, 100% wet output, disables microphone/carrier monitoring, and loops the selected prerecorded voice through the vocoder.
 
-Download the two WAV files supplied with the speech-test workflow and place them in either the app's `TestAudio` folder, beside `VoxTimbre.exe`, or your Windows `Downloads` folder using these exact names:
+Download the two WAV files supplied with the speech-test workflow and place them in either the app's `TestAudio` folder, beside `PrismaVox.exe`, or your Windows `Downloads` folder using these exact names:
 
 - `vocoder_test_nova.wav`
 - `vocoder_test_ash.wav`
@@ -369,7 +369,7 @@ For a fair A/B comparison:
 - Avoid changing multiple DSP controls at once; it makes the cause harder to isolate.
 
 **SoundFont instruments are missing**
-- Confirm that the SoundFonts folder is beside VoxTimbre.exe.
+- Confirm that the SoundFonts folder is beside PrismaVox.exe.
 - Confirm the selected SF2 file loads successfully.
 - Some banks use unusual preset/bank layouts or contain no selectable presets.
 
@@ -410,7 +410,7 @@ The CMake configuration uses FetchContent to retrieve JUCE from its official Git
 
 CMake also downloads the bundled **GeneralUser GS v2.0.3** SoundFont and its licence into the build tree if they are not already present. SHA-256 hashes are checked during download. The post-build step copies the SoundFont, its licence, and the FluidSynth licence beside the built application.
 
-The executable and runtime dependencies are generated under the build output directory. The exact subdirectory can vary with the generator and configuration; search under build for VoxTimbre.exe.
+The executable and runtime dependencies are generated under the build output directory. The exact subdirectory can vary with the generator and configuration; search under build for PrismaVox.exe.
 
 ### Build with Visual Studio or another generator
 

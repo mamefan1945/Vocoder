@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(VoxTimbre VERSION 0.1.0 LANGUAGES CXX)
+project(PrismaVox VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -49,15 +49,15 @@ if(NOT EXISTS "${GENERALUSER_LICENSE}")
     endif()
 endif()
 
-juce_add_gui_app(VoxTimbre
-    PRODUCT_NAME "VoxTimbre"
+juce_add_gui_app(PrismaVox
+    PRODUCT_NAME "PrismaVox"
     COMPANY_NAME "Personal Audio Tools"
-    BUNDLE_ID "com.personalaudiotools.voxtimbre"
+    BUNDLE_ID "com.personalaudiotools.prismavox"
 )
 
-juce_generate_juce_header(VoxTimbre)
+juce_generate_juce_header(PrismaVox)
 
-target_sources(VoxTimbre PRIVATE
+target_sources(PrismaVox PRIVATE
     Source/Main.cpp
     Source/MainComponent.h
     Source/MainComponent.cpp
@@ -69,13 +69,13 @@ target_sources(VoxTimbre PRIVATE
     Source/VocoderEngine.cpp
 )
 
-target_compile_definitions(VoxTimbre PRIVATE
+target_compile_definitions(PrismaVox PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_USE_MP3AUDIOFORMAT=1
 )
 
-target_link_libraries(VoxTimbre PRIVATE
+target_link_libraries(PrismaVox PRIVATE
     juce::juce_gui_extra
     juce::juce_audio_utils
     juce::juce_dsp
@@ -86,15 +86,15 @@ target_link_libraries(VoxTimbre PRIVATE
 )
 
 if(MSVC)
-    target_compile_options(VoxTimbre PRIVATE /W4 /permissive-)
+    target_compile_options(PrismaVox PRIVATE /W4 /permissive-)
 endif()
 
-add_custom_command(TARGET VoxTimbre POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:VoxTimbre>/SoundFonts"
+add_custom_command(TARGET PrismaVox POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PrismaVox>/SoundFonts"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GENERALUSER_SF2}" "$<TARGET_FILE_DIR:VoxTimbre>/SoundFonts/GeneralUser-GS.sf2"
+        "${GENERALUSER_SF2}" "$<TARGET_FILE_DIR:PrismaVox>/SoundFonts/GeneralUser-GS.sf2"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GENERALUSER_LICENSE}" "$<TARGET_FILE_DIR:VoxTimbre>/FluidSynth-LGPL-2.1.txt"
+        "${GENERALUSER_LICENSE}" "$<TARGET_FILE_DIR:PrismaVox>/FluidSynth-LGPL-2.1.txt"
 )
 
 # A standalone, deterministic DSP test runner. It exercises the three
@@ -112,7 +112,7 @@ target_sources(HarmonizerDSPTests PRIVATE
 target_compile_definitions(HarmonizerDSPTests PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
-    VOXTIMBRE_TEST_AUDIO_DIR="${CMAKE_SOURCE_DIR}/TestAudio"
+    PRISMAVOX_TEST_AUDIO_DIR="${CMAKE_SOURCE_DIR}/TestAudio"
 )
 target_link_libraries(HarmonizerDSPTests PRIVATE
     juce::juce_audio_basics

@@ -115,8 +115,8 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path "TestAudio") {
-            $exe = Get-ChildItem "build" -Filter "VoxTimbre.exe" -Recurse | Select-Object -First 1
-            if (-not $exe) { throw "VoxTimbre.exe was not found after the build." }
+            $exe = Get-ChildItem "build" -Filter "PrismaVox.exe" -Recurse | Select-Object -First 1
+            if (-not $exe) { throw "PrismaVox.exe was not found after the build." }
             $target = Join-Path $exe.DirectoryName "TestAudio"
             New-Item -ItemType Directory -Force -Path $target | Out-Null
             Copy-Item "TestAudio/*" -Destination $target -Recurse -Force
@@ -125,10 +125,10 @@ jobs:
       - name: Upload application
         uses: actions/upload-artifact@v4
         with:
-          name: VoxTimbre-Windows-x64-build-${{ github.run_number }}
+          name: PrismaVox-Windows-x64-build-${{ github.run_number }}
           path: |
-            build/**/VoxTimbre.exe
-            build/**/VoxTimbre_artefacts/Release/SoundFonts/**
+            build/**/PrismaVox.exe
+            build/**/PrismaVox_artefacts/Release/SoundFonts/**
             build/**/TestAudio/**
             build/**/fluidsynth*.dll
             build/**/libfluidsynth*.dll
