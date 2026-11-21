@@ -5,7 +5,7 @@
  #pragma comment(lib, "dwmapi.lib")
 #endif
 #include "MainComponent.h"
-#include "PrismaVoxArtwork.h"
+#include <BinaryData.h>
 
 namespace
 {
@@ -31,14 +31,10 @@ namespace
             const auto bounds = getLocalBounds().toFloat();
             g.fillAll(juce::Colour(0xff050914));
 
-            static const auto artwork = []
-            {
-                auto xml = juce::XmlDocument::parse(prismaVoxSplashSvg);
-                return xml != nullptr ? juce::Drawable::createFromSVG(*xml)
-                                      : std::unique_ptr<juce::Drawable> {};
-            }();
-            if (artwork != nullptr)
-                artwork->drawWithin(g, bounds, juce::RectanglePlacement::stretchToFit, 1.0f);
+            static const auto artwork = juce::ImageCache::getFromMemory(
+                BinaryData::PrismaVoxSplash_png, BinaryData::PrismaVoxSplash_pngSize);
+            if (artwork.isValid())
+                g.drawImage(artwork, bounds, juce::RectanglePlacement::stretchToFit);
 
             g.setColour(juce::Colour(0xffaeb8c6));
             g.setFont(juce::Font(juce::FontOptions(14.0f)));
@@ -132,36 +128,9 @@ private:
         {
 #if JUCE_WINDOWS
             if (getPeer() == nullptr) return;
-            auto xml = juce::XmlDocument::parse(prismaVoxIconSvg);
-            auto drawable = xml != nullptr ? juce::Drawable::createFromSVG(*xml) : std::unique_ptr<juce::Drawable> {};
-            if (drawable == nullptr) return;
-            constexpr int size = 128;
-            juce::Image image(juce::Image::ARGB, size, size, true);
-            juce::Graphics graphics(image);
-            drawable->drawWithin(graphics, { 0.0f, 0.0f, 128.0f, 128.0f }, juce::RectanglePlacement::stretchToFit, 1.0f);
-            BITMAPINFO info {};
-            info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-            info.bmiHeader.biWidth = size; info.bmiHeader.biHeight = -size;
-            info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
-            info.bmiHeader.biCompression = BI_RGB;
-            void* bits = nullptr;
-            HBITMAP colourBitmap = CreateDIBSection(nullptr, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
-            if (colourBitmap == nullptr || bits == nullptr) return;
-            auto* dst = static_cast<unsigned char*>(bits);
-            for (int y = 0; y < size; ++y)
-                for (int x = 0; x < size; ++x)
-                {
-                    const auto c = image.getPixelAt(x, y);
-                    const auto p = (y * size + x) * 4;
-                    dst[p] = c.getBlue(); dst[p + 1] = c.getGreen();
-                    dst[p + 2] = c.getRed(); dst[p + 3] = c.getAlpha();
-                }
-            HBITMAP maskBitmap = CreateBitmap(size, size, 1, 1, nullptr);
-            ICONINFO ii {};
-            ii.fIcon = TRUE; ii.hbmColor = colourBitmap; ii.hbmMask = maskBitmap;
-            nativeIcon = CreateIconIndirect(&ii);
-            DeleteObject(colourBitmap);
-            if (maskBitmap != nullptr) DeleteObject(maskBitmap);
+            const auto instance = GetModuleHandleW(nullptr);
+            nativeIcon = static_cast<HICON>(LoadImageW(
+                instance, MAKEINTRESOURCEW(101), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE));
             if (nativeIcon != nullptr)
             {
                 const auto hwnd = static_cast<HWND>(getPeer()->getNativeHandle());
