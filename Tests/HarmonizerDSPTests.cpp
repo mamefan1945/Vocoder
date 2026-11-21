@@ -409,7 +409,7 @@ bool testSpeechFile(const char* fileName, HarmonizerEngine::Algorithm algorithm,
 {
     juce::AudioFormatManager formats;
     formats.registerBasicFormats();
-    const juce::File file(juce::String(VOXTIMBRE_TEST_AUDIO_DIR) + "/" + fileName);
+    const juce::File file(juce::String(PRISMAVOX_TEST_AUDIO_DIR) + "/" + fileName);
     std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
     if (reader == nullptr || reader->sampleRate <= 0.0 || reader->numChannels == 0)
     {
