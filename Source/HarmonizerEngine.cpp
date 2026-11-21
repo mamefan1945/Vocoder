@@ -122,6 +122,9 @@ void HarmonizerEngine::reset() noexcept
     publishedPitchHz.store(0.0f, std::memory_order_relaxed);
     publishedPitchConfidence.store(0.0f, std::memory_order_relaxed);
     publishedGrainCoverage.store(0.0f, std::memory_order_relaxed);
+    publishedFdInversePeak.store(0.0f, std::memory_order_relaxed);
+    publishedFdPsolaPeak.store(0.0f, std::memory_order_relaxed);
+    publishedFdReconstructedPeak.store(0.0f, std::memory_order_relaxed);
 }
 
 float HarmonizerEngine::estimatePitch(float sensitivity, float& confidence) const noexcept
@@ -391,6 +394,7 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
             shiftedSpectrum[static_cast<size_t>(fdFftSize - bin)] =
                 std::conj(shiftedSpectrum[static_cast<size_t>(bin)]);
         fdPsolaFft.perform(shiftedSpectrum.data(), fftInput.data(), true);
+        float inversePeak = 0.0f;
         const auto outputHalf = juce::jmin(halfWindow, fdFftSize / 2 - 1);
         for (int offset = -outputHalf; offset <= outputHalf; ++offset)
         {
@@ -402,9 +406,11 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
             const auto window = 0.5f + 0.5f * std::cos(
                 pi * static_cast<float>(offset) / static_cast<float>(outputHalf));
             const auto sample = fftInput[frameIndex].real();
+            inversePeak = juce::jmax(inversePeak, std::abs(sample));
             voice.overlap[outputIndex] += sample * window;
             voice.weights[outputIndex] += window;
         }
+        publishedFdInversePeak.store(inversePeak, std::memory_order_relaxed);
         return;
     }
 
@@ -922,6 +928,8 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             const auto hasPsolaGrain = weight > 1.0e-5f;
             const auto psola = hasPsolaGrain
                 ? voice.overlap[ringIndex] / weight : 0.0f;
+            if (getAlgorithm() == Algorithm::frequencyDomain)
+                publishedFdPsolaPeak.store(juce::jmax(publishedFdPsolaPeak.load(std::memory_order_relaxed), std::abs(psola)), std::memory_order_relaxed);
             voice.overlap[ringIndex] = 0.0f;
             voice.weights[ringIndex] = 0.0f;
 
@@ -965,6 +973,8 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             voice.formantState[0] = reconstructed;
             const auto formantOutput = getAlgorithm() == Algorithm::timeDomain
                 ? psola : psola + (reconstructed - psola) * formantBlend;
+            if (getAlgorithm() == Algorithm::frequencyDomain)
+                publishedFdReconstructedPeak.store(juce::jmax(publishedFdReconstructedPeak.load(std::memory_order_relaxed), std::abs(formantOutput)), std::memory_order_relaxed);
 
             // Grain availability can change sample-by-sample, especially for a
             // single voice. Smooth the transition instead of hard-switching

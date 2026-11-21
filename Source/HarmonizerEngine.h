@@ -21,6 +21,9 @@ public:
     float getDetectedPitchHz() const noexcept { return publishedPitchHz.load(std::memory_order_relaxed); }
     float getPitchConfidence() const noexcept { return publishedPitchConfidence.load(std::memory_order_relaxed); }
     float getGrainCoverage() const noexcept { return publishedGrainCoverage.load(std::memory_order_relaxed); }
+    float getFdInversePeak() const noexcept { return publishedFdInversePeak.load(std::memory_order_relaxed); }
+    float getFdPsolaPeak() const noexcept { return publishedFdPsolaPeak.load(std::memory_order_relaxed); }
+    float getFdReconstructedPeak() const noexcept { return publishedFdReconstructedPeak.load(std::memory_order_relaxed); }
     void processBlock(const float* input, float* output, int numSamples,
                       const juce::MidiBuffer& midi, float dryWet, float outputGain,
                       int octaveShift = 0) noexcept;
@@ -97,6 +100,9 @@ private:
     std::atomic<float> publishedPitchHz { 0.0f };
     std::atomic<float> publishedPitchConfidence { 0.0f };
     std::atomic<float> publishedGrainCoverage { 0.0f };
+    std::atomic<float> publishedFdInversePeak { 0.0f };
+    std::atomic<float> publishedFdPsolaPeak { 0.0f };
+    std::atomic<float> publishedFdReconstructedPeak { 0.0f };
 
     float estimatePitch(float sensitivity, float& confidence) const noexcept;
     void estimateFormantEnvelope() noexcept;
