@@ -86,6 +86,10 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     // Map the computer-keyboard home row to C1 (MIDI 24), two octaves
     // above the previous C-1 mapping. Keep that full range visible below.
     keyboardComponent.setKeyPressBaseOctave(2);
+    // Route computer-keyboard notes from the whole component tree, not only
+    // when the on-screen piano itself owns focus.
+    keyboardComponent.clearKeyMappings();
+    addKeyListener(this);
     setSize(1380, 790);
     testAudioFormats.registerBasicFormats();
     testAudioReadAheadThread.startThread();
@@ -1045,6 +1049,34 @@ void MainComponent::selectMidiInput()
     statusLabel.setText("MIDI input selected: " + selectedName
                             + " | Play keys to send notes",
                         juce::dontSendNotification);
+}
+
+bool MainComponent::keyPressed(const juce::KeyPress&, juce::Component*)
+{
+    // The note-on/note-off transitions are handled in keyStateChanged.
+    return false;
+}
+
+bool MainComponent::keyStateChanged(bool, juce::Component*)
+{
+    static constexpr const char* keyMap = "awsedftgyhujkolp;";
+    bool handled = false;
+    for (int i = 0; i < 17; ++i)
+    {
+        const juce::KeyPress key(static_cast<juce::juce_wchar>(keyMap[i]), 0, 0);
+        const bool isDown = key.isCurrentlyDown();
+        if (isDown == computerKeysDown[static_cast<size_t>(i)])
+            continue;
+
+        computerKeysDown[static_cast<size_t>(i)] = isDown;
+        const int note = 24 + i; // C1 upward, matching the visible keyboard range.
+        if (isDown)
+            keyboardState.noteOn(1, note, 0.8f);
+        else
+            keyboardState.noteOff(1, note, 0.0f);
+        handled = true;
+    }
+    return handled;
 }
 
 void MainComponent::paint(juce::Graphics& graphics)
