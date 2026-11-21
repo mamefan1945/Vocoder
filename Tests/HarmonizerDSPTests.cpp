@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <chrono>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #include <vector>
 
 namespace
@@ -429,6 +431,9 @@ bool testSpeechFile(const char* fileName, HarmonizerEngine::Algorithm algorithm,
     std::array<float, blockSize> output {};
     juce::MidiBuffer midi;
     midi.addEvent(juce::MidiMessage::noteOn(1, 69, 0.9f), 0);
+    std::vector<double> callbackMilliseconds;
+    callbackMilliseconds.reserve((outputCount + static_cast<size_t>(blockSize) - 1)
+                                 / static_cast<size_t>(blockSize));
     size_t position = 0;
     while (position < outputCount)
     {
@@ -447,7 +452,11 @@ bool testSpeechFile(const char* fileName, HarmonizerEngine::Algorithm algorithm,
             }
             input[static_cast<size_t>(i)] = sample / static_cast<float>(source.getNumChannels());
         }
+        const auto callbackStart = std::chrono::steady_clock::now();
         engine->processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
+        const auto callbackEnd = std::chrono::steady_clock::now();
+        callbackMilliseconds.push_back(std::chrono::duration<double, std::milli>(
+            callbackEnd - callbackStart).count());
         midi.clear();
         std::copy_n(output.data(), count, rendered.data() + position);
         position += static_cast<size_t>(count);
@@ -462,8 +471,20 @@ bool testSpeechFile(const char* fileName, HarmonizerEngine::Algorithm algorithm,
         peak = std::max(peak, std::abs(sample));
     }
     const auto rms = static_cast<float>(std::sqrt(energy / rendered.size()));
+    std::sort(callbackMilliseconds.begin(), callbackMilliseconds.end());
+    const auto totalCallbackMs = std::accumulate(callbackMilliseconds.begin(),
+        callbackMilliseconds.end(), 0.0);
+    const auto meanCallbackMs = totalCallbackMs / callbackMilliseconds.size();
+    const auto p99Index = std::min(callbackMilliseconds.size() - 1,
+        static_cast<size_t>(std::ceil(callbackMilliseconds.size() * 0.99)) - 1);
+    const auto blockBudgetMs = 1000.0 * blockSize / sampleRate;
+    const auto p99CallbackMs = callbackMilliseconds[p99Index];
+    const auto maxCallbackMs = callbackMilliseconds.back();
     std::cout << "Speech " << fileName << " / " << algorithmName << ": RMS=" << rms
-              << "; peak=" << peak << "; finite=" << finite << "\\n";
+              << "; peak=" << peak << "; finite=" << finite
+              << "; callback mean/p99/max=" << meanCallbackMs << "/" << p99CallbackMs
+              << "/" << maxCallbackMs << " ms; mean CPU=" << 100.0 * meanCallbackMs / blockBudgetMs
+              << "%; p99 budget=" << 100.0 * p99CallbackMs / blockBudgetMs << "%\\n";
     return finite && rms > 0.001f && peak < 2.0f;
 }
 bool testSilenceProducesSilence()
