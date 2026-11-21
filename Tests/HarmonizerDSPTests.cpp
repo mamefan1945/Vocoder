@@ -361,6 +361,9 @@ bool testAlgorithmSwitching()
                   << "; peak " << peak << "; grain coverage "
                   << minimumCoverage[static_cast<size_t>(segment)] << ".."
                   << maximumCoverage[static_cast<size_t>(segment)]
+                  << "; FD peaks inverse/PSOLA/reconstructed="
+                  << engine->getFdInversePeak() << "/" << engine->getFdPsolaPeak()
+                  << "/" << engine->getFdReconstructedPeak()
                   << "; finite=" << finite
                   << "; passed=" << (segmentPassed ? "true" : "false") << '\n';
         passed = passed && segmentPassed;

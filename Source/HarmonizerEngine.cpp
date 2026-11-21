@@ -410,7 +410,7 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
             voice.overlap[outputIndex] += sample * window;
             voice.weights[outputIndex] += window;
         }
-        publishedFdInversePeak.store(inversePeak, std::memory_order_relaxed);
+        publishedFdInversePeak.store(juce::jmax(publishedFdInversePeak.load(std::memory_order_relaxed), inversePeak), std::memory_order_relaxed);
         return;
     }
 
