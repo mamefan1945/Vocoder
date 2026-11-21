@@ -1040,6 +1040,13 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
                                       * (1.0f - voicedMix);
         harmony += transientMix * transientAmount
                  * (unvoicedTransient - harmony);
+        if (getAlgorithm() == Algorithm::frequencyDomain)
+        {
+            const auto voicedSample = voicedHarmony * normalization * voicedMix;
+            fdVoicedEnergy += static_cast<double>(voicedSample) * voicedSample;
+            fdHarmonyEnergy += static_cast<double>(harmony) * harmony;
+            ++fdMeasuredSamples;
+        }
         output[i] = (delayedInput * (1.0f - mix)
                    + harmony * mix) * outputGain;
     }
