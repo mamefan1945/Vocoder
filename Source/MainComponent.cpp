@@ -83,9 +83,10 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
       keyboardComponent(keyboardState),
       startupCompleteCallback(onStartupComplete)
 {
-    // Set the computer-keyboard home row (A) to C2; the UI octave selector
-    // remains an independent transposition applied to the generated notes.
-    keyboardComponent.setOctaveForMiddleC(0);
+    // Lower JUCE's computer-keyboard mapping by two octaves: with the
+    // current JUCE key layout, A otherwise triggers C1 instead of C-1.
+    // The on-screen keyboard and external MIDI input are unaffected.
+    keyboardComponent.setOctaveForMiddleC(-2);
     setSize(1080, 740);
     testAudioFormats.registerBasicFormats();
     testAudioReadAheadThread.startThread();
