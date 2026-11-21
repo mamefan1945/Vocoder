@@ -487,6 +487,93 @@ bool testSpeechFile(const char* fileName, HarmonizerEngine::Algorithm algorithm,
               << "%; p99 budget=" << 100.0 * p99CallbackMs / blockBudgetMs << "%\\n";
     return finite && rms > 0.001f && peak < 2.0f;
 }
+bool testFdPolyphonyPerformanceProfile()
+{
+    struct Profile
+    {
+        const char* name;
+        std::array<int, 3> notes;
+        int noteCount;
+    };
+    constexpr std::array<Profile, 3> profiles {{
+        { "low triad",  { 48, 55, 60 }, 3 },
+        { "mid triad",  { 57, 60, 64 }, 3 },
+        { "high triad", { 64, 67, 71 }, 3 }
+    }};
+    bool passed = true;
+    for (const auto& profile : profiles)
+    {
+        auto engine = std::make_unique<HarmonizerEngine>();
+        engine->setAlgorithm(HarmonizerEngine::Algorithm::frequencyDomain);
+        engine->prepare(sampleRate, blockSize);
+        constexpr size_t total = static_cast<size_t>(sampleRate * 2.0);
+        std::array<float, blockSize> input {};
+        std::array<float, blockSize> output {};
+        juce::MidiBuffer midi;
+        for (int i = 0; i < profile.noteCount; ++i)
+            midi.addEvent(juce::MidiMessage::noteOn(
+                1, profile.notes[static_cast<size_t>(i)], 0.8f), 0);
+
+        std::vector<double> callbackMilliseconds;
+        callbackMilliseconds.reserve(total / static_cast<size_t>(blockSize));
+        double energy = 0.0;
+        float peak = 0.0f;
+        bool finite = true;
+        size_t position = 0;
+        while (position < total)
+        {
+            const auto count = static_cast<int>(std::min(
+                static_cast<size_t>(blockSize), total - position));
+            for (int i = 0; i < count; ++i)
+            {
+                const auto t = static_cast<double>(position + static_cast<size_t>(i))
+                             / sampleRate;
+                const auto envelope = 0.35 + 0.65 * (0.5 + 0.5 * std::sin(2.0 * pi * 2.3 * t));
+                const auto fundamental = 130.8128;
+                double sample = 0.0;
+                for (int harmonic = 1; harmonic <= 12; ++harmonic)
+                    sample += (0.6 / harmonic) * std::sin(
+                        2.0 * pi * fundamental * harmonic * t);
+                input[static_cast<size_t>(i)] =
+                    static_cast<float>(0.18 * envelope * sample);
+            }
+
+            const auto start = std::chrono::steady_clock::now();
+            engine->processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
+            const auto finish = std::chrono::steady_clock::now();
+            callbackMilliseconds.push_back(std::chrono::duration<double, std::milli>(
+                finish - start).count());
+            midi.clear();
+            for (int i = 0; i < count; ++i)
+            {
+                const auto value = output[static_cast<size_t>(i)];
+                finite = finite && std::isfinite(value);
+                energy += static_cast<double>(value) * value;
+                peak = std::max(peak, std::abs(value));
+            }
+            position += static_cast<size_t>(count);
+        }
+
+        std::sort(callbackMilliseconds.begin(), callbackMilliseconds.end());
+        const auto mean = std::accumulate(callbackMilliseconds.begin(),
+            callbackMilliseconds.end(), 0.0) / callbackMilliseconds.size();
+        const auto p99Index = std::min(callbackMilliseconds.size() - 1,
+            static_cast<size_t>(std::ceil(callbackMilliseconds.size() * 0.99)) - 1);
+        const auto p99 = callbackMilliseconds[p99Index];
+        const auto maximum = callbackMilliseconds.back();
+        const auto rms = std::sqrt(energy / static_cast<double>(total));
+        const auto budget = 1000.0 * blockSize / sampleRate;
+        std::cout << "FD-PSOLA " << profile.name
+                  << ": mean/p99/max=" << mean << "/" << p99 << "/" << maximum
+                  << " ms; mean CPU=" << 100.0 * mean / budget
+                  << "%; p99 budget=" << 100.0 * p99 / budget
+                  << "%; RMS=" << rms << "; peak=" << peak
+                  << "; finite=" << finite << '\n';
+        passed = passed && finite && std::isfinite(rms) && rms > 0.001 && peak < 2.0f;
+    }
+    return passed;
+}
+
 bool testSilenceProducesSilence()
 {
     auto engine = std::make_unique<HarmonizerEngine>();
