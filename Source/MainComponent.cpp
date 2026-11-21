@@ -83,10 +83,10 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
       keyboardComponent(keyboardState),
       startupCompleteCallback(onStartupComplete)
 {
-    // The previous two-octave adjustment still left A sounding C1.
-    // Move the computer-keyboard mapping down two additional octaves.
-    // The on-screen keyboard and external MIDI input are unaffected.
-    keyboardComponent.setOctaveForMiddleC(-4);
+    // setOctaveForMiddleC changes only the octave labels painted on the
+    // on-screen keyboard. Computer-keyboard note input uses a separate base
+    // octave; zero maps the A-key's C position to MIDI note 0 (C-1).
+    keyboardComponent.setKeyPressBaseOctave(0);
     setSize(1080, 740);
     testAudioFormats.registerBasicFormats();
     testAudioReadAheadThread.startThread();
