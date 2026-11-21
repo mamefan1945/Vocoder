@@ -1565,7 +1565,7 @@ void MainComponent::timerCallback()
         {
             const auto midiNote = juce::jlimit(0, 127,
                 static_cast<int>(std::lround(69.0 + 12.0 * std::log2(pitchHz / 440.0))));
-            const auto noteName = juce::MidiMessage::getMidiNoteName(midiNote, true, true, 3);
+            const auto noteName = juce::MidiMessage::getMidiNoteName(midiNote, true, true, 4);
             harmonizerPitchLabel.setText("Pitch: " + noteName + "  |  "
                 + juce::String(pitchHz, 1) + " Hz  |  PSOLA: "
                 + juce::String(grainCoverage * 100.0f, 0) + "%", juce::dontSendNotification);
