@@ -995,19 +995,46 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             // pitch-shifting the LPC residual. Coefficients are read from the
             // matching delayed input time so formant motion stays aligned.
             auto reconstructed = psola;
+            bool formantStateValid = std::isfinite(psola);
             if (delayedAbsolute >= 0)
             {
                 const auto coefficientIndex =
                     static_cast<size_t>(delayedAbsolute) & inputRingMask;
                 for (int coefficient = 0; coefficient < lpcOrder; ++coefficient)
-                    reconstructed -=
-                        formantCoefficientHistory[static_cast<size_t>(coefficient)][coefficientIndex]
-                        * voice.formantState[static_cast<size_t>(coefficient)];
+                {
+                    auto& state = voice.formantState[static_cast<size_t>(coefficient)];
+                    const auto predictor = formantCoefficientHistory[static_cast<size_t>(coefficient)][coefficientIndex];
+                    if (!std::isfinite(state) || !std::isfinite(predictor)
+                        || std::abs(state) > 8.0f || std::abs(predictor) > 8.0f)
+                    {
+                        formantStateValid = false;
+                        break;
+                    }
+                    reconstructed -= predictor * state;
+                    if (!std::isfinite(reconstructed) || std::abs(reconstructed) > 8.0f)
+                    {
+                        formantStateValid = false;
+                        break;
+                    }
+                }
             }
-            for (int coefficient = lpcOrder - 1; coefficient > 0; --coefficient)
-                voice.formantState[static_cast<size_t>(coefficient)] =
-                    voice.formantState[static_cast<size_t>(coefficient - 1)];
-            voice.formantState[0] = reconstructed;
+            if (!formantStateValid)
+            {
+                // Time-varying LPC coefficients can destabilize the recursive
+                // synthesis state on real speech transients. Discard the bad
+                // state and fall back to the finite pitch-shifted residual for
+                // this sample instead of allowing NaNs/infinite values to
+                // poison the remainder of the audio stream.
+                voice.formantState.fill(0.0f);
+                reconstructed = psola;
+            }
+            else
+            {
+                for (int coefficient = lpcOrder - 1; coefficient > 0; --coefficient)
+                    voice.formantState[static_cast<size_t>(coefficient)] =
+                        voice.formantState[static_cast<size_t>(coefficient - 1)];
+                voice.formantState[0] = reconstructed;
+            }
             const auto formantOutput = getAlgorithm() == Algorithm::timeDomain
                 ? psola : psola + (reconstructed - psola) * formantBlend;
             if (getAlgorithm() == Algorithm::frequencyDomain)
