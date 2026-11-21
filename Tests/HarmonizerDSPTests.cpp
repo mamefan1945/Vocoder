@@ -288,6 +288,8 @@ bool testAlgorithmSwitching()
     juce::MidiBuffer midi;
     midi.addEvent(juce::MidiMessage::noteOn(1, 69, 0.9f), 0);
 
+    std::array<float, 3> minimumCoverage { 1.0f, 1.0f, 1.0f };
+    std::array<float, 3> maximumCoverage {};
     for (int block = 0; block < totalBlocks; ++block)
     {
         if (block == blocksPerAlgorithm)
@@ -306,6 +308,12 @@ bool testAlgorithmSwitching()
         }
 
         engine->processBlock(input.data(), output.data(), blockSize, midi, 1.0f, 1.0f, 0);
+        const auto algorithmSegment = juce::jmin(2, block / blocksPerAlgorithm);
+        const auto coverage = engine->getGrainCoverage();
+        minimumCoverage[static_cast<size_t>(algorithmSegment)] =
+            std::min(minimumCoverage[static_cast<size_t>(algorithmSegment)], coverage);
+        maximumCoverage[static_cast<size_t>(algorithmSegment)] =
+            std::max(maximumCoverage[static_cast<size_t>(algorithmSegment)], coverage);
         midi.clear();
         std::copy_n(output.data(), blockSize,
                     rendered.data() + static_cast<size_t>(block * blockSize));
@@ -350,7 +358,10 @@ bool testAlgorithmSwitching()
             && dominantHz >= 425.0 && dominantHz <= 455.0;
         std::cout << "Runtime switch " << names[static_cast<size_t>(segment)]
                   << ": dominant " << dominantHz << " Hz; RMS " << rms
-                  << "; peak " << peak << "; finite=" << finite
+                  << "; peak " << peak << "; grain coverage "
+                  << minimumCoverage[static_cast<size_t>(segment)] << ".."
+                  << maximumCoverage[static_cast<size_t>(segment)]
+                  << "; finite=" << finite
                   << "; passed=" << (segmentPassed ? "true" : "false") << '\n';
         passed = passed && segmentPassed;
     }
