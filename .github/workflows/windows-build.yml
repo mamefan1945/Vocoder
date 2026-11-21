@@ -1,5 +1,9 @@
 name: Windows build
 
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ main ]
@@ -72,9 +76,34 @@ jobs:
           path: ${{ steps.vcpkg-cache.outputs.path }}
           key: vcpkg-${{ runner.os }}-x64-${{ steps.vcpkg-version.outputs.version }}-fluidsynth-r1
 
-      - name: Configure CMake
+      - name: Prepare JUCE FetchContent cache directory
+        id: juce-cache
         shell: pwsh
-        run: cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows
+        run: |
+          $cache = Join-Path $env:RUNNER_TEMP 'cmake-fetchcontent'
+          New-Item -ItemType Directory -Force -Path $cache | Out-Null
+          "FETCHCONTENT_BASE_DIR=$cache" >> $env:GITHUB_ENV
+          "path=$cache" >> $env:GITHUB_OUTPUT
+
+      - name: Restore JUCE source cache
+        id: restore-juce
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.juce-cache.outputs.path }}
+          # Bump this revision if the JUCE FetchContent declaration changes.
+          key: cmake-${{ runner.os }}-juce-8.0.10-r1
+
+      - name: Configure CMake
+        id: configure-cmake
+        shell: pwsh
+        run: cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -DFETCHCONTENT_BASE_DIR="$env:FETCHCONTENT_BASE_DIR"
+
+      - name: Save JUCE source cache
+        if: steps.configure-cmake.outcome == 'success' && steps.restore-juce.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.juce-cache.outputs.path }}
+          key: cmake-${{ runner.os }}-juce-8.0.10-r1
 
       - name: Build Release
         run: cmake --build build --config Release --parallel
