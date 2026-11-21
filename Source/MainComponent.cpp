@@ -83,8 +83,8 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
       keyboardComponent(keyboardState),
       startupCompleteCallback(onStartupComplete)
 {
-    // Map the computer-keyboard home row to C1 (MIDI 24), two octaves
-    // above the previous C-1 mapping. Keep that full range visible below.
+    // Map the computer keyboard from C3 (MIDI 48), a practical
+    // starting point for baritone-range playing.
     keyboardComponent.setKeyPressBaseOctave(2);
     // Route computer-keyboard notes from the whole component tree, not only
     // when the on-screen piano itself owns focus.
@@ -1069,7 +1069,7 @@ bool MainComponent::keyStateChanged(bool, juce::Component*)
             continue;
 
         computerKeysDown[static_cast<size_t>(i)] = isDown;
-        const int note = 12 + i; // C0 upward, matching the visible keyboard range.
+        const int note = 48 + i; // C3 upward, centered on the baritone register.
         if (isDown)
             keyboardState.noteOn(1, note, 0.8f);
         else
