@@ -271,6 +271,92 @@ bool testPolyphony(HarmonizerEngine::Algorithm algorithm, const char* name)
         && std::isfinite(noteA) && std::isfinite(noteB);
 }
 
+
+bool testAlgorithmSwitching()
+{
+    auto engine = std::make_unique<HarmonizerEngine>();
+    engine->setAlgorithm(HarmonizerEngine::Algorithm::timeDomain);
+    engine->prepare(sampleRate, blockSize);
+
+    constexpr int blocksPerAlgorithm = 47;
+    constexpr int totalBlocks = blocksPerAlgorithm * 3;
+    constexpr size_t totalSamples =
+        static_cast<size_t>(blocksPerAlgorithm * 3 * blockSize);
+    std::vector<float> rendered(totalSamples, 0.0f);
+    std::array<float, blockSize> input {};
+    std::array<float, blockSize> output {};
+    juce::MidiBuffer midi;
+    midi.addEvent(juce::MidiMessage::noteOn(1, 69, 0.9f), 0);
+
+    for (int block = 0; block < totalBlocks; ++block)
+    {
+        if (block == blocksPerAlgorithm)
+            engine->setAlgorithm(HarmonizerEngine::Algorithm::lpc);
+        else if (block == blocksPerAlgorithm * 2)
+            engine->setAlgorithm(HarmonizerEngine::Algorithm::frequencyDomain);
+
+        for (int i = 0; i < blockSize; ++i)
+        {
+            const auto absolute = block * blockSize + i;
+            const auto time = static_cast<double>(absolute) / sampleRate;
+            input[static_cast<size_t>(i)] =
+                0.55f * static_cast<float>(std::sin(2.0 * pi * 220.0 * time))
+              + 0.22f * static_cast<float>(std::sin(2.0 * pi * 440.0 * time))
+              + 0.10f * static_cast<float>(std::sin(2.0 * pi * 660.0 * time));
+        }
+
+        engine->processBlock(input.data(), output.data(), blockSize, midi, 1.0f, 1.0f, 0);
+        midi.clear();
+        std::copy_n(output.data(), blockSize,
+                    rendered.data() + static_cast<size_t>(block * blockSize));
+    }
+
+    const std::array<const char*, 3> names {
+        "TD-PSOLA", "LP-PSOLA", "FD-PSOLA"
+    };
+    bool passed = true;
+    for (int segment = 0; segment < 3; ++segment)
+    {
+        const auto segmentStart =
+            static_cast<size_t>(segment * blocksPerAlgorithm * blockSize);
+        const auto first = segmentStart + static_cast<size_t>(sampleRate * 0.10);
+        constexpr size_t count = static_cast<size_t>(sampleRate * 0.30);
+        double strongest = 0.0;
+        double dominantHz = 0.0;
+        double squareSum = 0.0;
+        float peak = 0.0f;
+        bool finite = true;
+
+        for (size_t i = first; i < first + count; ++i)
+        {
+            const auto value = rendered[i];
+            finite = finite && std::isfinite(value);
+            squareSum += static_cast<double>(value) * value;
+            peak = std::max(peak, std::abs(value));
+        }
+        for (int hz = 420; hz <= 460; ++hz)
+        {
+            const auto magnitude = magnitudeAt(rendered, first, count,
+                                               static_cast<double>(hz));
+            if (magnitude > strongest)
+            {
+                strongest = magnitude;
+                dominantHz = static_cast<double>(hz);
+            }
+        }
+
+        const auto rms = std::sqrt(squareSum / static_cast<double>(count));
+        const auto segmentPassed = finite && peak < 2.0f && rms > 0.005
+            && dominantHz >= 425.0 && dominantHz <= 455.0;
+        std::cout << "Runtime switch " << names[static_cast<size_t>(segment)]
+                  << ": dominant " << dominantHz << " Hz; RMS " << rms
+                  << "; peak " << peak << "; finite=" << finite
+                  << "; passed=" << segmentPassed << '\\n';
+        passed = passed && segmentPassed;
+    }
+    return passed;
+}
+
 bool testSilenceProducesSilence()
 {
     auto engine = std::make_unique<HarmonizerEngine>();
@@ -331,6 +417,7 @@ int main()
     passed &= testPolyphony(HarmonizerEngine::Algorithm::timeDomain, "TD-PSOLA");
     passed &= testPolyphony(HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
     passed &= testPolyphony(HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
+    passed &= testAlgorithmSwitching();
     passed &= testSilenceProducesSilence();
     passed &= testNoMidiProducesNoWetOutput();
     std::cout << (passed ? "All harmonizer DSP tests passed.\n"
