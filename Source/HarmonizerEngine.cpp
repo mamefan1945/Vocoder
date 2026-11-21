@@ -717,10 +717,11 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         }
         activeOctaveShift = clampedOctaveShift;
     }
-    juce::MidiBuffer::Iterator midiIterator(midi);
-    juce::MidiMessage nextMidiMessage;
-    int nextMidiSample = 0;
-    auto hasNextMidiEvent = midiIterator.getNextEvent(nextMidiMessage, nextMidiSample);
+    auto midiIterator = midi.begin();
+    const auto midiEnd = midi.end();
+    auto hasNextMidiEvent = midiIterator != midiEnd;
+    auto nextMidiMetadata = hasNextMidiEvent
+        ? *midiIterator : juce::MidiMessageMetadata {};
     const auto mix = juce::jlimit(0.0f, 1.0f, dryWet);
     const auto sampleRate = static_cast<float>(currentSampleRate);
     const auto attackCoefficient = 1.0f - std::exp(-1.0f / (0.008f * sampleRate));
@@ -749,10 +750,13 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
     for (int i = 0; i < numSamples; ++i)
     {
         // Apply note/controller events at their actual sample offsets.
-        while (hasNextMidiEvent && nextMidiSample <= i)
+        while (hasNextMidiEvent && nextMidiMetadata.samplePosition <= i)
         {
-            handleMidiMessage(nextMidiMessage, clampedOctaveShift * 12);
-            hasNextMidiEvent = midiIterator.getNextEvent(nextMidiMessage, nextMidiSample);
+            handleMidiMessage(nextMidiMetadata.getMessage(), clampedOctaveShift * 12);
+            ++midiIterator;
+            hasNextMidiEvent = midiIterator != midiEnd;
+            if (hasNextMidiEvent)
+                nextMidiMetadata = *midiIterator;
         }
 
         for (size_t channel = 0; channel < pitchBendSemitones.size(); ++channel)
