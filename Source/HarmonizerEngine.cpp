@@ -1009,6 +1009,15 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             ++activeCount;
         }
 
+        // Aggregate per-voice measurements once per output sample. These
+        // counters feed the FD-PSOLA stage RMS diagnostics used by regression
+        // tests; omitting this step leaves their block totals permanently zero.
+        if (getAlgorithm() == Algorithm::frequencyDomain)
+        {
+            fdPsolaEnergy += fdSamplePsolaEnergy;
+            fdReconstructedEnergy += fdSampleReconstructedEnergy;
+        }
+
         // Unvoiced consonants contain no stable pitch to transpose. Route them
         // once, shared by the active chord, instead of summing an identical dry
         // consonant through every voice (which boosts S/SH/F levels by sqrt(N)).
