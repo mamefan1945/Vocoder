@@ -87,7 +87,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     // on-screen keyboard. Computer-keyboard note input uses a separate base
     // octave; zero maps the A-key's C position to MIDI note 0 (C-1).
     keyboardComponent.setKeyPressBaseOctave(0);
-    setSize(1080, 740);
+    setSize(1380, 790);
     testAudioFormats.registerBasicFormats();
     testAudioReadAheadThread.startThread();
 

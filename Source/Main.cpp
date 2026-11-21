@@ -33,23 +33,23 @@ namespace
             }();
             if (logo != nullptr)
                 logo->drawWithin(g, juce::Rectangle<float>(
-                    getWidth() * 0.12f, 54.0f, getWidth() * 0.76f, 254.0f),
+                    getWidth() * 0.12f, 22.0f, getWidth() * 0.76f, 278.0f),
                     juce::RectanglePlacement::centred, 1.0f);
 
             g.setColour(juce::Colour(0xffaeb8c6));
             g.setFont(juce::Font(juce::FontOptions(14.0f)));
             g.drawFittedText("Starting audio engine and loading instruments...",
-                             getLocalBounds().withY(getHeight() / 2 + 52).withHeight(26),
+                             getLocalBounds().withY(430).withHeight(26),
                              juce::Justification::centred, 1);
 
             const auto waveArea = juce::Rectangle<float>(
-                getWidth() * 0.18f, getHeight() * 0.5f + 20.0f,
-                getWidth() * 0.64f, 76.0f);
+                getWidth() * 0.18f, 326.0f,
+                getWidth() * 0.64f, 82.0f);
             g.setColour(juce::Colour(0xff343b48));
             g.drawRoundedRectangle(waveArea, 8.0f, 1.0f);
 
             const auto progressArea = juce::Rectangle<float>(
-                waveArea.getX(), waveArea.getBottom() + 16.0f,
+                waveArea.getX(), waveArea.getBottom() + 64.0f,
                 waveArea.getWidth(), 4.0f);
             g.setColour(juce::Colour(0xff303744));
             g.fillRoundedRectangle(progressArea, 2.0f);
@@ -162,7 +162,8 @@ private:
             setUsingNativeTitleBar(true);
             setContentOwned(new StartupSplash(), true);
             setResizable(true, true);
-            centreWithSize(900, 620);
+            setResizeLimits(1180, 700, 1920, 1200);
+            centreWithSize(1380, 790);
             setVisible(true);
             startTimer(250);
         }

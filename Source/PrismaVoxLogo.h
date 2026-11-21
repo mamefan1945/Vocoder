@@ -34,10 +34,5 @@ inline constexpr const char* prismaVoxLogoSvg = R"PRISMAVOX(
     <path d="M450 244 L600 244 L820 166" fill="none" stroke="url(#beam)" stroke-width="2" opacity=".7"/>
     <path d="M450 244 L300 244 L110 166" fill="none" stroke="#8fcaff" stroke-width="2" opacity=".55"/>
   </g>
-  <text x="450" y="354" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="104" font-weight="300" letter-spacing="-4" fill="#f4f7fb">Prisma<tspan fill="url(#vox)" font-weight="600">Vox</tspan></text>
-  <path d="M85 421 H245 M655 421 H815" stroke="#287dca" stroke-width="2" opacity=".55"/>
-  <g transform="translate(450 421)" stroke="url(#vox)" stroke-width="5" stroke-linecap="round" filter="url(#glow)">
-    <path d="M-185 0v-8 M-158 0v-18 M-131 0v-31 M-104 0v-43 M-77 0v-57 M-50 0v-72 M-23 0v-88 M0 0v-102 M23 0v-88 M50 0v-72 M77 0v-57 M104 0v-43 M131 0v-31 M158 0v-18 M185 0v-8"/>
-  </g>
 </svg>
 )PRISMAVOX";
