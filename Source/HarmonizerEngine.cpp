@@ -388,7 +388,17 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
             const auto fraction = static_cast<float>(destination - lower);
             if (lower < 0 || lower > fdFftSize / 2)
                 continue;
-            const auto source = sourceSpectrum[static_cast<size_t>(bin)];
+            // The analysis frame is centered at N/2, not at sample zero.
+            // Moving a bin from k to destination changes the phase required
+            // to keep the waveform's time origin centered. Without this
+            // correction, the inverse-FFT grain can be displaced in time and
+            // the center extraction window discards most of its energy.
+            const auto phase = -pi * (destination - static_cast<double>(bin));
+            const auto phaseCorrection = Complex(
+                static_cast<float>(std::cos(phase)),
+                static_cast<float>(std::sin(phase)));
+            const auto source = sourceSpectrum[static_cast<size_t>(bin)]
+                              * phaseCorrection;
             shiftedSpectrum[static_cast<size_t>(lower)] += source * (1.0f - fraction);
             if (lower + 1 <= fdFftSize / 2)
                 shiftedSpectrum[static_cast<size_t>(lower + 1)] += source * fraction;
