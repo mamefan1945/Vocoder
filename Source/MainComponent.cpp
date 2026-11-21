@@ -83,10 +83,9 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
       keyboardComponent(keyboardState),
       startupCompleteCallback(onStartupComplete)
 {
-    // setOctaveForMiddleC changes only the octave labels painted on the
-    // on-screen keyboard. Computer-keyboard note input uses a separate base
-    // octave; zero maps the A-key's C position to MIDI note 0 (C-1).
-    keyboardComponent.setKeyPressBaseOctave(0);
+    // Map the computer-keyboard home row to C1 (MIDI 24), two octaves
+    // above the previous C-1 mapping. Keep that full range visible below.
+    keyboardComponent.setKeyPressBaseOctave(2);
     setSize(1380, 790);
     testAudioFormats.registerBasicFormats();
     testAudioReadAheadThread.startThread();
@@ -447,7 +446,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
 
     startTimerHz(60);
 
-    keyboardComponent.setAvailableRange(36, 108);
+    keyboardComponent.setAvailableRange(24, 108);
     keyboardComponent.setKeyWidth(24.0f);
     addAndMakeVisible(keyboardComponent);
 
