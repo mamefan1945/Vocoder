@@ -52,15 +52,25 @@ jobs:
           "path=$cache" >> $env:GITHUB_OUTPUT
 
       - name: Restore FluidSynth binary cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ${{ steps.vcpkg-cache.outputs.path }}
           # Bump the fluidsynth cache revision when intentionally upgrading it.
           key: vcpkg-${{ runner.os }}-x64-${{ steps.vcpkg-version.outputs.version }}-fluidsynth-r1
 
       - name: Install FluidSynth
+        id: install-fluidsynth
         shell: pwsh
         run: '& "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install fluidsynth:x64-windows --classic'
+
+      # Save immediately after dependency installation so a later DSP test
+      # failure cannot prevent the dependency cache from being populated.
+      - name: Save FluidSynth binary cache
+        if: steps.install-fluidsynth.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.vcpkg-cache.outputs.path }}
+          key: vcpkg-${{ runner.os }}-x64-${{ steps.vcpkg-version.outputs.version }}-fluidsynth-r1
 
       - name: Configure CMake
         shell: pwsh
