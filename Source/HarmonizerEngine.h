@@ -72,8 +72,11 @@ private:
     std::array<float, inputRingSize> inputHistory {};
     std::array<float, inputRingSize> residualHistory {};
     std::array<std::array<float, inputRingSize>, lpcOrder> formantCoefficientHistory {};
+    // Smooth reflection coefficients, not direct-form LPC polynomial
+    // coefficients. Every interpolated set remains stable by construction.
+    std::array<float, lpcOrder> formantReflectionCoefficients {};
+    std::array<float, lpcOrder> targetFormantReflectionCoefficients {};
     std::array<float, lpcOrder> formantCoefficients {};
-    std::array<float, lpcOrder> targetFormantCoefficients {};
     int maximumBlockSize = 2048;
     double currentSampleRate = 44100.0;
     uint64_t totalSamples = 0;

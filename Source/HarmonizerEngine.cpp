@@ -96,8 +96,9 @@ void HarmonizerEngine::reset() noexcept
     residualHistory.fill(0.0f);
     for (auto& coefficients : formantCoefficientHistory)
         coefficients.fill(0.0f);
+    formantReflectionCoefficients.fill(0.0f);
+    targetFormantReflectionCoefficients.fill(0.0f);
     formantCoefficients.fill(0.0f);
-    targetFormantCoefficients.fill(0.0f);
     totalSamples = 0;
     pitchUpdateCounter = 0;
     pitchMissCount = 0;
@@ -291,6 +292,7 @@ void HarmonizerEngine::estimateFormantEnvelope() noexcept
 
     std::array<double, lpcOrder + 1> predictor {};
     std::array<double, lpcOrder + 1> updated {};
+    std::array<float, lpcOrder> reflectionCoefficients {};
     predictor[0] = 1.0;
     auto predictionError = autocorrelation[0];
 
@@ -304,16 +306,22 @@ void HarmonizerEngine::estimateFormantEnvelope() noexcept
         if (!std::isfinite(residual) || !std::isfinite(predictionError)
             || predictionError <= 1.0e-12)
         {
-            targetFormantCoefficients.fill(0.0f);
+            targetFormantReflectionCoefficients.fill(0.0f);
             return;
         }
         const auto reflectionValue = -residual / predictionError;
         if (!std::isfinite(reflectionValue))
         {
-            targetFormantCoefficients.fill(0.0f);
+            targetFormantReflectionCoefficients.fill(0.0f);
             return;
         }
-        const auto reflection = juce::jlimit(-0.98, 0.98, reflectionValue);
+        // Reflection coefficients inside the unit circle define a stable
+        // all-pole filter. Store these parameters and smooth them over time;
+        // interpolating LPC polynomial coefficients directly can cross into
+        // an unstable region even when both endpoint filters are stable.
+        const auto reflection = juce::jlimit(-0.95, 0.95, reflectionValue);
+        reflectionCoefficients[static_cast<size_t>(order - 1)] =
+            static_cast<float>(reflection);
         updated = predictor;
         for (int j = 1; j < order; ++j)
             updated[static_cast<size_t>(j)] =
@@ -325,14 +333,7 @@ void HarmonizerEngine::estimateFormantEnvelope() noexcept
             predictionError * (1.0 - reflection * reflection));
     }
 
-    constexpr double bandwidthExpansion = 0.994;
-    double expansion = bandwidthExpansion;
-    for (int i = 0; i < lpcOrder; ++i)
-    {
-        targetFormantCoefficients[static_cast<size_t>(i)] =
-            static_cast<float>(predictor[static_cast<size_t>(i + 1)] * expansion);
-        expansion *= bandwidthExpansion;
-    }
+    targetFormantReflectionCoefficients = reflectionCoefficients;
 }
 
 void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
@@ -904,10 +905,38 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             formantUpdateCounter = 0;
             estimateFormantEnvelope();
         }
+        // Interpolate stable reflection parameters, then rebuild the LPC
+        // polynomial. This avoids unstable intermediate filters caused by
+        // smoothing direct-form predictor coefficients independently.
         for (int coefficient = 0; coefficient < lpcOrder; ++coefficient)
-            formantCoefficients[static_cast<size_t>(coefficient)] +=
-                (targetFormantCoefficients[static_cast<size_t>(coefficient)]
-                 - formantCoefficients[static_cast<size_t>(coefficient)]) * formantSmoothing;
+            formantReflectionCoefficients[static_cast<size_t>(coefficient)] +=
+                (targetFormantReflectionCoefficients[static_cast<size_t>(coefficient)]
+                 - formantReflectionCoefficients[static_cast<size_t>(coefficient)])
+                * formantSmoothing;
+
+        std::array<float, lpcOrder> stablePredictor {};
+        std::array<float, lpcOrder> updatedPredictor {};
+        for (int order = 1; order <= lpcOrder; ++order)
+        {
+            const auto reflection =
+                formantReflectionCoefficients[static_cast<size_t>(order - 1)];
+            updatedPredictor = stablePredictor;
+            for (int j = 1; j < order; ++j)
+                updatedPredictor[static_cast<size_t>(j - 1)] =
+                    stablePredictor[static_cast<size_t>(j - 1)]
+                    + reflection * stablePredictor[static_cast<size_t>(order - j - 1)];
+            updatedPredictor[static_cast<size_t>(order - 1)] = reflection;
+            stablePredictor = updatedPredictor;
+        }
+
+        constexpr float bandwidthExpansion = 0.994f;
+        float expansion = bandwidthExpansion;
+        for (int coefficient = 0; coefficient < lpcOrder; ++coefficient)
+        {
+            formantCoefficients[static_cast<size_t>(coefficient)] =
+                stablePredictor[static_cast<size_t>(coefficient)] * expansion;
+            expansion *= bandwidthExpansion;
+        }
 
         const auto historyIndex = static_cast<size_t>(absolute) & inputRingMask;
         float residual = source;
