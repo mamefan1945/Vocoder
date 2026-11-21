@@ -3,8 +3,20 @@ name: Windows build
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - '*.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE/**'
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - '*.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE/**'
   workflow_dispatch:
 
 permissions:
@@ -13,6 +25,10 @@ permissions:
 jobs:
   build:
     runs-on: windows-2022
+    env:
+      # vcpkg uses this directory for compiled package archives. actions/cache
+      # restores it before install and saves it after the job on cache misses.
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}\\vcpkg-binary-cache
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -21,6 +37,21 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+
+      - name: Identify vcpkg toolchain
+        id: vcpkg-version
+        shell: pwsh
+        run: |
+          $version = (& "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" version | Select-Object -First 1).Trim()
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Using $version"
+
+      - name: Restore FluidSynth binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          # Bump the fluidsynth cache revision when intentionally upgrading it.
+          key: vcpkg-${{ runner.os }}-x64-${{ steps.vcpkg-version.outputs.version }}-fluidsynth-r1
 
       - name: Install FluidSynth
         shell: pwsh
