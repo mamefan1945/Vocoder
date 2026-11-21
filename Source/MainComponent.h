@@ -118,7 +118,7 @@ private:
     juce::MidiMessageCollector externalMidiCollector;
     MidiInputRouter midiInputRouter;
     LockableMidiKeyboard keyboardComponent;
-    std::array<bool, 17> computerKeysDown {};
+    std::array<bool, 19> computerKeysDown {};
     juce::StringArray midiInputIdentifiers;
 
     juce::ComboBox processingMode;
