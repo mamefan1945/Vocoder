@@ -8,13 +8,21 @@ namespace
                                 private juce::Timer
     {
     public:
-        StartupSplash()
+        explicit StartupSplash(std::function<void()> onFirstPaint)
+            : firstPaintCallback(std::move(onFirstPaint))
         {
             startTimerHz(30);
         }
 
         void paint(juce::Graphics& g) override
         {
+            if (!firstPaintSent)
+            {
+                firstPaintSent = true;
+                auto callback = std::move(firstPaintCallback);
+                if (callback)
+                    juce::MessageManager::callAsync(std::move(callback));
+            }
             const auto bounds = getLocalBounds().toFloat();
             g.fillAll(juce::Colour(0xff171a20));
             g.setColour(juce::Colour(0xff202936));
@@ -125,6 +133,8 @@ namespace
             repaint();
         }
 
+        std::function<void()> firstPaintCallback;
+        bool firstPaintSent = false;
         float phase = 0.0f;
         float scrollPhase = 0.0f;
         float progressPhase = 0.0f;
@@ -149,8 +159,7 @@ public:
     }
 
 private:
-    class MainWindow final : public juce::DocumentWindow,
-                             private juce::Timer
+    class MainWindow final : public juce::DocumentWindow
     {
     public:
         explicit MainWindow(const juce::String& name)
@@ -160,15 +169,17 @@ private:
                              juce::DocumentWindow::allButtons)
         {
             setUsingNativeTitleBar(true);
-            setContentOwned(new StartupSplash(), true);
+            juce::Component::SafePointer<MainWindow> safeThis(this);
+            setContentOwned(new StartupSplash([safeThis]
+            {
+                if (safeThis != nullptr)
+                    safeThis->startMainComponent();
+            }), true);
             setResizable(true, true);
             setResizeLimits(1180, 700, 1920, 1200);
             centreWithSize(1380, 790);
             setVisible(true);
-            startTimer(250);
         }
-
-        ~MainWindow() override { stopTimer(); }
 
         void closeButtonPressed() override
         {
@@ -176,17 +187,21 @@ private:
         }
 
     private:
-        void timerCallback() override
+        void startMainComponent()
         {
-            stopTimer();
+            if (pendingMainComponent != nullptr || mainComponentInstalled)
+                return;
             pendingMainComponent = std::make_unique<MainComponent>([this]
             {
                 if (pendingMainComponent != nullptr)
+                {
+                    mainComponentInstalled = true;
                     setContentOwned(pendingMainComponent.release(), true);
+                }
             });
         }
-
         std::unique_ptr<MainComponent> pendingMainComponent;
+        bool mainComponentInstalled = false;
     };
 
     std::unique_ptr<MainWindow> mainWindow;
