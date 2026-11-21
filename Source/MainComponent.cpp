@@ -450,7 +450,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
 
     startTimerHz(60);
 
-    keyboardComponent.setAvailableRange(24, 108);
+    keyboardComponent.setAvailableRange(12, 108);
     keyboardComponent.setKeyWidth(24.0f);
     addAndMakeVisible(keyboardComponent);
 
@@ -1069,7 +1069,7 @@ bool MainComponent::keyStateChanged(bool, juce::Component*)
             continue;
 
         computerKeysDown[static_cast<size_t>(i)] = isDown;
-        const int note = 24 + i; // C1 upward, matching the visible keyboard range.
+        const int note = 12 + i; // C0 upward, matching the visible keyboard range.
         if (isDown)
             keyboardState.noteOn(1, note, 0.8f);
         else
