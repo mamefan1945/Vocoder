@@ -347,8 +347,14 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
         // source grain, remap its complex spectrum by the target/source F0
         // ratio, inverse-transform, then overlap-add at the synthesis mark.
         // The fixed stack buffers avoid allocation or locking on the audio thread.
-        std::array<float, fdFftSize * 2> fftData {};
-        std::array<float, fdFftSize + 2> sourceSpectrum {};
+        // Use the complex-to-complex FFT API here. JUCE's real-only transform
+        // has backend-specific packed layouts (notably IPP's CCS format), while
+        // this bin-remapping code requires a consistent interleaved complex
+        // spectrum on every supported Windows machine.
+        using Complex = juce::dsp::Complex<float>;
+        std::array<Complex, fdFftSize> fftInput {};
+        std::array<Complex, fdFftSize> sourceSpectrum {};
+        std::array<Complex, fdFftSize> shiftedSpectrum {};
         const auto ratio = juce::jlimit(0.25,
             4.0, sourcePeriod / juce::jmax(1.0, targetPeriod));
         for (int n = 0; n < fdFftSize; ++n)
@@ -360,36 +366,31 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
             const auto window = 0.5f - 0.5f * std::cos(
                 2.0f * pi * static_cast<float>(n)
                 / static_cast<float>(fdFftSize - 1));
-            fftData[static_cast<size_t>(n)] =
-                (absolute >= 0 ? residualHistory[index] : 0.0f) * window;
+            const auto sample = (absolute >= 0 ? residualHistory[index] : 0.0f)
+                              * window;
+            fftInput[static_cast<size_t>(n)] = Complex(sample, 0.0f);
         }
-        fdPsolaFft.performRealOnlyForwardTransform(fftData.data());
-        for (int bin = 0; bin <= fdFftSize / 2; ++bin)
-        {
-            sourceSpectrum[static_cast<size_t>(2 * bin)] = fftData[static_cast<size_t>(2 * bin)];
-            sourceSpectrum[static_cast<size_t>(2 * bin + 1)] = fftData[static_cast<size_t>(2 * bin + 1)];
-        }
-        std::fill(fftData.begin(), fftData.end(), 0.0f);
+        fdPsolaFft.perform(fftInput.data(), sourceSpectrum.data(), false);
         for (int bin = 0; bin <= fdFftSize / 2; ++bin)
         {
             const auto destination = static_cast<double>(bin) * ratio;
             const auto lower = static_cast<int>(std::floor(destination));
             const auto fraction = static_cast<float>(destination - lower);
-            if (lower < 0 || lower >= fdFftSize / 2)
+            if (lower < 0 || lower > fdFftSize / 2)
                 continue;
-            const auto sourceReal = sourceSpectrum[static_cast<size_t>(2 * bin)];
-            const auto sourceImag = sourceSpectrum[static_cast<size_t>(2 * bin + 1)];
-            const auto lowerIndex = static_cast<size_t>(2 * lower);
-            fftData[lowerIndex] += sourceReal * (1.0f - fraction);
-            fftData[lowerIndex + 1] += sourceImag * (1.0f - fraction);
-            if (lower + 1 < fdFftSize / 2)
-            {
-                const auto upperIndex = static_cast<size_t>(2 * (lower + 1));
-                fftData[upperIndex] += sourceReal * fraction;
-                fftData[upperIndex + 1] += sourceImag * fraction;
-            }
+            const auto source = sourceSpectrum[static_cast<size_t>(bin)];
+            shiftedSpectrum[static_cast<size_t>(lower)] += source * (1.0f - fraction);
+            if (lower + 1 <= fdFftSize / 2)
+                shiftedSpectrum[static_cast<size_t>(lower + 1)] += source * fraction;
         }
-        fdPsolaFft.performRealOnlyInverseTransform(fftData.data());
+        // A real-valued frame requires a conjugate-symmetric spectrum.
+        shiftedSpectrum[0] = Complex(shiftedSpectrum[0].real(), 0.0f);
+        shiftedSpectrum[static_cast<size_t>(fdFftSize / 2)] =
+            Complex(shiftedSpectrum[static_cast<size_t>(fdFftSize / 2)].real(), 0.0f);
+        for (int bin = 1; bin < fdFftSize / 2; ++bin)
+            shiftedSpectrum[static_cast<size_t>(fdFftSize - bin)] =
+                std::conj(shiftedSpectrum[static_cast<size_t>(bin)]);
+        fdPsolaFft.perform(shiftedSpectrum.data(), fftInput.data(), true);
         const auto outputHalf = juce::jmin(halfWindow, fdFftSize / 2 - 1);
         for (int offset = -outputHalf; offset <= outputHalf; ++offset)
         {
@@ -400,7 +401,7 @@ void HarmonizerEngine::scheduleGrain(PitchVoice& voice, int64_t sourceCentre,
             const auto frameIndex = static_cast<size_t>(offset + fdFftSize / 2);
             const auto window = 0.5f + 0.5f * std::cos(
                 pi * static_cast<float>(offset) / static_cast<float>(outputHalf));
-            const auto sample = fftData[frameIndex];
+            const auto sample = fftInput[frameIndex].real();
             voice.overlap[outputIndex] += sample * window;
             voice.weights[outputIndex] += window;
         }
