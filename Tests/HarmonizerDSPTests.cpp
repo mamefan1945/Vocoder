@@ -679,6 +679,30 @@ bool testSilenceProducesSilence()
     return peak < 1.0e-6f;
 }
 
+bool testNoMidiDryBlendIsGated()
+{
+    auto engine = std::make_unique<HarmonizerEngine>();
+    engine->prepare(sampleRate, blockSize);
+    std::array<float, blockSize> input {};
+    std::array<float, blockSize> output {};
+    juce::MidiBuffer midi;
+    float peak = 0.0f;
+    for (int block = 0; block < 80; ++block)
+    {
+        for (int i = 0; i < blockSize; ++i)
+        {
+            const auto t = static_cast<double>(block * blockSize + i) / sampleRate;
+            input[static_cast<size_t>(i)] =
+                0.5f * static_cast<float>(std::sin(2.0 * pi * 220.0 * t));
+        }
+        engine->processBlock(input.data(), output.data(), blockSize, midi, 0.35f, 1.0f, 0);
+        for (const auto value : output)
+            peak = std::max(peak, std::abs(value));
+    }
+    std::cout << "No-MIDI mixed-output peak: " << peak << '\n';
+    return peak < 1.0e-6f;
+}
+
 bool testNoMidiProducesNoWetOutput()
 {
     auto engine = std::make_unique<HarmonizerEngine>();
@@ -730,6 +754,7 @@ int main()
     passed &= testFdPolyphonyPerformanceProfile();
     passed &= testSilenceProducesSilence();
     passed &= testNoMidiProducesNoWetOutput();
+    passed &= testNoMidiDryBlendIsGated();
     std::cout << (passed ? "All harmonizer DSP tests passed.\n"
                          : "One or more harmonizer DSP tests failed.\n");
     return passed ? 0 : 1;

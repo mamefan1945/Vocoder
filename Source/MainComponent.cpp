@@ -83,10 +83,10 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
       keyboardComponent(keyboardState),
       startupCompleteCallback(onStartupComplete)
 {
-    // Lower JUCE's computer-keyboard mapping by two octaves: with the
-    // current JUCE key layout, A otherwise triggers C1 instead of C-1.
+    // The previous two-octave adjustment still left A sounding C1.
+    // Move the computer-keyboard mapping down two additional octaves.
     // The on-screen keyboard and external MIDI input are unaffected.
-    keyboardComponent.setOctaveForMiddleC(-2);
+    keyboardComponent.setOctaveForMiddleC(-4);
     setSize(1080, 740);
     testAudioFormats.registerBasicFormats();
     testAudioReadAheadThread.startThread();

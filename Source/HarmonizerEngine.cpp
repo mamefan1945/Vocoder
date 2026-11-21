@@ -980,6 +980,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
         float unvoicedGain = 0.0f;
         int activeCount = 0;
         float voiceLevelSum = 0.0f;
+        float dryGate = 0.0f;
         float grainFallbackGain = 0.0f;
         double fdSamplePsolaEnergy = 0.0;
         double fdSampleReconstructedEnergy = 0.0;
@@ -1019,6 +1020,11 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             }
             else
                 voice.envelope += (1.0f - voice.envelope) * attackCoefficient;
+
+            // Gate dry blend with the MIDI voice envelope. This preserves a
+            // smooth note attack/release while preventing input leakage when
+            // no key is held.
+            dryGate = juce::jmax(dryGate, voice.envelope);
 
             // Reconstruct the source vocal-tract spectral envelope after
             // pitch-shifting the LPC residual. Coefficients are read from the
@@ -1135,7 +1141,7 @@ void HarmonizerEngine::processBlock(const float* input, float* output, int numSa
             fdHarmonyEnergy += static_cast<double>(harmony) * harmony;
             ++fdMeasuredSamples;
         }
-        output[i] = (delayedInput * (1.0f - mix)
+        output[i] = (delayedInput * (1.0f - mix) * dryGate
                    + harmony * mix) * outputGain;
     }
     if (fdMeasuredSamples > 0)
