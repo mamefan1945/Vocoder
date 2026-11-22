@@ -32,7 +32,7 @@ The application is a standalone Windows x64 program. The DSP engines are separat
 - Microphone input on input channel 1; optional external carrier on input channel 2.
 - 40-band vocoder analysis/synthesis filter banks.
 - Adjustable vocoder attack/release, frequency range, formant shift, and noise-gate threshold.
-- Internal polyphonic oscillator synthesizer: sine, saw, square, triangle, noise, rich PWM, and choir-like waveforms.
+- Internal polyphonic oscillator synthesizer: sine, saw, square, triangle, noise, rich PWM, choir-like, and an experimental Analog Stack carrier.
 - FluidSynth SoundFont playback, with an instrument list populated from the loaded SoundFont.
 - Bundled GeneralUser GS SoundFont, plus support for loading another SF2 file.
 - On-screen keyboard covering MIDI notes 36–108 (C2–C8).
@@ -96,7 +96,7 @@ When using speakers, the microphone can pick up the processed output and feed it
 | **Processing** | Select Pass-through, Vocoder, or Harmonizer. |
 | **Carrier** | Select the internal MIDI synth or external audio input 2. Used by the vocoder. |
 | **MIDI input** | Select a connected MIDI input, or No MIDI input to use only the on-screen keyboard. |
-| **Carrier type** | Select an oscillator waveform or SoundFont (GM). |
+| **Carrier type** | Select an oscillator waveform (including the experimental Analog Stack) or SoundFont (GM). |
 | **Instrument** | Select a preset from the loaded SoundFont. Visible when SoundFont (GM) is selected. |
 | **Load SF2...** | Load another SoundFont file. |
 | **Octave** | Shift internal carrier notes and harmonizer target notes by -2 to +2 octaves. |
@@ -157,7 +157,7 @@ For a simple vocoder test:
 3. Select **Saw** as the carrier type.
 4. Leave Octave at **0**.
 5. Enable **Carrier preview** briefly and play a key to confirm the carrier is audible. Disable preview before evaluating the vocoder.
-6. Hold a single key, speak into the microphone, and watch the input/output meters.
+6. Hold a single key, speak into the microphone, and watch the input/output meters. Compare Rich (PWM), Saw, and Analog Stack at matched levels; Analog Stack is experimental and is not the default.
 7. Try a few different carrier waveforms and SoundFont presets.
 
 For a simple harmonizer test:
