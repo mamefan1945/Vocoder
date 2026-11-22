@@ -244,6 +244,8 @@ bool testReferenceSpeechFile(const juce::String& filename)
     engine.setAttackMs(10.0f);
     engine.setReleaseMs(10.0f);
     engine.setFormantShift(-2.0f);
+    engine.setBandCount(56);
+    engine.setFilterQ(7.0f);
     engine.setUnvoicedNoise(0.10f);
     engine.setSibilanceAmount(0.10f);
 
