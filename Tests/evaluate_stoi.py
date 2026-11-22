@@ -42,7 +42,7 @@ def frame_envelope(samples: np.ndarray, frame_length: int) -> np.ndarray:
 
 
 def estimate_delay_samples(reference: np.ndarray, processed: np.ndarray,
-                           sample_rate: int) -> int:
+                           sample_rate: int) -> tuple[int, float]:
     """Estimate processed-signal delay from 10 ms RMS envelopes.
 
     Positive results mean the processed signal lags the reference. The search
@@ -83,7 +83,7 @@ def estimate_delay_samples(reference: np.ndarray, processed: np.ndarray,
 
     if not np.isfinite(best_corr):
         raise ValueError("could not estimate a reliable speech-envelope alignment")
-    return best_lag * frame_length
+    return best_lag * frame_length, float(best_corr)
 
 
 def align_signals(reference: np.ndarray, processed: np.ndarray,
@@ -116,8 +116,18 @@ def main() -> int:
             continue
 
         identity_score = float(stoi(reference, reference, ref_rate, extended=False))
+        unaligned_length = min(reference.size, processed.size)
+        if unaligned_length < ref_rate:
+            print(f"ERROR: less than one second of unaligned speech for {stem}",
+                  file=sys.stderr)
+            failures.append(stem)
+            continue
+        unaligned_score = float(stoi(
+            reference[:unaligned_length], processed[:unaligned_length],
+            ref_rate, extended=False))
         try:
-            delay_samples = estimate_delay_samples(reference, processed, ref_rate)
+            delay_samples, alignment_correlation = estimate_delay_samples(
+                reference, processed, ref_rate)
             aligned_reference, aligned_processed = align_signals(
                 reference, processed, delay_samples)
         except ValueError as error:
@@ -141,16 +151,20 @@ def main() -> int:
                   file=sys.stderr)
             failures.append(stem)
             continue
-        if not np.isfinite(vocoder_score) or not -1.0 <= vocoder_score <= 1.0:
+        if (not np.isfinite(vocoder_score) or not -1.0 <= vocoder_score <= 1.0
+                or not np.isfinite(unaligned_score)
+                or not -1.0 <= unaligned_score <= 1.0):
             print(f"ERROR: invalid STOI score for {stem}: {vocoder_score}",
                   file=sys.stderr)
             failures.append(stem)
             continue
 
         delay_ms = delay_samples * 1000.0 / ref_rate
-        print(f"{stem}: STOI={vocoder_score:.4f} (estimated processed delay="
-              f"{delay_ms:+.1f} ms; identity control={identity_score:.4f}); "
-              "delay-aligned baseline only, no quality threshold applied")
+        print(f"{stem}: STOI unaligned={unaligned_score:.4f}, "
+              f"aligned={vocoder_score:.4f} (estimated processed delay="
+              f"{delay_ms:+.1f} ms; envelope correlation={alignment_correlation:.3f}; "
+              f"identity control={identity_score:.4f}); "
+              "both scores are diagnostic baselines; no quality threshold applied")
 
     if failures:
         print("STOI evaluation failed for: " + ", ".join(failures), file=sys.stderr)
