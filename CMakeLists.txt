@@ -121,7 +121,6 @@ target_compile_definitions(HarmonizerDSPTests PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     PRISMAVOX_TEST_AUDIO_DIR="${CMAKE_SOURCE_DIR}/TestAudio"
-    PRISMAVOX_TEST_RENDER_DIR="${CMAKE_BINARY_DIR}/test-renders"
 )
 target_link_libraries(HarmonizerDSPTests PRIVATE
     juce::juce_audio_basics
@@ -153,6 +152,7 @@ target_compile_definitions(VocoderDSPTests PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     PRISMAVOX_TEST_AUDIO_DIR="${CMAKE_SOURCE_DIR}/TestAudio"
+    PRISMAVOX_TEST_RENDER_DIR="${CMAKE_BINARY_DIR}/test-renders"
 )
 target_link_libraries(VocoderDSPTests PRIVATE
     juce::juce_audio_basics
