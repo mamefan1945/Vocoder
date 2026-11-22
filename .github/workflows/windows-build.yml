@@ -111,6 +111,19 @@ jobs:
       - name: Run harmonizer and vocoder DSP regression tests
         run: ctest --test-dir build -C Release --verbose --output-on-failure
 
+      - name: Set up Python for STOI evaluation
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: Tests/requirements-stoi.txt
+
+      - name: Install STOI evaluator
+        run: python -m pip install -r Tests/requirements-stoi.txt
+
+      - name: Evaluate vocoder speech intelligibility (STOI)
+        run: python Tests/evaluate_stoi.py build/test-renders
+
       - name: Stage speech-test audio beside the executable
         shell: pwsh
         run: |
