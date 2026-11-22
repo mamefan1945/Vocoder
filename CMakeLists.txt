@@ -166,3 +166,28 @@ if(MSVC)
 endif()
 
 add_test(NAME VocoderDSPTests COMMAND $<TARGET_FILE:VocoderDSPTests>)
+
+# Hosted, device-independent vocoder parameter search.
+juce_add_console_app(VocoderOptimizer PRODUCT_NAME "Vocoder Parameter Optimizer")
+juce_generate_juce_header(VocoderOptimizer)
+target_include_directories(VocoderOptimizer PRIVATE Source)
+target_sources(VocoderOptimizer PRIVATE
+    Tests/VocoderOptimizer.cpp
+    Source/VocoderEngine.h
+    Source/VocoderEngine.cpp
+)
+target_compile_definitions(VocoderOptimizer PRIVATE
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    PRISMAVOX_TEST_AUDIO_DIR="${CMAKE_SOURCE_DIR}/TestAudio"
+)
+target_link_libraries(VocoderOptimizer PRIVATE
+    juce::juce_audio_basics
+    juce::juce_audio_formats
+    juce::juce_dsp
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags
+)
+if(MSVC)
+    target_compile_options(VocoderOptimizer PRIVATE /W4 /permissive-)
+endif()
