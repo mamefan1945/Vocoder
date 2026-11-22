@@ -6,11 +6,11 @@
 class CarrierSynth final : public juce::Synthesiser
 {
 public:
-    enum Waveform { sine = 0, saw, square, triangle, noise, rich, choir };
+    enum Waveform { sine = 0, saw, square, triangle, noise, rich, choir, analogStack };
 
     CarrierSynth();
 
-    void setWaveform(int value) noexcept { waveform.store(juce::jlimit(0, 6, value)); }
+    void setWaveform(int value) noexcept { waveform.store(juce::jlimit(0, 7, value)); }
     void setOctave(int value) noexcept { octave.store(juce::jlimit(-2, 2, value)); }
 
 private:
@@ -46,6 +46,8 @@ private:
             pwmPhase = 0.0;
             choirPhases.fill(0.0);
             choirVibratoPhases = { 0.0, 0.37, 0.73 };
+            stackPhases = { 0.0, 0.333333333, 0.666666667 };
+            appliedOctave = octave.load(std::memory_order_relaxed);
             adsr.noteOn();
         }
 
@@ -161,6 +163,39 @@ private:
                         sample = 0.50f * saw + 0.35f * pulse + 0.15f * triangle;
                         break;
                     }
+                    case analogStack:
+                    {
+                        // Three phase-offset, gently detuned band-limited saws create
+                        // a broad analog-style harmonic bed without the choir's vibrato.
+                        constexpr double detune[] = { 0.9970, 1.0, 1.0030 };
+                        constexpr float weights[] = { 0.34f, 0.40f, 0.26f };
+                        float sawStack = 0.0f;
+                        for (size_t layer = 0; layer < 3; ++layer)
+                        {
+                            const auto increment = static_cast<float>(
+                                frequency * detune[layer] / sampleRate);
+                            const auto layerPhase = static_cast<float>(stackPhases[layer]);
+                            const auto saw = 2.0f * layerPhase - 1.0f
+                                - polyBlep(layerPhase, increment);
+                            sawStack += weights[layer] * saw;
+                            stackPhases[layer] += increment;
+                            stackPhases[layer] -= std::floor(stackPhases[layer]);
+                        }
+
+                        // A restrained pulse and sub-octave sine reinforce the
+                        // harmonics and body; slow PWM adds movement without chorus.
+                        const auto pulseWidth = 0.42f + 0.045f
+                            * std::sin(static_cast<float>(pwmPhase
+                                * juce::MathConstants<double>::twoPi));
+                        auto pulse = phase01 < pulseWidth ? 1.0f : -1.0f;
+                        pulse += polyBlep(phase01, phaseIncrement);
+                        pulse -= polyBlep(std::fmod(phase01 - pulseWidth + 1.0f, 1.0f),
+                                          phaseIncrement);
+                        const auto sub = std::sin(static_cast<float>(
+                            phase * juce::MathConstants<double>::pi));
+                        sample = 0.78f * sawStack + 0.15f * pulse + 0.07f * sub;
+                        break;
+                    }
                     case choir:
                     {
                         // Three gently detuned choir layers with independent vibrato.
@@ -220,6 +255,7 @@ private:
         double phase = 0.0;
         double pwmPhase = 0.0;
         std::array<double, 3> choirPhases {};
+        std::array<double, 3> stackPhases {};
         std::array<double, 3> choirVibratoPhases {};
         float level = 0.0f;
     };
