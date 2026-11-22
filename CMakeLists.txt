@@ -175,6 +175,8 @@ target_sources(VocoderOptimizer PRIVATE
     Tests/VocoderOptimizer.cpp
     Source/CarrierSynth.h
     Source/CarrierSynth.cpp
+    Source/SoundFontEngine.h
+    Source/SoundFontEngine.cpp
     Source/VocoderEngine.h
     Source/VocoderEngine.cpp
 )
@@ -182,11 +184,13 @@ target_compile_definitions(VocoderOptimizer PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     PRISMAVOX_TEST_AUDIO_DIR="${CMAKE_SOURCE_DIR}/TestAudio"
+    PRISMAVOX_DEFAULT_SOUNDFONT="${GENERALUSER_SF2}"
 )
 target_link_libraries(VocoderOptimizer PRIVATE
     juce::juce_audio_basics
     juce::juce_audio_formats
     juce::juce_dsp
+    FluidSynth::libfluidsynth
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags
 )
