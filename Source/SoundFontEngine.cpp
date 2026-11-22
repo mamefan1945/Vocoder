@@ -20,8 +20,13 @@ SoundFontEngine::~SoundFontEngine()
         delete_fluid_synth(synth);
 }
 
-bool SoundFontEngine::load(const juce::File& file, juce::String& error)
+bool SoundFontEngine::load(const juce::File& file, juce::String& error, double sampleRate)
 {
+    double loadSampleRate = 44100.0;
+    {
+        const juce::ScopedLock guard(lock);
+        loadSampleRate = sampleRate > 0.0 ? sampleRate : currentSampleRate;
+    }
     if (!file.existsAsFile())
     {
         error = "SoundFont file does not exist: " + file.getFullPathName();
@@ -35,7 +40,7 @@ bool SoundFontEngine::load(const juce::File& file, juce::String& error)
         return false;
     }
 
-    fluid_settings_setnum(settings, "synth.sample-rate", currentSampleRate);
+    fluid_settings_setnum(settings, "synth.sample-rate", loadSampleRate);
     fluid_settings_setnum(settings, "synth.gain", 0.8);
     fluid_settings_setint(settings, "synth.polyphony", 128);
     fluid_settings_setint(settings, "synth.reverb.active", 0);
@@ -102,6 +107,7 @@ bool SoundFontEngine::load(const juce::File& file, juce::String& error)
         selectedPreset = defaultPreset;
         loadedFileName = file.getFileName();
         loadedFile = file;
+        currentSampleRate = loadSampleRate;
     }
 
     if (oldSynth != nullptr)
@@ -123,15 +129,14 @@ void SoundFontEngine::prepare(double sampleRate, int maximumBlockSize)
         + "; synth=" + juce::String(synth != nullptr ? "present" : "null")
         + "; loaded file exists=" + juce::String(loadedFile.existsAsFile() ? "yes" : "no"));
 
-    // FluidSynth 2.5 no longer supports changing a live synth's sample rate.
-    // Recreate it with the new rate before the audio callback starts, retaining
-    // the loaded bank and selected preset.
+    // FluidSynth 2.5 does not support changing a live synth's sample rate.
+    // On a device-rate change, destroy the old synth before loading the bank
+    // into its replacement. Avoid two concurrent synths loading the same SF2.
     if (synth != nullptr && std::abs(requestedRate - currentSampleRate) > 0.5
         && loadedFile.existsAsFile())
     {
-        writeSoundFontTrace("sample-rate change requires synth recreation");
+        writeSoundFontTrace("sample-rate change requires sequential synth recreation");
         auto* settings = new_fluid_settings();
-        writeSoundFontTrace(settings != nullptr ? "new_fluid_settings succeeded" : "new_fluid_settings returned null");
         if (settings != nullptr)
         {
             fluid_settings_setnum(settings, "synth.sample-rate", requestedRate);
@@ -139,15 +144,15 @@ void SoundFontEngine::prepare(double sampleRate, int maximumBlockSize)
             fluid_settings_setint(settings, "synth.polyphony", 128);
             fluid_settings_setint(settings, "synth.reverb.active", 0);
             fluid_settings_setint(settings, "synth.chorus.active", 0);
-
-            writeSoundFontTrace("Creating replacement FluidSynth instance");
             auto* replacement = new_fluid_synth(settings);
-            writeSoundFontTrace(replacement != nullptr ? "replacement synth created" : "replacement synth creation returned null");
             delete_fluid_settings(settings);
-            writeSoundFontTrace("FluidSynth settings released");
             if (replacement != nullptr)
             {
-                writeSoundFontTrace("Reloading SoundFont into replacement synth");
+                auto* previous = synth;
+                synth = nullptr;
+                soundFontId = -1;
+                delete_fluid_synth(previous);
+                writeSoundFontTrace("Loading SoundFont after releasing previous synth");
                 const auto replacementSoundFontId = fluid_synth_sfload(
                     replacement, loadedFile.getFullPathName().toRawUTF8(), 1);
                 writeSoundFontTrace("replacement fluid_synth_sfload returned id="
@@ -156,27 +161,18 @@ void SoundFontEngine::prepare(double sampleRate, int maximumBlockSize)
                     && juce::isPositiveAndBelow(selectedPreset, static_cast<int>(presets.size())))
                 {
                     const auto& preset = presets[static_cast<size_t>(selectedPreset)];
-                    writeSoundFontTrace("Selecting preset " + preset.name
-                        + "; bank=" + juce::String(preset.bank)
-                        + "; program=" + juce::String(preset.program));
                     for (int channel = 0; channel < 16; ++channel)
                         fluid_synth_program_select(replacement, channel,
                             replacementSoundFontId, preset.bank, preset.program);
-                    writeSoundFontTrace("Preset selected on all MIDI channels");
-
-                    auto* previous = synth;
                     synth = replacement;
                     soundFontId = replacementSoundFontId;
                     currentSampleRate = requestedRate;
-                    writeSoundFontTrace("Deleting previous FluidSynth instance");
-                    delete_fluid_synth(previous);
-                    writeSoundFontTrace("Previous FluidSynth instance deleted");
+                    writeSoundFontTrace("Sequential synth recreation completed");
                 }
                 else
                 {
                     delete_fluid_synth(replacement);
-                    juce::Logger::writeToLog(
-                        "FluidSynth could not recreate the SoundFont at the requested sample rate.");
+                    juce::Logger::writeToLog("FluidSynth could not reload the SoundFont at the requested sample rate.");
                 }
             }
         }
@@ -185,7 +181,6 @@ void SoundFontEngine::prepare(double sampleRate, int maximumBlockSize)
     {
         currentSampleRate = requestedRate;
     }
-
     writeSoundFontTrace("Resizing stereo render buffer");
     stereoBuffer.setSize(2, juce::jmax(1, maximumBlockSize), false, false, true);
     writeSoundFontTrace("prepare completed");
