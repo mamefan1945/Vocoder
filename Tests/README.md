@@ -3,7 +3,7 @@
 The project has two deterministic, device-independent DSP test executables:
 
 - `HarmonizerDSPTests` exercises TD-PSOLA, LP-PSOLA, and FD-PSOLA pitch shifting, source-pitch leakage, pitch bend, polyphony, speech-file processing, algorithm switching, silence/no-MIDI gating, sustained-level stability, and an FD-PSOLA polyphony performance profile.
-- `VocoderDSPTests` checks silence and missing-carrier behavior, dry/wet endpoint behavior, repeatability after reset, finite/bounded output across sample rates and block sizes, and live band-count/filter-Q configuration changes. It also processes the two checked-in reference speech recordings (`vocoder_test_ash.wav` and `vocoder_test_nova.wav`) through a deterministic harmonically rich carrier and reports input/wet RMS, wet peak, crest factor, output energy above 2.5 kHz, and the fraction of active 20 ms speech frames. These checks catch silence, clipping, non-finite output, and loss of all upper-band activity on real speech material.
+- `VocoderDSPTests` checks silence and missing-carrier behavior, dry/wet endpoint behavior, repeatability after reset, finite/bounded output across sample rates and block sizes, and live band-count/filter-Q configuration changes. It also processes the two checked-in reference speech recordings (`vocoder_test_ash.wav` and `vocoder_test_nova.wav`) through a deterministic harmonically rich carrier and reports input/wet RMS, wet peak, crest factor, output energy above 2.5 kHz, and the fraction of active 20 ms speech frames. These checks catch silence, clipping, non-finite output, and loss of all upper-band activity on real speech material. The same test renders are written to `build/test-renders` and evaluated by `Tests/evaluate_stoi.py` using the MIT-licensed `pystoi` implementation. CI reports classical STOI scores against each original recording and verifies the metric identity control; scores are not yet pass/fail thresholds.
 
 Both are registered with CTest and run by the Windows GitHub Actions build:
 
@@ -22,4 +22,4 @@ Performance timings printed by the harmonizer tests are diagnostic measurements,
 
 ## Next measurement work
 
-The next useful additions are calibrated THD+N and noise-floor analysis, true-peak measurement, a validated speech intelligibility proxy (for example, a suitably licensed STOI implementation), pitch/formant tracking over a wider vocal range, and golden-render comparisons. Hardware loopback tests should remain a separate opt-in test tier.
+The next useful additions are listening-backed STOI baselines and regression margins, calibrated THD+N and noise-floor analysis, true-peak measurement, pitch/formant tracking over a wider vocal range, and golden-render comparisons. Hardware loopback tests should remain a separate opt-in test tier.
