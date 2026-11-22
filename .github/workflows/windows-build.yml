@@ -125,7 +125,12 @@ jobs:
         run: python Tests/evaluate_stoi.py build/test-renders
 
       - name: Render vocoder parameter candidates
-        run: .\\build\\Release\\VocoderOptimizer.exe
+        shell: pwsh
+        run: |
+          $optimizer = Get-ChildItem -Path build -Filter VocoderOptimizer.exe -Recurse -File | Select-Object -First 1
+          if (-not $optimizer) { throw "VocoderOptimizer.exe was not found under the build directory." }
+          & $optimizer.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Rank vocoder parameter candidates
         run: python Tests/rank_vocoder_candidates.py build/optimization-results
