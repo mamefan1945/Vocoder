@@ -1,5 +1,18 @@
 #include "SoundFontEngine.h"
 
+namespace
+{
+    void writeSoundFontTrace(const juce::String& message)
+    {
+        static juce::CriticalSection traceLock;
+        const juce::ScopedLock guard(traceLock);
+        const auto file = juce::File::getSpecialLocation(
+            juce::File::userDesktopDirectory).getChildFile("PrismaVox-startup.log");
+        file.appendText(juce::Time::getCurrentTime().toISO8601(true)
+            + " | SoundFontEngine | " + message + "\r\n");
+    }
+}
+
 SoundFontEngine::~SoundFontEngine()
 {
     const juce::ScopedLock guard(lock);
@@ -100,8 +113,15 @@ bool SoundFontEngine::load(const juce::File& file, juce::String& error)
 
 void SoundFontEngine::prepare(double sampleRate, int maximumBlockSize)
 {
+    writeSoundFontTrace("prepare entered; requested sample rate="
+        + juce::String(sampleRate, 2) + "; block size=" + juce::String(maximumBlockSize));
     const juce::ScopedLock guard(lock);
+    writeSoundFontTrace("prepare acquired engine lock");
     const auto requestedRate = juce::jmax(8000.0, sampleRate);
+    writeSoundFontTrace("current sample rate=" + juce::String(currentSampleRate, 2)
+        + "; requested rate=" + juce::String(requestedRate, 2)
+        + "; synth=" + juce::String(synth != nullptr ? "present" : "null")
+        + "; loaded file exists=" + juce::String(loadedFile.existsAsFile() ? "yes" : "no"));
 
     // FluidSynth 2.5 no longer supports changing a live synth's sample rate.
     // Recreate it with the new rate before the audio callback starts, retaining
@@ -109,7 +129,9 @@ void SoundFontEngine::prepare(double sampleRate, int maximumBlockSize)
     if (synth != nullptr && std::abs(requestedRate - currentSampleRate) > 0.5
         && loadedFile.existsAsFile())
     {
+        writeSoundFontTrace("sample-rate change requires synth recreation");
         auto* settings = new_fluid_settings();
+        writeSoundFontTrace(settings != nullptr ? "new_fluid_settings succeeded" : "new_fluid_settings returned null");
         if (settings != nullptr)
         {
             fluid_settings_setnum(settings, "synth.sample-rate", requestedRate);
@@ -118,25 +140,37 @@ void SoundFontEngine::prepare(double sampleRate, int maximumBlockSize)
             fluid_settings_setint(settings, "synth.reverb.active", 0);
             fluid_settings_setint(settings, "synth.chorus.active", 0);
 
+            writeSoundFontTrace("Creating replacement FluidSynth instance");
             auto* replacement = new_fluid_synth(settings);
+            writeSoundFontTrace(replacement != nullptr ? "replacement synth created" : "replacement synth creation returned null");
             delete_fluid_settings(settings);
+            writeSoundFontTrace("FluidSynth settings released");
             if (replacement != nullptr)
             {
+                writeSoundFontTrace("Reloading SoundFont into replacement synth");
                 const auto replacementSoundFontId = fluid_synth_sfload(
                     replacement, loadedFile.getFullPathName().toRawUTF8(), 1);
+                writeSoundFontTrace("replacement fluid_synth_sfload returned id="
+                    + juce::String(replacementSoundFontId));
                 if (replacementSoundFontId >= 0
                     && juce::isPositiveAndBelow(selectedPreset, static_cast<int>(presets.size())))
                 {
                     const auto& preset = presets[static_cast<size_t>(selectedPreset)];
+                    writeSoundFontTrace("Selecting preset " + preset.name
+                        + "; bank=" + juce::String(preset.bank)
+                        + "; program=" + juce::String(preset.program));
                     for (int channel = 0; channel < 16; ++channel)
                         fluid_synth_program_select(replacement, channel,
                             replacementSoundFontId, preset.bank, preset.program);
+                    writeSoundFontTrace("Preset selected on all MIDI channels");
 
                     auto* previous = synth;
                     synth = replacement;
                     soundFontId = replacementSoundFontId;
                     currentSampleRate = requestedRate;
+                    writeSoundFontTrace("Deleting previous FluidSynth instance");
                     delete_fluid_synth(previous);
+                    writeSoundFontTrace("Previous FluidSynth instance deleted");
                 }
                 else
                 {
@@ -152,7 +186,9 @@ void SoundFontEngine::prepare(double sampleRate, int maximumBlockSize)
         currentSampleRate = requestedRate;
     }
 
+    writeSoundFontTrace("Resizing stereo render buffer");
     stereoBuffer.setSize(2, juce::jmax(1, maximumBlockSize), false, false, true);
+    writeSoundFontTrace("prepare completed");
 }
 
 void SoundFontEngine::selectPreset(int presetIndex)
