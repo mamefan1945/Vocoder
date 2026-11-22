@@ -38,6 +38,7 @@ private:
     std::vector<Preset> presets;
     int selectedPreset = 0;
     juce::String loadedFileName;
+    juce::File loadedFile;
     double currentSampleRate = 44100.0;
     juce::AudioBuffer<float> stereoBuffer;
 
