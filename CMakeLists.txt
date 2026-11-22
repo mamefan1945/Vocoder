@@ -58,7 +58,7 @@ juce_add_gui_app(PrismaVox
 juce_generate_juce_header(PrismaVox)
 
 # Embed the original full-resolution splash artwork in the application.
-juce_add_binary_data(PrismaVoxArtwork SOURCES PrismaVox-Splash.png)
+juce_add_binary_data(PrismaVoxArtwork SOURCES "PrismaVox Neon Prism Audio Logo.png")
 
 target_sources(PrismaVox PRIVATE
     Source/Main.cpp
