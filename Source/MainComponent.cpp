@@ -150,6 +150,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     waveform.addItem("Rich (PWM)", 6);
     waveform.addItem("Angelic Choir", 7);
     waveform.addItem("SoundFont (GM)", 8);
+    waveform.addItem("Analog Stack", 9);
     waveform.setSelectedId(6);
     carrierSynth.setWaveform(CarrierSynth::rich);
     waveform.onChange = [this]
@@ -157,7 +158,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
         const auto selected = waveform.getSelectedId();
         useSoundFontCarrier.store(selected == 8, std::memory_order_relaxed);
         if (selected != 8)
-            carrierSynth.setWaveform(selected - 1);
+            carrierSynth.setWaveform(selected == 9 ? CarrierSynth::analogStack : selected - 1);
         if (!applyingCarrierPreset)
             carrierPreset.setSelectedId(11, juce::dontSendNotification);
         updateSoundFontControls();
