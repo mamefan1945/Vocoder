@@ -2,6 +2,16 @@
 
 namespace
 {
+    void writeStartupTrace(const juce::String& message)
+    {
+        static juce::CriticalSection traceLock;
+        const juce::ScopedLock guard(traceLock);
+        const auto traceFile = juce::File::getSpecialLocation(
+            juce::File::userDesktopDirectory).getChildFile("PrismaVox-startup.log");
+        traceFile.appendText(juce::Time::getCurrentTime().toISO8601(true)
+            + " | " + message + "\r\n");
+    }
+
     class ControlInfoButton final : public juce::TextButton
     {
     public:
@@ -83,6 +93,11 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
       keyboardComponent(keyboardState),
       startupCompleteCallback(onStartupComplete)
 {
+    writeStartupTrace("MainComponent constructor entered");
+    // Start a fresh trace for each application launch.
+    juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
+        .getChildFile("PrismaVox-startup.log").deleteFile();
+    writeStartupTrace("MainComponent UI construction beginning");
     // Map the computer keyboard from C3 (MIDI 48), a practical
     // starting point for baritone-range playing.
     keyboardComponent.setKeyPressBaseOctave(2);
@@ -528,32 +543,42 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
         "Changes the harmonic content of the Vocoder carrier. A rich spectrum generally gives the voice more material to shape and can improve intelligibility. A smooth sine may sound pure but often produces less recognizable speech.");
 
     updateModeControls();
+    writeStartupTrace("MainComponent UI construction complete");
 
     // Defer all potentially slow startup work until after this component has
     // returned to the message loop, so the splash and waveform can animate.
     juce::Component::SafePointer<MainComponent> safeThis(this);
     startupThread = std::thread([this, safeThis]
     {
+        writeStartupTrace("Background startup thread entered");
         try
         {
+            writeStartupTrace("Calling initializeAudioAndInstruments");
             initializeAudioAndInstruments();
+            writeStartupTrace("initializeAudioAndInstruments returned");
             if (shuttingDown.load(std::memory_order_acquire))
                 return;
 
+            writeStartupTrace("Queueing startup UI callback");
             juce::MessageManager::callAsync([safeThis]
             {
+                writeStartupTrace("Startup UI callback entered");
                 if (safeThis == nullptr)
                     return;
 
                 try
                 {
+                    writeStartupTrace("Populating SoundFont instrument list");
                     safeThis->populateSoundFontInstruments();
+                    writeStartupTrace("SoundFont instrument list populated; refreshing MIDI inputs");
                     safeThis->refreshMidiInputs();
+                    writeStartupTrace("MIDI input refresh complete");
                     if (safeThis->statusLabel.getText().startsWith("Starting in background"))
                         safeThis->statusLabel.setText("Ready. Select a processing mode and audio devices.",
                                                       juce::dontSendNotification);
                     if (safeThis->startupCompleteCallback)
                         safeThis->startupCompleteCallback();
+                    writeStartupTrace("Startup UI callback completed");
                 }
                 catch (const std::exception& e)
                 {
@@ -596,9 +621,14 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
 
 MainComponent::~MainComponent()
 {
+    writeStartupTrace("MainComponent destructor entered");
     shuttingDown.store(true, std::memory_order_release);
     if (startupThread.joinable())
+    {
+        writeStartupTrace("Destructor joining startup thread");
         startupThread.join();
+        writeStartupTrace("Startup thread joined");
+    }
 
     deviceManager.removeAudioCallback(this);
     testAudioTransport.stop();
@@ -631,12 +661,16 @@ MainComponent::~MainComponent()
 
 void MainComponent::initializeAudioAndInstruments()
 {
+    writeStartupTrace("Audio/instrument initialization entered");
     const auto defaultSoundFont = juce::File::getSpecialLocation(
         juce::File::currentExecutableFile).getSiblingFile("SoundFonts")
         .getChildFile("GeneralUser-GS.sf2");
 
     juce::String soundFontError;
+    writeStartupTrace("Loading bundled SoundFont: " + defaultSoundFont.getFullPathName());
     const auto soundFontLoaded = soundFontEngine.load(defaultSoundFont, soundFontError);
+    writeStartupTrace("SoundFont load returned: " + juce::String(soundFontLoaded ? "success" : "failure")
+        + (soundFontError.isNotEmpty() ? " | " + soundFontError : juce::String{}));
 
     if (shuttingDown.load(std::memory_order_acquire))
         return;
@@ -644,11 +678,16 @@ void MainComponent::initializeAudioAndInstruments()
     // Opening a Windows audio device can block while the driver initializes;
     // keep it off the UI thread. Register the callback only after the synth
     // engine and its SoundFont state have finished loading.
+    writeStartupTrace("Calling deviceManager.initialise");
     const auto audioError = deviceManager.initialise(2, 2, nullptr, true);
+    writeStartupTrace("deviceManager.initialise returned"
+        + (audioError.isNotEmpty() ? " | " + audioError : juce::String(" | no error")));
     if (shuttingDown.load(std::memory_order_acquire))
         return;
 
+    writeStartupTrace("Registering audio callback");
     deviceManager.addAudioCallback(this);
+    writeStartupTrace("Audio callback registered");
 
     juce::Component::SafePointer<MainComponent> safeThis(this);
     juce::MessageManager::callAsync([safeThis, soundFontLoaded,
@@ -747,6 +786,7 @@ void MainComponent::updateModeControls()
 }
 void MainComponent::populateSoundFontInstruments()
 {
+    writeStartupTrace("populateSoundFontInstruments entered");
     soundFontInstrument.clear(juce::dontSendNotification);
     const auto& presets = soundFontEngine.getPresets();
     for (size_t i = 0; i < presets.size(); ++i)
@@ -760,6 +800,8 @@ void MainComponent::populateSoundFontInstruments()
     if (!presets.empty())
         soundFontInstrument.setSelectedId(soundFontEngine.getSelectedPresetIndex() + 1,
                                           juce::dontSendNotification);
+    writeStartupTrace("populateSoundFontInstruments completed; preset count="
+        + juce::String(static_cast<int>(presets.size())));
 }
 
 void MainComponent::chooseSoundFont()
@@ -1030,6 +1072,7 @@ void MainComponent::chooseTestAudio()
 
 void MainComponent::refreshMidiInputs()
 {
+    writeStartupTrace("refreshMidiInputs entered");
     const auto previousIdentifier = activeMidiIdentifier;
     const auto devices = juce::MidiInput::getAvailableDevices();
     midiInput.clear(juce::dontSendNotification);
@@ -1060,6 +1103,8 @@ void MainComponent::refreshMidiInputs()
     midiInput.setSelectedId(selectedId, juce::dontSendNotification);
     if (selectedId == 1 && devices.isEmpty())
         midiInput.setTextWhenNothingSelected("No MIDI devices found");
+    writeStartupTrace("refreshMidiInputs completed; device count="
+        + juce::String(devices.size()));
 }
 
 void MainComponent::selectMidiInput()
@@ -1627,19 +1672,28 @@ void MainComponent::timerCallback()
 
 void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
 {
+    writeStartupTrace("audioDeviceAboutToStart entered"
+        + (device != nullptr ? " | " + device->getTypeName() + " / " + device->getName()
+                             : juce::String(" | null device")));
     if (device != nullptr)
     {
+        writeStartupTrace("Preparing MIDI collector and test transport");
         externalMidiCollector.reset(device->getCurrentSampleRate());
         testAudioTransport.prepareToPlay(device->getCurrentBufferSizeSamples(), device->getCurrentSampleRate());
         testAudioBuffer.setSize(1, juce::jmax(512, device->getCurrentBufferSizeSamples()), false, false, true);
+        writeStartupTrace("Preparing vocoder");
         vocoder.prepare(device->getCurrentSampleRate());
+        writeStartupTrace("Preparing carrier synth");
         carrierSynth.setCurrentPlaybackSampleRate(device->getCurrentSampleRate());
         synthBuffer.setSize(1, juce::jmax(512, device->getCurrentBufferSizeSamples()), false, false, true);
+        writeStartupTrace("Preparing SoundFont engine");
         soundFontEngine.prepare(device->getCurrentSampleRate(),
                                 juce::jmax(512, device->getCurrentBufferSizeSamples()));
+        writeStartupTrace("SoundFont engine prepare returned; preparing harmonizer");
         harmonizer.prepare(device->getCurrentSampleRate(),
                            juce::jmax(512, device->getCurrentBufferSizeSamples()));
         harmonizerBuffer.setSize(1, juce::jmax(512, device->getCurrentBufferSizeSamples()), false, false, true);
+        writeStartupTrace("audioDeviceAboutToStart preparation complete");
     }
 
     juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<MainComponent>(this),
