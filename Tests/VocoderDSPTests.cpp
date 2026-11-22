@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <iostream>
+#include <memory>
 #include <vector>
 
 namespace
@@ -245,6 +246,7 @@ bool testReferenceSpeechFile(const juce::String& filename)
         sampleRate, juce::jmin(2500.0, sampleRate * 0.40));
 
     SpeechMetrics metrics;
+    juce::AudioBuffer<float> processed(1, sampleCount);
     double inputEnergy = 0.0;
     double outputEnergy = 0.0;
     double highBandEnergy = 0.0;
@@ -269,6 +271,7 @@ bool testReferenceSpeechFile(const juce::String& filename)
             + 0.2 * std::sin(5.0 * phase));
         const auto output = engine.processSample(voice, carrier, true, carrier);
         const auto high = highPass.processSample(output);
+        processed.setSample(0, i, output);
 
         metrics.finite = metrics.finite && std::isfinite(output) && std::isfinite(high);
         metrics.outputPeak = juce::jmax(metrics.outputPeak, std::abs(output));
@@ -315,6 +318,43 @@ bool testReferenceSpeechFile(const juce::String& filename)
         ? static_cast<double>(metrics.outputPeak) / metrics.outputRms : 0.0;
     metrics.activeFrameRatio = totalFrames > 0
         ? static_cast<double>(activeFrames) / static_cast<double>(totalFrames) : 0.0;
+
+#ifdef PRISMAVOX_TEST_RENDER_DIR
+    const auto renderDirectory = juce::File(PRISMAVOX_TEST_RENDER_DIR);
+    if (renderDirectory.createDirectory().failed())
+    {
+        std::cerr << "Could not create STOI render directory: "
+                  << renderDirectory.getFullPathName() << '\\n';
+        return false;
+    }
+    const auto renderFile = renderDirectory.getChildFile(
+        filename.upToLastOccurrenceOf(".", false, false) + "_vocoded.wav");
+    auto outputStream = std::unique_ptr<juce::FileOutputStream>(renderFile.createOutputStream());
+    if (outputStream == nullptr)
+    {
+        std::cerr << "Could not create STOI render file: "
+                  << renderFile.getFullPathName() << '\\n';
+        return false;
+    }
+    juce::WavAudioFormat wavFormat;
+    auto writer = std::unique_ptr<juce::AudioFormatWriter>(wavFormat.createWriterFor(
+        outputStream.get(), sampleRate, 1, 24, {}, 0));
+    if (writer == nullptr)
+    {
+        std::cerr << "Could not initialize STOI WAV writer for "
+                  << renderFile.getFullPathName() << '\\n';
+        return false;
+    }
+    outputStream.release();
+    if (!writer->writeFromAudioSampleBuffer(processed, 0, sampleCount))
+    {
+        std::cerr << "Could not write STOI render: "
+                  << renderFile.getFullPathName() << '\\n';
+        return false;
+    }
+    writer.reset();
+    std::cout << "STOI render written: " << renderFile.getFullPathName() << '\\n';
+#endif
 
     const auto passed = metrics.finite && metrics.inputRms > 1.0e-4
         && metrics.outputRms > 1.0e-5 && metrics.outputHighBandRms > 1.0e-7
