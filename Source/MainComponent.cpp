@@ -676,9 +676,9 @@ void MainComponent::initializeAudioAndInstruments()
     if (shuttingDown.load(std::memory_order_acquire))
         return;
 
-    const auto* currentDevice = deviceManager.getCurrentAudioDevice();
-    const auto soundFontSampleRate = currentDevice != nullptr
-        ? currentDevice->getCurrentSampleRate() : 44100.0;
+    const auto deviceSetup = deviceManager.getAudioDeviceSetup();
+    const auto soundFontSampleRate = deviceSetup.sampleRate > 0.0
+        ? deviceSetup.sampleRate : 44100.0;
     juce::String soundFontError;
     writeStartupTrace("Loading bundled SoundFont at "
         + juce::String(soundFontSampleRate, 2) + " Hz: "
@@ -827,9 +827,8 @@ void MainComponent::chooseSoundFont()
                 return;
 
             juce::String error;
-            const auto* currentDevice = safeThis->deviceManager.getCurrentAudioDevice();
-            const auto sampleRate = currentDevice != nullptr
-                ? currentDevice->getCurrentSampleRate() : 0.0;
+            const auto deviceSetup = safeThis->deviceManager.getAudioDeviceSetup();
+            const auto sampleRate = deviceSetup.sampleRate;
             if (safeThis->soundFontEngine.load(file, error, sampleRate))
             {
                 safeThis->populateSoundFontInstruments();
