@@ -5,7 +5,7 @@
  #pragma comment(lib, "dwmapi.lib")
 #endif
 #include "MainComponent.h"
-#include <BinaryData.h>
+#include "PrismaVoxSplash.h"
 
 namespace
 {
@@ -28,13 +28,13 @@ namespace
                 if (callback)
                     juce::MessageManager::callAsync(std::move(callback));
             }
-            const auto bounds = getLocalBounds().toFloat();
-            g.fillAll(juce::Colour(0xff050914));
 
-            static const auto artwork = juce::ImageCache::getFromMemory(
-                BinaryData::PrismaVoxSplash_png, BinaryData::PrismaVoxSplash_pngSize);
-            if (artwork.isValid())
-                g.drawImage(artwork, bounds, juce::RectanglePlacement::stretchToFit);
+            const auto bounds = getLocalBounds().toFloat();
+            static const auto artwork = juce::Drawable::createFromSVG(
+                juce::XmlDocument::parse(prismaVoxSplashSvg));
+            g.fillAll(juce::Colour(0xff050914));
+            if (artwork != nullptr)
+                artwork->drawWithin(g, bounds, juce::RectanglePlacement::stretchToFit, 1.0f);
 
             g.setColour(juce::Colour(0xffaeb8c6));
             g.setFont(juce::Font(juce::FontOptions(14.0f)));
@@ -52,8 +52,6 @@ namespace
             g.setColour(juce::Colour(0xff62b5ff));
             g.fillRoundedRectangle({ segmentX, progressArea.getY(),
                                      segmentWidth, progressArea.getHeight() }, 2.0f);
-
-
         }
 
     private:
