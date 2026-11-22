@@ -25,14 +25,20 @@ Performance timings printed by the harmonizer tests are diagnostic measurements,
 The next useful additions are listening-backed STOI baselines and regression margins, calibrated THD+N and noise-floor analysis, true-peak measurement, pitch/formant tracking over a wider vocal range, and golden-render comparisons. Hardware loopback tests should remain a separate opt-in test tier.
 
 
-## Hosted vocoder parameter search
+## Hosted vocoder parameter refinement
 
-The Windows workflow renders a baseline and one-factor-at-a-time probes for filter
-bands, filter Q, attack, release, formant shift, sibilance, unvoiced noise, and
-articulation lift using both checked-in speaker recordings. It publishes WAVs,
-per-speaker metrics, and a shortlist as a separate GitHub Actions artifact.
+The Windows workflow now runs a focused 6-by-5 grid using both checked-in speaker
+recordings: release times of 5, 6, 7, 8, 9, and 10 ms crossed with formant shifts
+of -2, -1.5, -1, -0.5, and 0 semitones. Attack remains 10 ms; filter bands/Q,
+sibilance, unvoiced-noise, and articulation settings remain at the established
+baseline. This isolates the release/formant interaction suggested by the first
+screen rather than changing several unrelated controls at once. The grid includes
+the baseline corner (10 ms, -2) and the two strongest one-factor directions (5 ms
+release and 0-semitone formant).
 
-The ranking is a screening heuristic (50% classical STOI and 50% reference-energy-
-weighted band-envelope correlation), not a perceptual quality claim. These metrics
-can mis-rank deliberately vocoded speech. Listen to shortlisted, level-matched
-Ash and Nova files before changing application defaults.
+CI publishes all 60 level-matched-by-process candidate WAV renders (30 profiles
+for each speaker), per-speaker metrics, and a ranked shortlist as a separate
+GitHub Actions artifact. The ranking is a screening heuristic (50% classical
+STOI and 50% reference-energy-weighted band-envelope correlation), not a perceptual
+quality claim. These metrics can mis-rank deliberately vocoded speech. Compare
+Ash and Nova recordings by listening before changing application defaults.
