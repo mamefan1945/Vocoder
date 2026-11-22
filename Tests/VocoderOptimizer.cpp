@@ -146,10 +146,10 @@ int main() {
   if(!renderCarrierComparison(input,dir,speaker,"rich",CarrierSynth::rich))return 6;
   if(!renderCarrierComparison(input,dir,speaker,"analog_stack",CarrierSynth::analogStack))return 7;
   if(!renderCarrierComparison(input,dir,speaker,"saw",CarrierSynth::saw))return 8;
-  if(!renderSoundFontComparison(input,dir,speaker,"drawbar_organ","Drawbar Organ"))return 9;
-  if(!renderSoundFontComparison(input,dir,speaker,"synth_strings","Synth Strings"))return 10;
-  if(!renderSoundFontComparison(input,dir,speaker,"choir_aahs","Choir Aahs"))return 11;
-  if(!renderSoundFontComparison(input,dir,speaker,"voice_oohs","Voice Oohs"))return 12;
+  if(!renderSoundFontComparison(input,dir,speaker,"organ","Organ"))return 9;
+  if(!renderSoundFontComparison(input,dir,speaker,"strings","Strings"))return 10;
+  if(!renderSoundFontComparison(input,dir,speaker,"choir","Choir"))return 11;
+  if(!renderSoundFontComparison(input,dir,speaker,"voice","Voice"))return 12;
   if(!renderSoundFontComparison(input,dir,speaker,"saw_lead","Sawtooth"))return 13;
  }
  std::cout<<"Rendered "<<std::size(profiles)*2+6<<" candidate WAV files.\n"; return 0;
