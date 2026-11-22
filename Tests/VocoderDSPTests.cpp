@@ -188,6 +188,157 @@ bool testConfigurationChangesRemainFinite()
     std::cout << "Configuration sweep peak=" << peak << "; finite=" << finite << '\n';
     return finite && peak < 1.5f;
 }
+
+struct SpeechMetrics
+{
+    double inputRms = 0.0;
+    double outputRms = 0.0;
+    double outputHighBandRms = 0.0;
+    float outputPeak = 0.0f;
+    double crestFactor = 0.0;
+    double activeFrameRatio = 0.0;
+    bool finite = true;
+};
+
+bool testReferenceSpeechFile(const juce::String& filename)
+{
+#ifndef PRISMAVOX_TEST_AUDIO_DIR
+    juce::ignoreUnused(filename);
+    std::cout << "Reference speech test skipped: audio directory is not configured.\n";
+    return true;
+#else
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    const auto file = juce::File(PRISMAVOX_TEST_AUDIO_DIR).getChildFile(filename);
+    std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
+    if (reader == nullptr || reader->lengthInSamples <= 0 || reader->numChannels <= 0)
+    {
+        std::cerr << "Could not read reference speech file: " << file.getFullPathName() << '\n';
+        return false;
+    }
+
+    const auto sampleCount = static_cast<int>(juce::jmin<juce::int64>(
+        reader->lengthInSamples, static_cast<juce::int64>(reader->sampleRate * 120.0)));
+    juce::AudioBuffer<float> input(1, sampleCount);
+    if (!reader->read(&input, 0, sampleCount, 0, true, false))
+    {
+        std::cerr << "Failed reading reference speech samples: " << filename << '\n';
+        return false;
+    }
+
+    const auto sampleRate = reader->sampleRate;
+    if (sampleRate < 8000.0 || sampleRate > 192000.0)
+    {
+        std::cerr << "Unsupported reference speech sample rate: " << sampleRate << '\n';
+        return false;
+    }
+
+    VocoderEngine engine;
+    engine.prepare(sampleRate);
+    engine.setDryWet(1.0f);
+    engine.setOutputGain(1.0f);
+    engine.setAttackMs(1.0f);
+    engine.setReleaseMs(35.0f);
+
+    auto highPass = juce::dsp::IIR::Filter<float>();
+    highPass.coefficients = juce::dsp::IIR::Coefficients<float>::makeHighPass(
+        sampleRate, juce::jmin(2500.0, sampleRate * 0.40));
+
+    SpeechMetrics metrics;
+    double inputEnergy = 0.0;
+    double outputEnergy = 0.0;
+    double highBandEnergy = 0.0;
+    double frameEnergy = 0.0;
+    int frameSamples = 0;
+    int activeFrames = 0;
+    int totalFrames = 0;
+    double maximumFrameRms = 0.0;
+    double pendingFrameRms = 0.0;
+    constexpr int frameDurationMs = 20;
+    const auto frameLength = juce::jmax(1, juce::roundToInt(sampleRate * frameDurationMs / 1000.0));
+
+    for (int i = 0; i < sampleCount; ++i)
+    {
+        const auto voice = input.getSample(0, i);
+        const auto time = static_cast<double>(i) / sampleRate;
+        // A deterministic, harmonically rich 110 Hz carrier gives the speech
+        // envelope multiple partials to shape, without relying on a MIDI device.
+        const auto phase = 2.0 * juce::MathConstants<double>::pi * 110.0 * time;
+        const auto carrier = 0.13f * static_cast<float>(
+            std::sin(phase) + 0.5 * std::sin(2.0 * phase)
+            + 0.333333 * std::sin(3.0 * phase) + 0.25 * std::sin(4.0 * phase)
+            + 0.2 * std::sin(5.0 * phase));
+        const auto output = engine.processSample(voice, carrier, true, carrier);
+        const auto high = highPass.processSample(output);
+
+        metrics.finite = metrics.finite && std::isfinite(output) && std::isfinite(high);
+        metrics.outputPeak = juce::jmax(metrics.outputPeak, std::abs(output));
+        inputEnergy += static_cast<double>(voice) * voice;
+        outputEnergy += static_cast<double>(output) * output;
+        highBandEnergy += static_cast<double>(high) * high;
+        frameEnergy += static_cast<double>(voice) * voice;
+        ++frameSamples;
+
+        if (frameSamples == frameLength || i == sampleCount - 1)
+        {
+            const auto frameRms = std::sqrt(frameEnergy / static_cast<double>(frameSamples));
+            maximumFrameRms = juce::jmax(maximumFrameRms, frameRms);
+            pendingFrameRms += frameRms;
+            ++totalFrames;
+            frameEnergy = 0.0;
+            frameSamples = 0;
+        }
+    }
+
+    // A second pass counts active speech frames against the file's own maximum,
+    // making the activity statistic independent of recording gain.
+    frameEnergy = 0.0;
+    frameSamples = 0;
+    for (int i = 0; i < sampleCount; ++i)
+    {
+        const auto value = static_cast<double>(input.getSample(0, i));
+        frameEnergy += value * value;
+        ++frameSamples;
+        if (frameSamples == frameLength || i == sampleCount - 1)
+        {
+            const auto frameRms = std::sqrt(frameEnergy / static_cast<double>(frameSamples));
+            if (maximumFrameRms > 1.0e-8 && frameRms >= maximumFrameRms * 0.10)
+                ++activeFrames;
+            frameEnergy = 0.0;
+            frameSamples = 0;
+        }
+    }
+
+    const auto divisor = static_cast<double>(juce::jmax(1, sampleCount));
+    metrics.inputRms = std::sqrt(inputEnergy / divisor);
+    metrics.outputRms = std::sqrt(outputEnergy / divisor);
+    metrics.outputHighBandRms = std::sqrt(highBandEnergy / divisor);
+    metrics.crestFactor = metrics.outputRms > 1.0e-12
+        ? static_cast<double>(metrics.outputPeak) / metrics.outputRms : 0.0;
+    metrics.activeFrameRatio = totalFrames > 0
+        ? static_cast<double>(activeFrames) / static_cast<double>(totalFrames) : 0.0;
+
+    const auto passed = metrics.finite && metrics.inputRms > 1.0e-4
+        && metrics.outputRms > 1.0e-5 && metrics.outputHighBandRms > 1.0e-7
+        && metrics.outputPeak < 2.0f && metrics.activeFrameRatio > 0.05;
+    std::cout << "Speech file " << filename << ": input RMS=" << metrics.inputRms
+              << ", wet RMS=" << metrics.outputRms
+              << ", wet >2.5 kHz RMS=" << metrics.outputHighBandRms
+              << ", wet peak=" << metrics.outputPeak
+              << ", crest factor=" << metrics.crestFactor
+              << ", active 20 ms input frames=" << metrics.activeFrameRatio
+              << "; " << (passed ? "PASS" : "FAIL") << '\n';
+    return passed;
+#endif
+}
+
+bool testReferenceSpeechCorpus()
+{
+    const auto ash = testReferenceSpeechFile("vocoder_test_ash.wav");
+    const auto nova = testReferenceSpeechFile("vocoder_test_nova.wav");
+    return ash && nova;
+}
+
 }
 
 int main()
@@ -198,6 +349,7 @@ int main()
     passed = testDeterministicReset() && passed;
     passed = testSampleRatesAndBlockSizes() && passed;
     passed = testConfigurationChangesRemainFinite() && passed;
+    passed = testReferenceSpeechCorpus() && passed;
 
     std::cout << (passed ? "All vocoder DSP tests passed.\n"
                          : "One or more vocoder DSP tests failed.\n");
