@@ -151,9 +151,11 @@ target_sources(VocoderDSPTests PRIVATE
 target_compile_definitions(VocoderDSPTests PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
+    PRISMAVOX_TEST_AUDIO_DIR="${CMAKE_SOURCE_DIR}/TestAudio"
 )
 target_link_libraries(VocoderDSPTests PRIVATE
     juce::juce_audio_basics
+    juce::juce_audio_formats
     juce::juce_dsp
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags
