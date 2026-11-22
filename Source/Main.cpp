@@ -5,7 +5,7 @@
  #pragma comment(lib, "dwmapi.lib")
 #endif
 #include "MainComponent.h"
-#include "PrismaVoxSplash.h"
+#include "BinaryData.h"
 
 namespace
 {
@@ -30,11 +30,13 @@ namespace
             }
 
             const auto bounds = getLocalBounds().toFloat();
-            static const auto artwork = juce::Drawable::createFromSVG(
-                juce::XmlDocument::parse(prismaVoxSplashSvg));
+            static const auto artwork = juce::ImageFileFormat::loadFrom(
+                PrismaVoxArtwork::PrismaVox_Splash_png,
+                static_cast<size_t>(PrismaVoxArtwork::PrismaVox_Splash_pngSize));
             g.fillAll(juce::Colour(0xff050914));
-            if (artwork != nullptr)
-                artwork->drawWithin(g, bounds, juce::RectanglePlacement::stretchToFit, 1.0f);
+            if (!artwork.isNull())
+                g.drawImageWithin(artwork, getLocalBounds(),
+                                  juce::RectanglePlacement::stretchToFit);
 
             g.setColour(juce::Colour(0xffaeb8c6));
             g.setFont(juce::Font(juce::FontOptions(14.0f)));
