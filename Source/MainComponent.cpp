@@ -534,23 +534,63 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     juce::Component::SafePointer<MainComponent> safeThis(this);
     startupThread = std::thread([this, safeThis]
     {
-        initializeAudioAndInstruments();
-        if (shuttingDown.load(std::memory_order_acquire))
-            return;
-
-        juce::MessageManager::callAsync([safeThis]
+        try
         {
-            if (safeThis == nullptr)
+            initializeAudioAndInstruments();
+            if (shuttingDown.load(std::memory_order_acquire))
                 return;
 
-            safeThis->populateSoundFontInstruments();
-            safeThis->refreshMidiInputs();
-            if (safeThis->statusLabel.getText().startsWith("Starting in background"))
-                safeThis->statusLabel.setText("Ready. Select a processing mode and audio devices.",
-                                              juce::dontSendNotification);
-            if (safeThis->startupCompleteCallback)
-                safeThis->startupCompleteCallback();
-        });
+            juce::MessageManager::callAsync([safeThis]
+            {
+                if (safeThis == nullptr)
+                    return;
+
+                try
+                {
+                    safeThis->populateSoundFontInstruments();
+                    safeThis->refreshMidiInputs();
+                    if (safeThis->statusLabel.getText().startsWith("Starting in background"))
+                        safeThis->statusLabel.setText("Ready. Select a processing mode and audio devices.",
+                                                      juce::dontSendNotification);
+                    if (safeThis->startupCompleteCallback)
+                        safeThis->startupCompleteCallback();
+                }
+                catch (const std::exception& e)
+                {
+                    safeThis->statusLabel.setText("Startup error: "
+                        + juce::String::fromUTF8(e.what()), juce::dontSendNotification);
+                    juce::Logger::writeToLog("PrismaVox startup UI error: "
+                        + juce::String::fromUTF8(e.what()));
+                }
+                catch (...)
+                {
+                    safeThis->statusLabel.setText("Startup error: unknown UI initialization failure.",
+                                                  juce::dontSendNotification);
+                    juce::Logger::writeToLog("PrismaVox startup UI error: unknown exception.");
+                }
+            });
+        }
+        catch (const std::exception& e)
+        {
+            const auto message = juce::String::fromUTF8(e.what());
+            juce::Logger::writeToLog("PrismaVox background startup error: " + message);
+            juce::MessageManager::callAsync([safeThis, message]
+            {
+                if (safeThis != nullptr)
+                    safeThis->statusLabel.setText("Startup error: " + message,
+                                                  juce::dontSendNotification);
+            });
+        }
+        catch (...)
+        {
+            juce::Logger::writeToLog("PrismaVox background startup error: unknown exception.");
+            juce::MessageManager::callAsync([safeThis]
+            {
+                if (safeThis != nullptr)
+                    safeThis->statusLabel.setText("Startup error: unknown background initialization failure.",
+                                                  juce::dontSendNotification);
+            });
+        }
     });
 }
 
