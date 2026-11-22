@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 from scipy.io import wavfile
+from scipy.signal import butter, sosfilt
 from pystoi import stoi
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -97,6 +98,49 @@ def align_signals(reference: np.ndarray, processed: np.ndarray,
     return reference, processed
 
 
+def band_envelope_correlations(reference: np.ndarray, processed: np.ndarray,
+                                 sample_rate: int) -> dict[int, float]:
+    """Compare speech-energy contours in corresponding frequency bands.
+
+    This is a vocoder-specific diagnostic, not a perceptual intelligibility
+    score. Identical analysis filters and 20 ms RMS envelopes make it less
+    sensitive to carrier cycles while retaining speech articulation timing.
+    """
+    centres = (160, 250, 400, 630, 1000, 1600, 2500, 4000, 6300)
+    frame_length = max(1, round(sample_rate * 0.020))
+    results: dict[int, float] = {}
+    length = min(reference.size, processed.size)
+    reference = reference[:length]
+    processed = processed[:length]
+
+    for centre in centres:
+        low = centre / np.sqrt(2.0)
+        high = min(centre * np.sqrt(2.0), sample_rate * 0.49)
+        if low >= high:
+            continue
+        sos = butter(4, (low, high), btype="bandpass", fs=sample_rate,
+                     output="sos")
+        ref_band = sosfilt(sos, reference)
+        out_band = sosfilt(sos, processed)
+        frame_count = length // frame_length
+        if frame_count < 50:
+            continue
+        ref_frames = ref_band[:frame_count * frame_length].reshape(
+            frame_count, frame_length)
+        out_frames = out_band[:frame_count * frame_length].reshape(
+            frame_count, frame_length)
+        ref_env = np.log(np.sqrt(np.mean(ref_frames ** 2, axis=1)) + 1.0e-8)
+        out_env = np.log(np.sqrt(np.mean(out_frames ** 2, axis=1)) + 1.0e-8)
+        if np.max(ref_env) < np.log(1.0e-6):
+            continue
+        ref_env -= np.mean(ref_env)
+        out_env -= np.mean(out_env)
+        denominator = np.linalg.norm(ref_env) * np.linalg.norm(out_env)
+        if denominator > 1.0e-12:
+            results[centre] = float(np.dot(ref_env, out_env) / denominator)
+    return results
+
+
 def main() -> int:
     failures = []
     for stem in ("vocoder_test_ash", "vocoder_test_nova"):
@@ -160,11 +204,20 @@ def main() -> int:
             continue
 
         delay_ms = delay_samples * 1000.0 / ref_rate
+        band_scores = band_envelope_correlations(
+            aligned_reference, aligned_processed, ref_rate)
+        if band_scores:
+            band_summary = ", ".join(
+                f"{centre}Hz={score:.3f}" for centre, score in band_scores.items())
+            band_mean = float(np.mean(list(band_scores.values())))
+            band_report = f"band-envelope mean={band_mean:.3f} ({band_summary})"
+        else:
+            band_report = "band-envelope correlation unavailable"
         print(f"{stem}: STOI unaligned={unaligned_score:.4f}, "
               f"aligned={vocoder_score:.4f} (estimated processed delay="
               f"{delay_ms:+.1f} ms; envelope correlation={alignment_correlation:.3f}; "
-              f"identity control={identity_score:.4f}); "
-              "both scores are diagnostic baselines; no quality threshold applied")
+              f"identity control={identity_score:.4f}); {band_report}; "
+              "diagnostic baselines only; no quality threshold applied")
 
     if failures:
         print("STOI evaluation failed for: " + ", ".join(failures), file=sys.stderr)
