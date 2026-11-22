@@ -17,7 +17,7 @@ public:
     SoundFontEngine() = default;
     ~SoundFontEngine();
 
-    bool load(const juce::File& file, juce::String& error);
+    bool load(const juce::File& file, juce::String& error, double sampleRate = 0.0);
     void prepare(double sampleRate, int maximumBlockSize);
     void renderNextBlock(juce::AudioBuffer<float>& monoOutput,
                          const juce::MidiBuffer& midiMessages);
