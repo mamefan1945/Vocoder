@@ -108,7 +108,7 @@ jobs:
       - name: Build Release
         run: cmake --build build --config Release --parallel
 
-      - name: Run harmonizer DSP regression tests
+      - name: Run harmonizer and vocoder DSP regression tests
         run: ctest --test-dir build -C Release --verbose --output-on-failure
 
       - name: Stage speech-test audio beside the executable
