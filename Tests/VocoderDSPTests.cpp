@@ -253,7 +253,6 @@ bool testReferenceSpeechFile(const juce::String& filename)
     int activeFrames = 0;
     int totalFrames = 0;
     double maximumFrameRms = 0.0;
-    double pendingFrameRms = 0.0;
     constexpr int frameDurationMs = 20;
     const auto frameLength = juce::jmax(1, juce::roundToInt(sampleRate * frameDurationMs / 1000.0));
 
@@ -283,7 +282,6 @@ bool testReferenceSpeechFile(const juce::String& filename)
         {
             const auto frameRms = std::sqrt(frameEnergy / static_cast<double>(frameSamples));
             maximumFrameRms = juce::jmax(maximumFrameRms, frameRms);
-            pendingFrameRms += frameRms;
             ++totalFrames;
             frameEnergy = 0.0;
             frameSamples = 0;
