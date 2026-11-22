@@ -666,18 +666,9 @@ void MainComponent::initializeAudioAndInstruments()
         juce::File::currentExecutableFile).getSiblingFile("SoundFonts")
         .getChildFile("GeneralUser-GS.sf2");
 
-    juce::String soundFontError;
-    writeStartupTrace("Loading bundled SoundFont: " + defaultSoundFont.getFullPathName());
-    const auto soundFontLoaded = soundFontEngine.load(defaultSoundFont, soundFontError);
-    writeStartupTrace("SoundFont load returned: " + juce::String(soundFontLoaded ? "success" : "failure")
-        + (soundFontError.isNotEmpty() ? " | " + soundFontError : juce::String{}));
-
-    if (shuttingDown.load(std::memory_order_acquire))
-        return;
-
-    // Opening a Windows audio device can block while the driver initializes;
-    // keep it off the UI thread. Register the callback only after the synth
-    // engine and its SoundFont state have finished loading.
+    // Open the device first so FluidSynth is created at the actual device rate.
+    // This avoids loading the bundled bank at 44.1 kHz and immediately loading
+    // it into a second synth at the device's rate during audio startup.
     writeStartupTrace("Calling deviceManager.initialise");
     const auto audioError = deviceManager.initialise(2, 2, nullptr, true);
     writeStartupTrace("deviceManager.initialise returned"
@@ -685,6 +676,22 @@ void MainComponent::initializeAudioAndInstruments()
     if (shuttingDown.load(std::memory_order_acquire))
         return;
 
+    const auto* currentDevice = deviceManager.getCurrentAudioDevice();
+    const auto soundFontSampleRate = currentDevice != nullptr
+        ? currentDevice->getCurrentSampleRate() : 44100.0;
+    juce::String soundFontError;
+    writeStartupTrace("Loading bundled SoundFont at "
+        + juce::String(soundFontSampleRate, 2) + " Hz: "
+        + defaultSoundFont.getFullPathName());
+    const auto soundFontLoaded = soundFontEngine.load(
+        defaultSoundFont, soundFontError, soundFontSampleRate);
+    writeStartupTrace("SoundFont load returned: " + juce::String(soundFontLoaded ? "success" : "failure")
+        + (soundFontError.isNotEmpty() ? " | " + soundFontError : juce::String{}));
+
+    if (shuttingDown.load(std::memory_order_acquire))
+        return;
+
+    // Register the callback only after the synth and SoundFont are ready.
     writeStartupTrace("Registering audio callback");
     deviceManager.addAudioCallback(this);
     writeStartupTrace("Audio callback registered");
@@ -820,7 +827,10 @@ void MainComponent::chooseSoundFont()
                 return;
 
             juce::String error;
-            if (safeThis->soundFontEngine.load(file, error))
+            const auto* currentDevice = safeThis->deviceManager.getCurrentAudioDevice();
+            const auto sampleRate = currentDevice != nullptr
+                ? currentDevice->getCurrentSampleRate() : 0.0;
+            if (safeThis->soundFontEngine.load(file, error, sampleRate))
             {
                 safeThis->populateSoundFontInstruments();
                 safeThis->statusLabel.setText("Loaded SoundFont: "
