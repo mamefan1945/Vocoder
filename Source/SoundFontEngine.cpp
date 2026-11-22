@@ -88,6 +88,7 @@ bool SoundFontEngine::load(const juce::File& file, juce::String& error)
         presets = std::move(newPresets);
         selectedPreset = defaultPreset;
         loadedFileName = file.getFileName();
+        loadedFile = file;
     }
 
     if (oldSynth != nullptr)
@@ -100,10 +101,58 @@ bool SoundFontEngine::load(const juce::File& file, juce::String& error)
 void SoundFontEngine::prepare(double sampleRate, int maximumBlockSize)
 {
     const juce::ScopedLock guard(lock);
-    currentSampleRate = juce::jmax(8000.0, sampleRate);
+    const auto requestedRate = juce::jmax(8000.0, sampleRate);
+
+    // FluidSynth 2.5 no longer supports changing a live synth's sample rate.
+    // Recreate it with the new rate before the audio callback starts, retaining
+    // the loaded bank and selected preset.
+    if (synth != nullptr && std::abs(requestedRate - currentSampleRate) > 0.5
+        && loadedFile.existsAsFile())
+    {
+        auto* settings = new_fluid_settings();
+        if (settings != nullptr)
+        {
+            fluid_settings_setnum(settings, "synth.sample-rate", requestedRate);
+            fluid_settings_setnum(settings, "synth.gain", 0.8);
+            fluid_settings_setint(settings, "synth.polyphony", 128);
+            fluid_settings_setint(settings, "synth.reverb.active", 0);
+            fluid_settings_setint(settings, "synth.chorus.active", 0);
+
+            auto* replacement = new_fluid_synth(settings);
+            delete_fluid_settings(settings);
+            if (replacement != nullptr)
+            {
+                const auto replacementSoundFontId = fluid_synth_sfload(
+                    replacement, loadedFile.getFullPathName().toRawUTF8(), 1);
+                if (replacementSoundFontId >= 0
+                    && juce::isPositiveAndBelow(selectedPreset, static_cast<int>(presets.size())))
+                {
+                    const auto& preset = presets[static_cast<size_t>(selectedPreset)];
+                    for (int channel = 0; channel < 16; ++channel)
+                        fluid_synth_program_select(replacement, channel,
+                            replacementSoundFontId, preset.bank, preset.program);
+
+                    auto* previous = synth;
+                    synth = replacement;
+                    soundFontId = replacementSoundFontId;
+                    currentSampleRate = requestedRate;
+                    delete_fluid_synth(previous);
+                }
+                else
+                {
+                    delete_fluid_synth(replacement);
+                    juce::Logger::writeToLog(
+                        "FluidSynth could not recreate the SoundFont at the requested sample rate.");
+                }
+            }
+        }
+    }
+    else if (synth == nullptr)
+    {
+        currentSampleRate = requestedRate;
+    }
+
     stereoBuffer.setSize(2, juce::jmax(1, maximumBlockSize), false, false, true);
-    if (synth != nullptr)
-        fluid_synth_set_sample_rate(synth, static_cast<float>(currentSampleRate));
 }
 
 void SoundFontEngine::selectPreset(int presetIndex)
