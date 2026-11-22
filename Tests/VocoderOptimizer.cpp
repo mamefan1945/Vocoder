@@ -1,6 +1,5 @@
 #include "VocoderEngine.h"
 #include "CarrierSynth.h"
-#include "SoundFontEngine.h"
 #include <cmath>
 #include <iostream>
 #include <memory>
@@ -92,49 +91,6 @@ bool renderCarrierComparison(const juce::File& inputFile, const juce::File& outp
  if(!writer)return false; stream.release(); return writer->writeFromAudioSampleBuffer(output,0,count);
 }
 
-bool renderSoundFontComparison(const juce::File& inputFile, const juce::File& outputDir,
-                                 const juce::String& speaker, const juce::String& profile,
-                                 const juce::String& instrumentSearch)
-{
- juce::AudioFormatManager fm; fm.registerBasicFormats();
- std::unique_ptr<juce::AudioFormatReader> reader(fm.createReaderFor(inputFile));
- if(!reader || reader->lengthInSamples<=0 || reader->numChannels<=0) return false;
- const int count=(int)juce::jmin<juce::int64>(reader->lengthInSamples,(juce::int64)(reader->sampleRate*120.0));
- const double rate=reader->sampleRate;
- juce::AudioBuffer<float> input(1,count), carrier(1,count), output(1,count);
- if(!reader->read(&input,0,count,0,true,false)) return false;
- SoundFontEngine synth; juce::String error;
- if(!synth.load(juce::File(PRISMAVOX_DEFAULT_SOUNDFONT),error))
- {
-  std::cerr<<"SoundFont load failed: "<<error<<std::endl; return false;
- }
- int presetIndex=-1;
- const auto& presets=synth.getPresets();
- for(size_t i=0;i<presets.size();++i)
-  if(presets[i].name.containsIgnoreCase(instrumentSearch))
-  { presetIndex=(int)i; break; }
- if(presetIndex<0)
- {
-  std::cerr<<"SoundFont preset not found: "<<instrumentSearch<<std::endl; return false;
- }
- synth.selectPreset(presetIndex);
- synth.prepare(rate,count);
- juce::MidiBuffer midi;
- midi.addEvent(juce::MidiMessage::noteOn(1,45,(juce::uint8)110),0);
- midi.addEvent(juce::MidiMessage::noteOff(1,45),count-1);
- synth.renderNextBlock(carrier,midi);
- VocoderEngine engine; engine.prepare(rate); engine.setDryWet(1); engine.setOutputGain(1);
- engine.setAttackMs(10); engine.setReleaseMs(5); engine.setFormantShift(0);
- engine.setBandCount(56); engine.setFilterQ(7); engine.setSibilanceAmount(.10f);
- engine.setUnvoicedNoise(.10f); engine.setArticulationLift(1); engine.reset();
- for(int i=0;i<count;++i)
-  output.setSample(0,i,engine.processSample(input.getSample(0,i),0.0f,false,carrier.getSample(0,i)));
- auto file=outputDir.getChildFile(speaker+"_carrier_sf2_"+profile+".wav");
- auto stream=std::unique_ptr<juce::FileOutputStream>(file.createOutputStream()); if(!stream)return false;
- juce::WavAudioFormat wav; auto writer=std::unique_ptr<juce::AudioFormatWriter>(wav.createWriterFor(stream.get(),rate,1,24,{},0));
- if(!writer)return false; stream.release(); return writer->writeFromAudioSampleBuffer(output,0,count);
-}
-
 int main() {
  const auto dir=juce::File::getCurrentWorkingDirectory().getChildFile("build").getChildFile("optimization-results");
  if(dir.createDirectory().failed())return 3;
@@ -146,11 +102,6 @@ int main() {
   if(!renderCarrierComparison(input,dir,speaker,"rich",CarrierSynth::rich))return 6;
   if(!renderCarrierComparison(input,dir,speaker,"analog_stack",CarrierSynth::analogStack))return 7;
   if(!renderCarrierComparison(input,dir,speaker,"saw",CarrierSynth::saw))return 8;
-  if(!renderSoundFontComparison(input,dir,speaker,"organ","Organ"))return 9;
-  if(!renderSoundFontComparison(input,dir,speaker,"strings","Strings"))return 10;
-  if(!renderSoundFontComparison(input,dir,speaker,"choir","Choir"))return 11;
-  if(!renderSoundFontComparison(input,dir,speaker,"voice","Voice"))return 12;
-  if(!renderSoundFontComparison(input,dir,speaker,"saw_lead","Sawtooth"))return 13;
  }
  std::cout<<"Rendered "<<std::size(profiles)*2+6<<" candidate WAV files.\n"; return 0;
 }
