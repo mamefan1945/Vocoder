@@ -124,6 +124,20 @@ jobs:
       - name: Evaluate vocoder speech intelligibility (STOI)
         run: python Tests/evaluate_stoi.py build/test-renders
 
+      - name: Render vocoder parameter candidates
+        run: .\\build\\Release\\VocoderOptimizer.exe
+
+      - name: Rank vocoder parameter candidates
+        run: python Tests/rank_vocoder_candidates.py build/optimization-results
+
+      - name: Upload vocoder optimization results
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrismaVox-Vocoder-Optimization-${{ github.run_number }}
+          path: build/optimization-results/**
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Stage speech-test audio beside the executable
         shell: pwsh
         run: |
