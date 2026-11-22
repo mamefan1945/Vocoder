@@ -35,7 +35,7 @@ namespace
                 static_cast<size_t>(BinaryData::PrismaVox_Neon_Prism_Audio_Logo_pngSize));
             g.fillAll(juce::Colour(0xff050914));
             if (!artwork.isNull())
-                g.drawImageWithin(artwork, getLocalBounds(),
+                g.drawImageWithin(artwork, 0, 0, getWidth(), getHeight(),
                                   juce::RectanglePlacement::stretchToFit);
 
             g.setColour(juce::Colour(0xffaeb8c6));
