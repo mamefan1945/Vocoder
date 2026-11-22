@@ -136,3 +136,30 @@ endif()
 enable_testing()
 add_test(NAME HarmonizerDSPTests COMMAND $<TARGET_FILE:HarmonizerDSPTests>)
 set_tests_properties(HarmonizerDSPTests PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+
+# Deterministic, device-independent vocoder signal-integrity tests.
+juce_add_console_app(VocoderDSPTests
+    PRODUCT_NAME "Vocoder DSP Tests"
+)
+juce_generate_juce_header(VocoderDSPTests)
+target_include_directories(VocoderDSPTests PRIVATE Source)
+target_sources(VocoderDSPTests PRIVATE
+    Tests/VocoderDSPTests.cpp
+    Source/VocoderEngine.h
+    Source/VocoderEngine.cpp
+)
+target_compile_definitions(VocoderDSPTests PRIVATE
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+)
+target_link_libraries(VocoderDSPTests PRIVATE
+    juce::juce_audio_basics
+    juce::juce_dsp
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags
+)
+if(MSVC)
+    target_compile_options(VocoderDSPTests PRIVATE /W4 /permissive-)
+endif()
+
+add_test(NAME VocoderDSPTests COMMAND $<TARGET_FILE:VocoderDSPTests>)
