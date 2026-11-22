@@ -173,6 +173,8 @@ juce_generate_juce_header(VocoderOptimizer)
 target_include_directories(VocoderOptimizer PRIVATE Source)
 target_sources(VocoderOptimizer PRIVATE
     Tests/VocoderOptimizer.cpp
+    Source/CarrierSynth.h
+    Source/CarrierSynth.cpp
     Source/VocoderEngine.h
     Source/VocoderEngine.cpp
 )
