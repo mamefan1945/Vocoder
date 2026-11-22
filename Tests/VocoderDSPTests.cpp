@@ -238,8 +238,14 @@ bool testReferenceSpeechFile(const juce::String& filename)
     engine.prepare(sampleRate);
     engine.setDryWet(1.0f);
     engine.setOutputGain(1.0f);
-    engine.setAttackMs(1.0f);
-    engine.setReleaseMs(35.0f);
+
+    // Representative reduced-noise tuning based on the user's normal setup.
+    // UI values are percentages; the engine receives normalized 0.0-2.0 amounts.
+    engine.setAttackMs(10.0f);
+    engine.setReleaseMs(10.0f);
+    engine.setFormantShift(-2.0f);
+    engine.setUnvoicedNoise(0.10f);
+    engine.setSibilanceAmount(0.10f);
 
     auto highPass = juce::dsp::IIR::Filter<float>();
     highPass.coefficients = juce::dsp::IIR::Coefficients<float>::makeHighPass(
