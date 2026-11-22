@@ -108,10 +108,11 @@ def band_envelope_correlations(reference: np.ndarray, processed: np.ndarray,
     """
     centres = (160, 250, 400, 630, 1000, 1600, 2500, 4000, 6300)
     frame_length = max(1, round(sample_rate * 0.020))
-    results: dict[int, float] = {}
+    results: dict[int, dict[str, float]] = {}
     length = min(reference.size, processed.size)
     reference = reference[:length]
     processed = processed[:length]
+    total_reference_power = 0.0
 
     for centre in centres:
         low = centre / np.sqrt(2.0)
@@ -129,15 +130,30 @@ def band_envelope_correlations(reference: np.ndarray, processed: np.ndarray,
             frame_count, frame_length)
         out_frames = out_band[:frame_count * frame_length].reshape(
             frame_count, frame_length)
+        ref_power = float(np.mean(ref_band ** 2))
+        out_power = float(np.mean(out_band ** 2))
         ref_env = np.log(np.sqrt(np.mean(ref_frames ** 2, axis=1)) + 1.0e-8)
         out_env = np.log(np.sqrt(np.mean(out_frames ** 2, axis=1)) + 1.0e-8)
-        if np.max(ref_env) < np.log(1.0e-6):
+        if ref_power < 1.0e-12 or np.max(ref_env) < np.log(1.0e-6):
             continue
         ref_env -= np.mean(ref_env)
         out_env -= np.mean(out_env)
         denominator = np.linalg.norm(ref_env) * np.linalg.norm(out_env)
         if denominator > 1.0e-12:
-            results[centre] = float(np.dot(ref_env, out_env) / denominator)
+            results[centre] = {
+                "correlation": float(np.dot(ref_env, out_env) / denominator),
+                "reference_power": ref_power,
+                "output_power": out_power,
+            }
+            total_reference_power += ref_power
+
+    if total_reference_power > 0.0:
+        for values in results.values():
+            values["reference_share"] = (
+                values["reference_power"] / total_reference_power)
+            values["level_change_db"] = 10.0 * np.log10(
+                max(values["output_power"], 1.0e-20)
+                / max(values["reference_power"], 1.0e-20))
     return results
 
 
@@ -208,9 +224,19 @@ def main() -> int:
             aligned_reference, aligned_processed, ref_rate)
         if band_scores:
             band_summary = ", ".join(
-                f"{centre}Hz={score:.3f}" for centre, score in band_scores.items())
-            band_mean = float(np.mean(list(band_scores.values())))
-            band_report = f"band-envelope mean={band_mean:.3f} ({band_summary})"
+                f"{centre}Hz:corr={values['correlation']:.3f},"
+                f"ref={values['reference_share'] * 100.0:.1f}%,"
+                f"level={values['level_change_db']:+.1f}dB"
+                for centre, values in band_scores.items())
+            band_mean = float(np.mean(
+                [values["correlation"] for values in band_scores.values()]))
+            weighted_mean = sum(
+                values["correlation"] * values["reference_share"]
+                for values in band_scores.values())
+            band_report = (
+                f"band-envelope mean={band_mean:.3f}, "
+                f"reference-energy-weighted={weighted_mean:.3f} "
+                f"({band_summary})")
         else:
             band_report = "band-envelope correlation unavailable"
         print(f"{stem}: STOI unaligned={unaligned_score:.4f}, "
