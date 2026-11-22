@@ -166,16 +166,14 @@ private:
 
         void startMainComponent()
         {
-            if (pendingMainComponent != nullptr || mainComponentInstalled)
+            if (mainComponentInstalled)
                 return;
-            pendingMainComponent = std::make_unique<MainComponent>([this]
-            {
-                if (pendingMainComponent != nullptr)
-                {
-                    mainComponentInstalled = true;
-                    setContentOwned(pendingMainComponent.release(), true);
-                }
-            });
+
+            // MainComponent starts audio and SoundFont initialization on its
+            // own worker thread. Install the usable UI immediately so a slow
+            // or unavailable audio driver cannot leave the app on the splash.
+            mainComponentInstalled = true;
+            setContentOwned(new MainComponent(), true);
         }
 #if JUCE_WINDOWS
         HICON nativeIcon = nullptr;
