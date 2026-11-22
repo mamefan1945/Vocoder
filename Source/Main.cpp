@@ -31,8 +31,8 @@ namespace
 
             const auto bounds = getLocalBounds().toFloat();
             static const auto artwork = juce::ImageFileFormat::loadFrom(
-                PrismaVoxArtwork::PrismaVox_Splash_png,
-                static_cast<size_t>(PrismaVoxArtwork::PrismaVox_Splash_pngSize));
+                PrismaVoxArtwork::PrismaVox_Neon_Prism_Audio_Logo_png,
+                static_cast<size_t>(PrismaVoxArtwork::PrismaVox_Neon_Prism_Audio_Logo_pngSize));
             g.fillAll(juce::Colour(0xff050914));
             if (!artwork.isNull())
                 g.drawImageWithin(artwork, getLocalBounds(),
