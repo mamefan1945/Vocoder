@@ -23,3 +23,16 @@ Performance timings printed by the harmonizer tests are diagnostic measurements,
 ## Next measurement work
 
 The next useful additions are listening-backed STOI baselines and regression margins, calibrated THD+N and noise-floor analysis, true-peak measurement, pitch/formant tracking over a wider vocal range, and golden-render comparisons. Hardware loopback tests should remain a separate opt-in test tier.
+
+
+## Hosted vocoder parameter search
+
+The Windows workflow renders a baseline and one-factor-at-a-time probes for filter
+bands, filter Q, attack, release, formant shift, sibilance, unvoiced noise, and
+articulation lift using both checked-in speaker recordings. It publishes WAVs,
+per-speaker metrics, and a shortlist as a separate GitHub Actions artifact.
+
+The ranking is a screening heuristic (50% classical STOI and 50% reference-energy-
+weighted band-envelope correlation), not a perceptual quality claim. These metrics
+can mis-rank deliberately vocoded speech. Listen to shortlisted, level-matched
+Ash and Nova files before changing application defaults.
