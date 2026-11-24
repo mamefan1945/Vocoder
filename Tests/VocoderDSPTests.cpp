@@ -5,6 +5,7 @@
 #include <cmath>
 #include <iostream>
 #include <memory>
+#include <cstdint>
 #include <vector>
 
 namespace
@@ -378,6 +379,57 @@ bool testReferenceSpeechFile(const juce::String& filename)
 #endif
 }
 
+bool testUnvoicedDetectorUsesBothCues()
+{
+    const auto measureNoisePath = [](bool broadband)
+    {
+        VocoderEngine withNoise;
+        VocoderEngine withoutNoise;
+        withNoise.prepare(48000.0);
+        withoutNoise.prepare(48000.0);
+        for (auto* engine : { &withNoise, &withoutNoise })
+        {
+            engine->setDryWet(1.0f);
+            engine->setGateThreshold(0.0f);
+            engine->setSibilanceAmount(2.0f);
+            engine->setUnvoicedNoise(2.0f);
+        }
+        withoutNoise.setUnvoicedNoise(0.0f);
+
+        std::uint32_t randomState = 0x13579bdfu;
+        double differenceEnergy = 0.0;
+        constexpr int sampleCount = 48000;
+        for (int i = 0; i < sampleCount; ++i)
+        {
+            float voice = 0.0f;
+            if (broadband)
+            {
+                randomState ^= randomState << 13;
+                randomState ^= randomState >> 17;
+                randomState ^= randomState << 5;
+                voice = 0.12f * (static_cast<float>(randomState & 0x00ffffffu)
+                               / 8388607.5f - 1.0f);
+            }
+            else
+            {
+                voice = 0.12f * std::sin(static_cast<float>(2.0 * pi * 220.0 * i / 48000.0));
+            }
+            const auto carrier = 0.5f * std::sin(static_cast<float>(
+                2.0 * pi * 440.0 * i / 48000.0));
+            const auto difference = withNoise.processSample(voice, carrier, true, carrier)
+                                  - withoutNoise.processSample(voice, carrier, true, carrier);
+            differenceEnergy += static_cast<double>(difference) * difference;
+        }
+        return std::sqrt(differenceEnergy / sampleCount);
+    };
+
+    const auto voicedNoise = measureNoisePath(false);
+    const auto broadbandNoise = measureNoisePath(true);
+    std::cout << "Unvoiced excitation delta: voiced=" << voicedNoise
+              << "; broadband=" << broadbandNoise << '\\n';
+    return broadbandNoise > 1.0e-5 && broadbandNoise > voicedNoise * 2.0;
+}
+
 bool testReferenceSpeechCorpus()
 {
     const auto ash = testReferenceSpeechFile("vocoder_test_ash.wav");
@@ -395,6 +447,7 @@ int main()
     passed = testDeterministicReset() && passed;
     passed = testSampleRatesAndBlockSizes() && passed;
     passed = testConfigurationChangesRemainFinite() && passed;
+    passed = testUnvoicedDetectorUsesBothCues() && passed;
     passed = testReferenceSpeechCorpus() && passed;
 
     std::cout << (passed ? "All vocoder DSP tests passed.\n"

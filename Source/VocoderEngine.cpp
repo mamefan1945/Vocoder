@@ -38,6 +38,8 @@ void VocoderEngine::prepare(double sampleRate)
     applyPendingConfiguration();
 
     voicingSmoothingCoefficient = std::exp(-1.0f / (0.010f * static_cast<float>(currentSampleRate)));
+    unvoicedAttackCoefficient = std::exp(-1.0f / (0.003f * static_cast<float>(currentSampleRate)));
+    unvoicedReleaseCoefficient = std::exp(-1.0f / (0.025f * static_cast<float>(currentSampleRate)));
     carrierActivityAttackCoefficient = std::exp(-1.0f / (0.001f * static_cast<float>(currentSampleRate)));
     carrierActivityReleaseCoefficient = std::exp(-1.0f / (0.020f * static_cast<float>(currentSampleRate)));
     updateEnvelopeTimes();
@@ -55,6 +57,7 @@ void VocoderEngine::reset()
     noiseState = 0x6d2b79f5u;
     previousModulator = 0.0f;
     zeroCrossingRate = 0.0f;
+    unvoicedAmount = 0.0f;
     carrierActivity = 0.0f;
     envelopes.fill(0.0f);
     envelopePowers.fill(0.0f);
@@ -76,16 +79,13 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto bandsPerOctave = static_cast<float>(activeBandCount - 1) / std::log2(highestBandHz / lowestBandHz);
     const auto bandOffset = shift * (bandsPerOctave / 12.0f);
 
-    // A short-term zero-crossing estimate distinguishes noisy, unvoiced speech
-    // from predominantly periodic vowels. It is deliberately smoothed over 10 ms
-    // so individual samples do not cause rapid switching.
+    // Zero-crossing rate remains one cue, but is no longer used alone:
+    // the final decision also considers energy in the upper analysis bands.
     const auto crossedZero = (modulator >= 0.0f) != (previousModulator >= 0.0f);
     previousModulator = modulator;
     const auto crossing = crossedZero ? 1.0f : 0.0f;
     zeroCrossingRate = voicingSmoothingCoefficient * zeroCrossingRate
                      + (1.0f - voicingSmoothingCoefficient) * crossing;
-    const auto unvoicedAmount = juce::jlimit(0.0f, 1.0f,
-        (zeroCrossingRate - 0.035f) / 0.105f);
 
     // Analyse speech as band-limited RMS energy, not a smoothed absolute peak.
     // RMS is more stable for voiced sounds and less dependent on waveform shape.
@@ -124,14 +124,39 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
 
         const auto tonalBand = carrierFilters[index].processSample(carrier);
         const auto noiseBand = sibilanceNoiseFilters[index].processSample(noiseSample);
-        const auto highFrequencyWeight = juce::jlimit(0.0f, 1.0f,
-            (bandCentres[index] - 900.0f) / 2600.0f);
         // Keep the harmonic carrier intact. Unvoiced consonants need their own
         // noise excitation path; mixing noise into the tonal carrier can actually
         // weaken useful harmonics and leave fricatives dependent on carrier pitch.
         carrierBands[index] = tonalBand;
         noiseBands[index] = noiseBand;
     }
+
+    // Combine two independent indicators of turbulent speech. High-frequency
+    // energy alone is not enough (bright vowels can contain it), and zero
+    // crossings alone are not enough (they vary with pitch and waveform).
+    // Requiring both cues makes the noise path follow fricatives more reliably.
+    float totalSpeechPower = 0.0f;
+    float upperSpeechPower = 0.0f;
+    for (int band = 0; band < activeBandCount; ++band)
+    {
+        const auto power = envelopePowers[static_cast<size_t>(band)];
+        totalSpeechPower += power;
+        if (bandCentres[static_cast<size_t>(band)] >= 2200.0f)
+            upperSpeechPower += power;
+    }
+    const auto upperEnergyRatio = upperSpeechPower / juce::jmax(totalSpeechPower, 1.0e-12f);
+    const auto zcrPosition = juce::jlimit(0.0f, 1.0f,
+        (zeroCrossingRate - 0.025f) / 0.105f);
+    const auto zcrScore = zcrPosition * zcrPosition * (3.0f - 2.0f * zcrPosition);
+    const auto spectralPosition = juce::jlimit(0.0f, 1.0f,
+        (upperEnergyRatio - 0.08f) / 0.27f);
+    const auto spectralScore = spectralPosition * spectralPosition
+                             * (3.0f - 2.0f * spectralPosition);
+    const auto unvoicedCandidate = std::sqrt(zcrScore * spectralScore);
+    const auto unvoicedCoefficient = unvoicedCandidate > unvoicedAmount
+        ? unvoicedAttackCoefficient : unvoicedReleaseCoefficient;
+    unvoicedAmount = unvoicedCoefficient * unvoicedAmount
+                   + (1.0f - unvoicedCoefficient) * unvoicedCandidate;
 
     // Convert each band level to a compressed modulation depth. This calibration
     // lifts quiet speech bands while the square-root curve preserves consonant

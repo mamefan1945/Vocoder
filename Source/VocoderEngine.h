@@ -51,6 +51,9 @@ private:
     float previousModulator = 0.0f;
     float zeroCrossingRate = 0.0f;
     float voicingSmoothingCoefficient = 0.0f;
+    float unvoicedAmount = 0.0f;
+    float unvoicedAttackCoefficient = 0.0f;
+    float unvoicedReleaseCoefficient = 0.0f;
     float carrierActivity = 0.0f;
     float carrierActivityAttackCoefficient = 0.0f;
     float carrierActivityReleaseCoefficient = 0.0f;
