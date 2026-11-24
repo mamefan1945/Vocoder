@@ -82,7 +82,7 @@ def main() -> int:
         "wide_r01/r20/r50 change only release to 1/20/50 ms. "
         "attack_a01/a30 change only attack to 1/30 ms. "
         "articulation_0/2 change only articulation lift to 0/200%. "
-        "unvoiced_0/2 change only unvoiced-noise amount to 0/20%. "
+        "unvoiced_0/2 change only unvoiced-noise amount to 0/200%. "
         "These are diagnostic extremes, not recommended settings.\n\n"
         "Listen for the stop consonant /t/ and the middle sequence /n-t-l/. "
         "Report whether any candidate makes 'silently' clearer, worse, or simply "
