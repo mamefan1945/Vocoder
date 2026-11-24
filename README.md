@@ -420,7 +420,7 @@ The documented command uses the Visual Studio generator via -A x64. If using a d
 
 The GitHub Actions workflow is .github/workflows/windows-build.yml. It runs on windows-2022, configures the MSVC x64 environment, installs FluidSynth through vcpkg, configures CMake, builds Release, and uploads the Windows x64 package.
 
-The workflow is a compile/package check. It does not currently run automated audio-quality tests, render reference audio, or validate the harmonizer by listening.
+The workflow builds the application and runs deterministic DSP regression tests, including pitch, polyphony, transitions, and a Signalsmith Stretch comparison. These tests check signal integrity and pitch targets; they do not replace listening tests or establish subjective audio quality.
 
 ## Project layout
 
@@ -451,7 +451,7 @@ The UI communicates audio-thread parameters using atomics where appropriate. Aud
 - **JUCE 8.0.10** — fetched from the official JUCE GitHub repository. JUCE is available under the AGPLv3 or a commercial licence. Review the [JUCE licensing terms](https://juce.com/legal/juce-licence/) before distributing the application or modified binaries.
 - **FluidSynth** — used for SoundFont playback and licensed under LGPL-2.1-or-later. The repository includes LICENSES/FluidSynth-LGPL-2.1.txt, and the build package copies the licence beside the executable.
 - **GeneralUser GS v2.0.3** — bundled as a separate SoundFont data file, not embedded in the executable. Its licence is copied into the SoundFonts directory as GeneralUser-GS-LICENSE.txt.
-- **Signalsmith licence texts** — the repository currently contains MIT licence texts for Signalsmith Linear and Signalsmith Stretch in LICENSES. The current harmonizer source is a custom TD-PSOLA implementation; do not assume that those libraries are the active pitch-shifting implementation merely because their licence files are present.
+- **Signalsmith Stretch and Signalsmith Linear** — MIT-licensed, pinned source dependencies used by the harmonizer DSP comparison tests. Their MIT licence texts are in `LICENSES/`. The live application does not yet use Signalsmith for real-time harmonizing; the existing TD/LP/FD-PSOLA engines remain unchanged.
 
 Check the licence terms of any user-supplied SoundFont or other asset before redistributing it. This README is technical project documentation, not legal advice.
 

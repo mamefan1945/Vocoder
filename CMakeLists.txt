@@ -8,6 +8,29 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
 
+# Signalsmith Stretch is used by the comparative harmonizer DSP tests only.
+# Pin both header-only dependencies to immutable upstream revisions.
+FetchContent_Declare(
+    signalsmith_stretch
+    GIT_REPOSITORY https://github.com/Signalsmith-Audio/signalsmith-stretch.git
+    GIT_TAG 88061fd4eda56a2353c5d65c74aa3f4ccf76f9da
+    GIT_SHALLOW FALSE
+)
+FetchContent_Declare(
+    signalsmith_linear
+    GIT_REPOSITORY https://github.com/Signalsmith-Audio/linear.git
+    GIT_TAG 7bb1c8f36794d6980080ce817c91f8da8fe56a66
+    GIT_SHALLOW FALSE
+)
+FetchContent_GetProperties(signalsmith_stretch)
+if(NOT signalsmith_stretch_POPULATED)
+    FetchContent_Populate(signalsmith_stretch)
+endif()
+FetchContent_GetProperties(signalsmith_linear)
+if(NOT signalsmith_linear_POPULATED)
+    FetchContent_Populate(signalsmith_linear)
+endif()
+
 FetchContent_Declare(
     JUCE
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
@@ -111,7 +134,11 @@ juce_add_console_app(HarmonizerDSPTests
     PRODUCT_NAME "Harmonizer DSP Tests"
 )
 juce_generate_juce_header(HarmonizerDSPTests)
-target_include_directories(HarmonizerDSPTests PRIVATE Source)
+target_include_directories(HarmonizerDSPTests PRIVATE
+    Source
+    "${signalsmith_stretch_SOURCE_DIR}"
+    "${signalsmith_linear_SOURCE_DIR}/include"
+)
 target_sources(HarmonizerDSPTests PRIVATE
     Tests/HarmonizerDSPTests.cpp
     Source/HarmonizerEngine.h
@@ -130,7 +157,7 @@ target_link_libraries(HarmonizerDSPTests PRIVATE
     juce::juce_recommended_warning_flags
 )
 if(MSVC)
-    target_compile_options(HarmonizerDSPTests PRIVATE /W4 /permissive-)
+    target_compile_options(HarmonizerDSPTests PRIVATE /W4 /permissive- /bigobj)
 endif()
 
 enable_testing()

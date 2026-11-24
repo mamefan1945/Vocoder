@@ -1,4 +1,5 @@
 #include "HarmonizerEngine.h"
+#include "signalsmith-stretch.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <algorithm>
 #include <array>
@@ -807,6 +808,157 @@ bool testNoMidiProducesNoWetOutput()
     std::cout << "No-MIDI wet-output peak: " << peak << '\n';
     return peak < 1.0e-6f;
 }
+
+bool testSignalsmithStretchSingleVoice()
+{
+    using Stretch = signalsmith::stretch::SignalsmithStretch<float>;
+    Stretch stretch(0x505249534d41564full);
+    stretch.presetCheaper(1, static_cast<float>(sampleRate), true);
+    stretch.setFormantBase(220.0f / static_cast<float>(sampleRate));
+    stretch.setFormantFactor(1.0f, true);
+    stretch.setTransposeSemitones(12.0f);
+
+    constexpr size_t total = static_cast<size_t>(sampleRate * 1.5);
+    std::vector<float> rendered(total, 0.0f);
+    std::array<float, blockSize> input {};
+    std::array<float, blockSize> output {};
+    float* inputChannels[] = { input.data() };
+    float* outputChannels[] = { output.data() };
+    std::vector<double> callbackMilliseconds;
+    callbackMilliseconds.reserve(total / static_cast<size_t>(blockSize));
+
+    size_t position = 0;
+    while (position < total)
+    {
+        const auto count = static_cast<int>(std::min(
+            static_cast<size_t>(blockSize), total - position));
+        for (int i = 0; i < count; ++i)
+        {
+            const auto t = static_cast<double>(position + static_cast<size_t>(i)) / sampleRate;
+            input[static_cast<size_t>(i)] =
+                0.55f * static_cast<float>(std::sin(2.0 * pi * 220.0 * t))
+              + 0.22f * static_cast<float>(std::sin(2.0 * pi * 440.0 * t))
+              + 0.10f * static_cast<float>(std::sin(2.0 * pi * 660.0 * t));
+        }
+
+        const auto start = std::chrono::steady_clock::now();
+        stretch.process(inputChannels, count, outputChannels, count);
+        const auto finish = std::chrono::steady_clock::now();
+        callbackMilliseconds.push_back(std::chrono::duration<double, std::milli>(
+            finish - start).count());
+        std::copy_n(output.data(), count, rendered.data() + position);
+        position += static_cast<size_t>(count);
+    }
+
+    const auto first = static_cast<size_t>(sampleRate * 0.30);
+    const auto count = static_cast<size_t>(sampleRate * 0.80);
+    const auto target = magnitudeAt(rendered, first, count, 440.0);
+    const auto source = magnitudeAt(rendered, first, count, 220.0);
+    const auto ratio = source > 1.0e-9 ? target / source : 1.0e9;
+
+    std::sort(callbackMilliseconds.begin(), callbackMilliseconds.end());
+    const auto mean = std::accumulate(callbackMilliseconds.begin(),
+        callbackMilliseconds.end(), 0.0) / callbackMilliseconds.size();
+    const auto p99Index = std::min(callbackMilliseconds.size() - 1,
+        static_cast<size_t>(std::ceil(callbackMilliseconds.size() * 0.99)) - 1);
+    const auto p99 = callbackMilliseconds[p99Index];
+    const auto maximum = callbackMilliseconds.back();
+    const auto budget = 1000.0 * blockSize / sampleRate;
+
+    std::cout << "Signalsmith Stretch single voice: target/source="
+              << ratio << "; latency input/output="
+              << stretch.inputLatency() << "/" << stretch.outputLatency()
+              << " samples; mean/p99/max=" << mean << "/" << p99 << "/"
+              << maximum << " ms; p99 block budget="
+              << 100.0 * p99 / budget << "%\n";
+
+    return std::isfinite(target) && std::isfinite(source)
+        && target > 1.0 && ratio > 3.0;
+}
+
+bool testSignalsmithStretchPolyphony()
+{
+    using Stretch = signalsmith::stretch::SignalsmithStretch<float>;
+    constexpr std::array<int, 3> targetNotes { 69, 72, 76 };
+    constexpr std::array<double, 3> targetHz { 440.0, 523.251, 659.255 };
+    std::array<std::unique_ptr<Stretch>, 3> stretchers;
+    std::array<std::vector<float>, 3> rendered;
+    std::array<std::array<float, blockSize>, 3> outputs {};
+    std::array<float, blockSize> input {};
+    float* inputChannels[] = { input.data() };
+    std::array<std::array<float*, 1>, 3> outputChannels {};
+
+    for (size_t voice = 0; voice < stretchers.size(); ++voice)
+    {
+        stretchers[voice] = std::make_unique<Stretch>(
+            static_cast<long>(0x50524953 + voice));
+        stretchers[voice]->presetCheaper(1, static_cast<float>(sampleRate), true);
+        stretchers[voice]->setFormantBase(220.0f / static_cast<float>(sampleRate));
+        stretchers[voice]->setFormantFactor(1.0f, true);
+        stretchers[voice]->setTransposeSemitones(
+            static_cast<float>(targetNotes[voice] - 57));
+        rendered[voice].assign(static_cast<size_t>(sampleRate * 1.5), 0.0f);
+        outputChannels[voice][0] = outputs[voice].data();
+    }
+
+    constexpr size_t total = static_cast<size_t>(sampleRate * 1.5);
+    size_t position = 0;
+    std::vector<double> callbackMilliseconds;
+    callbackMilliseconds.reserve(total / static_cast<size_t>(blockSize));
+
+    while (position < total)
+    {
+        const auto count = static_cast<int>(std::min(
+            static_cast<size_t>(blockSize), total - position));
+        for (int i = 0; i < count; ++i)
+        {
+            const auto t = static_cast<double>(position + static_cast<size_t>(i)) / sampleRate;
+            input[static_cast<size_t>(i)] =
+                0.55f * static_cast<float>(std::sin(2.0 * pi * 220.0 * t))
+              + 0.22f * static_cast<float>(std::sin(2.0 * pi * 440.0 * t))
+              + 0.10f * static_cast<float>(std::sin(2.0 * pi * 660.0 * t));
+        }
+
+        const auto start = std::chrono::steady_clock::now();
+        for (size_t voice = 0; voice < stretchers.size(); ++voice)
+            stretchers[voice]->process(inputChannels, count,
+                                       outputChannels[voice].data(), count);
+        const auto finish = std::chrono::steady_clock::now();
+        callbackMilliseconds.push_back(std::chrono::duration<double, std::milli>(
+            finish - start).count());
+
+        for (size_t voice = 0; voice < stretchers.size(); ++voice)
+            std::copy_n(outputs[voice].data(), count,
+                        rendered[voice].data() + position);
+        position += static_cast<size_t>(count);
+    }
+
+    bool passed = true;
+    for (size_t voice = 0; voice < stretchers.size(); ++voice)
+    {
+        const auto measured = magnitudeAt(rendered[voice],
+            static_cast<size_t>(sampleRate * 0.30),
+            static_cast<size_t>(sampleRate * 0.80), targetHz[voice]);
+        std::cout << "Signalsmith Stretch voice " << targetNotes[voice]
+                  << " target " << targetHz[voice]
+                  << " Hz magnitude=" << measured << '\n';
+        passed = passed && std::isfinite(measured) && measured > 1.0;
+    }
+
+    std::sort(callbackMilliseconds.begin(), callbackMilliseconds.end());
+    const auto mean = std::accumulate(callbackMilliseconds.begin(),
+        callbackMilliseconds.end(), 0.0) / callbackMilliseconds.size();
+    const auto p99Index = std::min(callbackMilliseconds.size() - 1,
+        static_cast<size_t>(std::ceil(callbackMilliseconds.size() * 0.99)) - 1);
+    const auto p99 = callbackMilliseconds[p99Index];
+    const auto maximum = callbackMilliseconds.back();
+    const auto budget = 1000.0 * blockSize / sampleRate;
+    std::cout << "Signalsmith Stretch three independent voices: mean/p99/max="
+              << mean << "/" << p99 << "/" << maximum
+              << " ms; p99 block budget=" << 100.0 * p99 / budget << "%\n";
+    return passed;
+}
+
 }
 
 int main()
@@ -836,6 +988,8 @@ int main()
     passed &= testAlgorithmSwitching();
     passed &= testLpSustainedFullLevelStability();
     passed &= testFdPolyphonyPerformanceProfile();
+    passed &= testSignalsmithStretchSingleVoice();
+    passed &= testSignalsmithStretchPolyphony();
     passed &= testSilenceProducesSilence();
     passed &= testNoMidiProducesNoWetOutput();
     passed &= testNoMidiDryBlendIsGated();
