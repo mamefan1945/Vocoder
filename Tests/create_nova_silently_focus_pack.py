@@ -22,6 +22,7 @@ PROFILES = [
     "articulation_0", "articulation_2",
     "unvoiced_0", "unvoiced_2",
     "plosive_off", "plosive_on",
+    "vowel_q4", "vowel_q10", "vowel_f0", "vowel_q10_f0",
 ]
 
 def read_float(path: Path) -> tuple[int, np.ndarray]:
@@ -85,8 +86,14 @@ def main() -> int:
         "articulation_0/2 change only articulation lift to 0/200%. "
         "unvoiced_0/2 change only unvoiced-noise amount to 0/200%. "
         "plosive_off/on compare the new short stop-release burst path disabled/enabled. "
+        "vowel_q4/q10 compare filter Q4/Q10 at the -2 semitone formant setting; "
+        "vowel_f0 compares zero formant shift at Q7; vowel_q10_f0 combines Q10 with zero shift. "
+        "These four isolate spectral resolution and static formant offset while attack/release stay fixed. "
         "These are diagnostic comparisons, not recommended settings.\n\n"
-        "Listen for the stop consonant /t/, the middle sequence /n-t-l/, and whether "
+        "For the vowel question, compare r07_fm2, vowel_q4, vowel_q10, vowel_f0, and vowel_q10_f0 first. "
+        "Listen for whether the /aɪ/ glide is more distinct rather than flattened toward /ɛ/. "
+        "Then compare the plosive_off/on pair for the /t/ release. "
+        "Listen for the middle sequence /n-t-l/ as well. "
         "the vowel glide in 'I' sounds like /aɪ/ rather than /ɛ/. "
         "Report whether any candidate makes 'silently' clearer, worse, or simply "
         "different. The optimizer carrier is a deterministic harmonic test tone, "
