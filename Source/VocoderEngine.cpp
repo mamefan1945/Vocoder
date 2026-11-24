@@ -42,6 +42,8 @@ void VocoderEngine::prepare(double sampleRate)
     unvoicedReleaseCoefficient = std::exp(-1.0f / (0.025f * static_cast<float>(currentSampleRate)));
     transientAttackCoefficient = std::exp(-1.0f / (0.0005f * static_cast<float>(currentSampleRate)));
     transientReleaseCoefficient = std::exp(-1.0f / (0.015f * static_cast<float>(currentSampleRate)));
+    plosiveAttackCoefficient = std::exp(-1.0f / (0.00015f * static_cast<float>(currentSampleRate)));
+    plosiveReleaseCoefficient = std::exp(-1.0f / (0.004f * static_cast<float>(currentSampleRate)));
     carrierActivityAttackCoefficient = std::exp(-1.0f / (0.001f * static_cast<float>(currentSampleRate)));
     carrierActivityReleaseCoefficient = std::exp(-1.0f / (0.020f * static_cast<float>(currentSampleRate)));
     updateEnvelopeTimes();
@@ -65,6 +67,7 @@ void VocoderEngine::reset()
     envelopes.fill(0.0f);
     envelopePowers.fill(0.0f);
     transientEnvelopes.fill(0.0f);
+    plosiveEnvelope = 0.0f;
 }
 
 float VocoderEngine::processSample(float modulator, float externalCarrier, bool useExternalCarrier,
@@ -78,6 +81,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto articulationAmount = articulationLift.load(std::memory_order_relaxed);
     const auto noiseAmount = unvoicedNoise.load(std::memory_order_relaxed);
     const auto sibilanceGain = sibilanceAmount.load(std::memory_order_relaxed);
+    const auto plosiveGain = plosiveBurstAmount.load(std::memory_order_relaxed);
     const auto preEmphasis = preEmphasisAmount.load(std::memory_order_relaxed);
     applyPendingConfiguration();
     const auto bandsPerOctave = static_cast<float>(activeBandCount - 1) / std::log2(highestBandHz / lowestBandHz);
@@ -122,6 +126,8 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
 
     std::array<float, maxBandCount> carrierBands {};
     std::array<float, maxBandCount> noiseBands {};
+    float plosiveFastEnergy = 0.0f;
+    float plosiveSlowEnergy = 0.0f;
     for (int band = 0; band < activeBandCount; ++band)
     {
         const auto index = static_cast<size_t>(band);
@@ -136,6 +142,11 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
                                   + (1.0f - transientCoefficient) * transientLevel;
         envelopePowers[index] = coefficient * envelopePowers[index] + (1.0f - coefficient) * power;
         envelopes[index] = std::sqrt(juce::jmax(0.0f, envelopePowers[index]));
+        if (bandCentres[index] >= 1400.0f && bandCentres[index] <= 7600.0f)
+        {
+            plosiveFastEnergy += transientEnvelopes[index];
+            plosiveSlowEnergy += envelopes[index];
+        }
 
         const auto tonalBand = carrierFilters[index].processSample(carrier);
         const auto noiseBand = sibilanceNoiseFilters[index].processSample(noiseSample);
@@ -195,6 +206,18 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         ? unvoicedAttackCoefficient : unvoicedReleaseCoefficient;
     unvoicedAmount = unvoicedCoefficient * unvoicedAmount
                    + (1.0f - unvoicedCoefficient) * unvoicedCandidate;
+
+    // A stop-consonant release is a short, broadband event: its fast upper-band
+    // energy briefly outruns the slower RMS envelope. Track that excess separately
+    // from the sustained fricative detector so /t/ and /k/ bursts are not required
+    // to masquerade as long unvoiced-noise segments.
+    const auto plosiveExcess = juce::jmax(0.0f, plosiveFastEnergy - 1.18f * plosiveSlowEnergy);
+    const auto plosiveCandidate = plosiveFastEnergy > 0.0015f
+        ? juce::jlimit(0.0f, 1.0f, plosiveExcess / (plosiveFastEnergy + 0.0001f)) : 0.0f;
+    const auto plosiveCoefficient = plosiveCandidate > plosiveEnvelope
+        ? plosiveAttackCoefficient : plosiveReleaseCoefficient;
+    plosiveEnvelope = plosiveCoefficient * plosiveEnvelope
+                    + (1.0f - plosiveCoefficient) * plosiveCandidate;
 
     // Convert each band level to a compressed modulation depth. This calibration
     // lifts quiet speech bands while the square-root curve preserves consonant
@@ -266,6 +289,15 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         const auto sibilance = 0.35f * sibilanceGain * unvoicedAmount
                              * highFrequencyWeight * carrierPresence * noiseAmount;
         wetOutput += noiseBands[index] * noiseModulation * sibilance;
+
+        // A brief, independently detected broadband burst restores the release
+        // edge of stop consonants. It is deliberately short and band-shaped;
+        // unlike the fricative path it does not depend on sustained ZCR/flatness.
+        const auto plosiveFrequencyWeight = juce::jlimit(0.0f, 1.0f,
+            (centre - 1200.0f) / 2200.0f);
+        const auto plosiveExcitation = 0.20f * plosiveGain * plosiveEnvelope
+                                     * plosiveFrequencyWeight * carrierPresence;
+        wetOutput += noiseBands[index] * plosiveExcitation;
     }
 
     // Keep headroom while avoiding an unnecessarily quiet wet signal.
@@ -327,6 +359,11 @@ void VocoderEngine::setUnvoicedNoise(float amount) noexcept
 void VocoderEngine::setSibilanceAmount(float amount) noexcept
 {
     sibilanceAmount.store(juce::jlimit(0.0f, 2.0f, amount), std::memory_order_relaxed);
+}
+
+void VocoderEngine::setPlosiveBurst(float amount) noexcept
+{
+    plosiveBurstAmount.store(juce::jlimit(0.0f, 2.0f, amount), std::memory_order_relaxed);
 }
 
 void VocoderEngine::setPreEmphasisAmount(float amount) noexcept
