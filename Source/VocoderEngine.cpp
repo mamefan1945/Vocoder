@@ -302,14 +302,16 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
                              * highFrequencyWeight * carrierPresence * noiseAmount;
         wetOutput += noiseBands[index] * noiseModulation * sibilance;
 
-        // A brief, independently detected broadband burst restores the release
-        // edge of stop consonants. It is deliberately short and band-shaped;
-        // unlike the fricative path it does not depend on sustained ZCR/flatness.
+        // A stop-consonant release is detected from the actual microphone
+        // transient above. Use that envelope to briefly reinforce the matching
+        // carrier band; do not inject a second, unrelated white-noise source.
+        // This preserves the vocoder's pitched synthesis while emphasizing the
+        // timing of the captured burst, and avoids the hiss heard with noiseBands.
         const auto plosiveFrequencyWeight = juce::jlimit(0.0f, 1.0f,
             (centre - 1200.0f) / 2200.0f);
         const auto plosiveExcitation = 0.20f * plosiveGain * plosiveEnvelope
                                      * plosiveFrequencyWeight * carrierPresence;
-        wetOutput += noiseBands[index] * plosiveExcitation;
+        wetOutput += carrierBands[index] * plosiveExcitation;
     }
 
     // Keep headroom while avoiding an unnecessarily quiet wet signal.
