@@ -6,7 +6,6 @@ from __future__ import annotations
 import csv
 import subprocess
 import sys
-import zipfile
 from pathlib import Path
 
 import imageio_ffmpeg
@@ -72,18 +71,8 @@ def main() -> int:
         encoding="utf-8",
     )
 
-    archive = results / "PrismaVox-Vocoder-Listening-Pack.zip"
-    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
-        for mp3 in converted:
-            bundle.write(mp3, mp3.name)
-        bundle.write(guide, guide.name)
-        for report in (results / "README-RESULTS.md", ranking,
-                       results / "candidate-metrics.csv"):
-            if report.is_file():
-                bundle.write(report, report.name)
-
     print(f"Created {len(converted)} MP3 files at 192 kbps.")
-    print(f"Listening pack: {archive}")
+    print(f"Listening files: {mp3_dir}")
     return 0
 
 
