@@ -299,6 +299,87 @@ bool testPolyphony(HarmonizerEngine::Algorithm algorithm, const char* name)
 }
 
 
+bool testStaggeredChordTransitions(HarmonizerEngine::Algorithm algorithm, const char* name)
+{
+    auto engine = std::make_unique<HarmonizerEngine>();
+    engine->setAlgorithm(algorithm);
+    engine->prepare(sampleRate, blockSize);
+
+    struct ScheduledMidiEvent
+    {
+        size_t sample;
+        juce::MidiMessage message;
+    };
+    const auto at = [](double seconds)
+    {
+        return static_cast<size_t>(std::llround(seconds * sampleRate));
+    };
+    const std::array<ScheduledMidiEvent, 8> events {{
+        { at(0.00), juce::MidiMessage::noteOn(1, 69, 0.85f) },
+        { at(0.22), juce::MidiMessage::noteOn(1, 72, 0.78f) },
+        { at(0.56), juce::MidiMessage::noteOff(1, 69) },
+        { at(0.62), juce::MidiMessage::noteOn(1, 76, 0.80f) },
+        { at(0.96), juce::MidiMessage::noteOff(1, 72) },
+        { at(1.02), juce::MidiMessage::noteOn(1, 67, 0.82f) },
+        { at(1.38), juce::MidiMessage::noteOff(1, 76) },
+        { at(1.72), juce::MidiMessage::noteOff(1, 67) }
+    }};
+
+    constexpr size_t total = static_cast<size_t>(sampleRate * 2.2);
+    std::array<float, blockSize> input {};
+    std::array<float, blockSize> output {};
+    size_t position = 0;
+    size_t nextEvent = 0;
+    double outputEnergy = 0.0;
+    float peak = 0.0f;
+    float maximumStep = 0.0f;
+    float previous = 0.0f;
+    bool finite = true;
+    while (position < total)
+    {
+        const auto count = static_cast<int>(std::min(
+            static_cast<size_t>(blockSize), total - position));
+        juce::MidiBuffer midi;
+        while (nextEvent < events.size()
+            && events[nextEvent].sample < position + static_cast<size_t>(count))
+        {
+            if (events[nextEvent].sample >= position)
+                midi.addEvent(events[nextEvent].message,
+                    static_cast<int>(events[nextEvent].sample - position));
+            ++nextEvent;
+        }
+
+        for (int i = 0; i < count; ++i)
+        {
+            const auto absolute = position + static_cast<size_t>(i);
+            const auto t = static_cast<double>(absolute) / sampleRate;
+            const auto fundamental = 185.0 + 18.0 * std::sin(2.0 * pi * 0.7 * t);
+            input[static_cast<size_t>(i)] =
+                0.48f * static_cast<float>(std::sin(2.0 * pi * fundamental * t))
+              + 0.20f * static_cast<float>(std::sin(4.0 * pi * fundamental * t))
+              + 0.09f * static_cast<float>(std::sin(6.0 * pi * fundamental * t));
+        }
+
+        engine->processBlock(input.data(), output.data(), count, midi, 1.0f, 1.0f, 0);
+        for (int i = 0; i < count; ++i)
+        {
+            const auto value = output[static_cast<size_t>(i)];
+            finite = finite && std::isfinite(value);
+            outputEnergy += static_cast<double>(value) * value;
+            peak = std::max(peak, std::abs(value));
+            maximumStep = std::max(maximumStep, std::abs(value - previous));
+            previous = value;
+        }
+        position += static_cast<size_t>(count);
+    }
+
+    const auto rms = std::sqrt(outputEnergy / static_cast<double>(total));
+    std::cout << name << " staggered chord transitions: RMS=" << rms
+              << "; peak=" << peak << "; max sample step=" << maximumStep
+              << "; finite=" << finite << '\\n';
+    return finite && std::isfinite(rms) && rms > 0.001
+        && peak < 2.0f && maximumStep < 1.5f;
+}
 bool testAlgorithmSwitching()
 {
     auto engine = std::make_unique<HarmonizerEngine>();
