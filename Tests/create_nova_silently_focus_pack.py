@@ -94,7 +94,6 @@ def main() -> int:
         "Listen for whether the /aɪ/ glide is more distinct rather than flattened toward /ɛ/. "
         "Then compare the plosive_off/on pair for the /t/ release. "
         "Listen for the middle sequence /n-t-l/ as well. "
-        "the vowel glide in 'I' sounds like /aɪ/ rather than /ɛ/. "
         "Report whether any candidate makes 'silently' clearer, worse, or simply "
         "different. The optimizer carrier is a deterministic harmonic test tone, "
         "not the exact live Ash/Square carrier. Listening judgment is decisive.\n",
