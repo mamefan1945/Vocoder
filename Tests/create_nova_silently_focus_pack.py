@@ -23,6 +23,8 @@ PROFILES = [
     "unvoiced_0", "unvoiced_2",
     "plosive_off", "plosive_on",
     "vowel_q4", "vowel_q10", "vowel_f0", "vowel_q10_f0",
+    "carrier_saw_plosive_off", "carrier_saw_plosive_on",
+    "carrier_square_plosive_off", "carrier_square_plosive_on",
 ]
 
 def read_float(path: Path) -> tuple[int, np.ndarray]:
