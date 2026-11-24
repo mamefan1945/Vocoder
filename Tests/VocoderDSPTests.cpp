@@ -426,7 +426,7 @@ bool testUnvoicedDetectorUsesBothCues()
     const auto voicedNoise = measureNoisePath(false);
     const auto broadbandNoise = measureNoisePath(true);
     std::cout << "Unvoiced excitation delta: voiced=" << voicedNoise
-              << "; broadband=" << broadbandNoise << '\\n';
+              << "; broadband=" << broadbandNoise << std::endl;
     return broadbandNoise > 1.0e-5 && broadbandNoise > voicedNoise * 2.0;
 }
 
