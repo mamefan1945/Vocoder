@@ -46,7 +46,7 @@ static const Profile profiles[] = {
  {"articulation_0",56,7,10,7,-2,.10f,.10f,0},
  {"articulation_2",56,7,10,7,-2,.10f,.10f,2},
  {"unvoiced_0",56,7,10,7,-2,.10f,0,1},
- {"unvoiced_2",56,7,10,7,-2,.10f,.20f,1}
+ {"unvoiced_2",56,7,10,7,-2,.10f,2.0f,1}
 };
 
 bool render(const juce::File& inputFile, const juce::File& outputDir, const juce::String& speaker, const Profile& p,
