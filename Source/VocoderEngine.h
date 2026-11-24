@@ -54,11 +54,14 @@ private:
     float unvoicedAmount = 0.0f;
     float unvoicedAttackCoefficient = 0.0f;
     float unvoicedReleaseCoefficient = 0.0f;
+    float transientAttackCoefficient = 0.0f;
+    float transientReleaseCoefficient = 0.0f;
     float carrierActivity = 0.0f;
     float carrierActivityAttackCoefficient = 0.0f;
     float carrierActivityReleaseCoefficient = 0.0f;
     std::array<float, maxBandCount> envelopes {};
     std::array<float, maxBandCount> envelopePowers {};
+    std::array<float, maxBandCount> transientEnvelopes {};
     std::array<float, maxBandCount> bandCentres {};
 
     double currentSampleRate = 44100.0;

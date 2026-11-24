@@ -314,6 +314,7 @@ void VocoderEngine::applyPendingConfiguration() noexcept
         const auto index = static_cast<size_t>(band);
         envelopes[index] = 0.0f;
         envelopePowers[index] = 0.0f;
+        transientEnvelopes[index] = 0.0f;
     }
     activeConfiguration = configuration;
 }
