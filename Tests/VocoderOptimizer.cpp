@@ -46,7 +46,12 @@ static const Profile profiles[] = {
  {"articulation_0",56,7,10,7,-2,.10f,.10f,0},
  {"articulation_2",56,7,10,7,-2,.10f,.10f,2},
  {"unvoiced_0",56,7,10,7,-2,.10f,0,1},
- {"unvoiced_2",56,7,10,7,-2,.10f,2.0f,1}
+ {"unvoiced_2",56,7,10,7,-2,.10f,2.0f,1},
+ // Isolated vowel-shape diagnostics: vary filter resolution and static formant offset.
+ {"vowel_q4",56,4,10,7,-2,.10f,.10f,1},
+ {"vowel_q10",56,10,10,7,-2,.10f,.10f,1},
+ {"vowel_f0",56,7,10,7,0,.10f,.10f,1},
+ {"vowel_q10_f0",56,10,10,7,0,.10f,.10f,1}
 };
 
 bool render(const juce::File& inputFile, const juce::File& outputDir, const juce::String& speaker, const Profile& p,
