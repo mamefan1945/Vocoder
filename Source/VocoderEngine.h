@@ -61,6 +61,8 @@ private:
     float transientReleaseCoefficient = 0.0f;
     float plosiveAttackCoefficient = 0.0f;
     float plosiveReleaseCoefficient = 0.0f;
+    float plosiveSlowAttackCoefficient = 0.0f;
+    float plosiveSlowReleaseCoefficient = 0.0f;
     float plosiveEnvelope = 0.0f;
     float carrierActivity = 0.0f;
     float carrierActivityAttackCoefficient = 0.0f;
@@ -68,6 +70,7 @@ private:
     std::array<float, maxBandCount> envelopes {};
     std::array<float, maxBandCount> envelopePowers {};
     std::array<float, maxBandCount> transientEnvelopes {};
+    std::array<float, maxBandCount> plosiveSlowEnvelopes {};
     std::array<float, maxBandCount> bandCentres {};
     std::array<std::atomic<float>, maxBandCount> bandAttackScales {};
     std::array<std::atomic<float>, maxBandCount> bandAttackCoefficients {};
