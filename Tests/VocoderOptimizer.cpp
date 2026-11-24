@@ -125,8 +125,8 @@ int main() {
   const Profile plosiveOn { "plosive_on",56,7,10,7,-2,.10f,.10f,1 };
   if(!render(input,dir,speaker,plosiveOff,0.15f,0.0f))return 12;
   if(!render(input,dir,speaker,plosiveOn,0.15f,1.0f))return 13;
-  if(!renderCarrierComparison(input,dir,speaker,"rich",CarrierSynth::rich))return 6;
-  if(!renderCarrierComparison(input,dir,speaker,"analog_stack",CarrierSynth::analogStack))return 7;
+  if(!renderCarrierComparison(input,dir,speaker,"rich",CarrierSynth::rich,0.0f))return 6;
+  if(!renderCarrierComparison(input,dir,speaker,"analog_stack",CarrierSynth::analogStack,0.0f))return 7;
   if(!renderCarrierComparison(input,dir,speaker,"saw",CarrierSynth::saw,0.0f))return 8;
   if(!renderCarrierComparison(input,dir,speaker,"saw",CarrierSynth::saw,1.0f))return 14;
   if(!renderCarrierComparison(input,dir,speaker,"square",CarrierSynth::square,0.0f))return 9;
