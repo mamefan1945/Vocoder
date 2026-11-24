@@ -44,6 +44,8 @@ void VocoderEngine::prepare(double sampleRate)
     transientReleaseCoefficient = std::exp(-1.0f / (0.015f * static_cast<float>(currentSampleRate)));
     plosiveAttackCoefficient = std::exp(-1.0f / (0.00015f * static_cast<float>(currentSampleRate)));
     plosiveReleaseCoefficient = std::exp(-1.0f / (0.004f * static_cast<float>(currentSampleRate)));
+    plosiveSlowAttackCoefficient = std::exp(-1.0f / (0.0015f * static_cast<float>(currentSampleRate)));
+    plosiveSlowReleaseCoefficient = std::exp(-1.0f / (0.012f * static_cast<float>(currentSampleRate)));
     carrierActivityAttackCoefficient = std::exp(-1.0f / (0.001f * static_cast<float>(currentSampleRate)));
     carrierActivityReleaseCoefficient = std::exp(-1.0f / (0.020f * static_cast<float>(currentSampleRate)));
     updateEnvelopeTimes();
@@ -68,6 +70,7 @@ void VocoderEngine::reset()
     envelopePowers.fill(0.0f);
     transientEnvelopes.fill(0.0f);
     plosiveEnvelope = 0.0f;
+    plosiveSlowEnvelopes.fill(0.0f);
 }
 
 float VocoderEngine::processSample(float modulator, float externalCarrier, bool useExternalCarrier,
@@ -145,7 +148,15 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         if (bandCentres[index] >= 1400.0f && bandCentres[index] <= 7600.0f)
         {
             plosiveFastEnergy += transientEnvelopes[index];
-            plosiveSlowEnergy += envelopes[index];
+            // Compare like-for-like amplitude envelopes. The previous detector
+            // compared a fast mean-absolute envelope with a slow RMS envelope;
+            // even steady noise has a lower mean-absolute value than its RMS,
+            // making the transient threshold unnecessarily difficult to cross.
+            const auto slowCoefficient = transientLevel > plosiveSlowEnvelopes[index]
+                ? plosiveSlowAttackCoefficient : plosiveSlowReleaseCoefficient;
+            plosiveSlowEnvelopes[index] = slowCoefficient * plosiveSlowEnvelopes[index]
+                                        + (1.0f - slowCoefficient) * transientLevel;
+            plosiveSlowEnergy += plosiveSlowEnvelopes[index];
         }
 
         const auto tonalBand = carrierFilters[index].processSample(carrier);
@@ -420,6 +431,7 @@ void VocoderEngine::applyPendingConfiguration() noexcept
         envelopes[index] = 0.0f;
         envelopePowers[index] = 0.0f;
         transientEnvelopes[index] = 0.0f;
+        plosiveSlowEnvelopes[index] = 0.0f;
     }
     activeConfiguration = configuration;
     updateEnvelopeTimes();
