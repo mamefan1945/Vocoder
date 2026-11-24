@@ -72,7 +72,6 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto carrier = useExternalCarrier ? externalCarrier : internalCarrier;
     const auto low = lowFrequency.load(std::memory_order_relaxed);
     const auto high = highFrequency.load(std::memory_order_relaxed);
-    const auto attack = attackCoefficient.load(std::memory_order_relaxed);
     const auto release = releaseCoefficient.load(std::memory_order_relaxed);
     const auto shift = formantShift.load(std::memory_order_relaxed);
     const auto articulationAmount = articulationLift.load(std::memory_order_relaxed);
@@ -121,7 +120,8 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         const auto index = static_cast<size_t>(band);
         const auto voiceBand = modulatorFilters[index].processSample(modulator);
         const auto power = voiceBand * voiceBand;
-        const auto coefficient = power > envelopePowers[index] ? attack : release;
+        const auto coefficient = power > envelopePowers[index]
+            ? bandAttackCoefficients[index].load(std::memory_order_relaxed) : release;
         const auto transientLevel = std::abs(voiceBand);
         const auto transientCoefficient = transientLevel > transientEnvelopes[index]
             ? transientAttackCoefficient : transientReleaseCoefficient;
@@ -323,6 +323,14 @@ void VocoderEngine::applyPendingConfiguration() noexcept
     {
         const auto index = static_cast<size_t>(band);
         bandCentres[index] = config.centres[index];
+        // Preserve slower low-frequency vowel envelopes while allowing mid/high
+        // consonant bands to follow faster amplitude transitions. The user's
+        // attack control remains the low-band reference; the reduction ramps
+        // smoothly from 500 Hz to 3 kHz and then levels off.
+        const auto frequencyWeight = juce::jlimit(0.0f, 1.0f,
+            (config.centres[index] - 500.0f) / 2500.0f);
+        bandAttackScales[index].store(1.0f - 0.55f * frequencyWeight,
+                                      std::memory_order_relaxed);
         modulatorFilters[index].coefficients = config.coefficients[index];
         carrierFilters[index].coefficients = config.coefficients[index];
         sibilanceNoiseFilters[index].coefficients = config.coefficients[index];
@@ -335,6 +343,7 @@ void VocoderEngine::applyPendingConfiguration() noexcept
         transientEnvelopes[index] = 0.0f;
     }
     activeConfiguration = configuration;
+    updateEnvelopeTimes();
 }
 
 void VocoderEngine::updateEnvelopeTimes() noexcept
@@ -345,4 +354,13 @@ void VocoderEngine::updateEnvelopeTimes() noexcept
                             std::memory_order_relaxed);
     releaseCoefficient.store(std::exp(-1.0f / (releaseSeconds * static_cast<float>(currentSampleRate))),
                              std::memory_order_relaxed);
+    for (size_t band = 0; band < maxBandCount; ++band)
+    {
+        const auto scale = juce::jlimit(0.35f, 1.0f,
+            bandAttackScales[band].load(std::memory_order_relaxed));
+        const auto effectiveAttackSeconds = attackSeconds * scale;
+        bandAttackCoefficients[band].store(
+            std::exp(-1.0f / (effectiveAttackSeconds * static_cast<float>(currentSampleRate))),
+            std::memory_order_relaxed);
+    }
 }

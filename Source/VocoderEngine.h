@@ -63,6 +63,8 @@ private:
     std::array<float, maxBandCount> envelopePowers {};
     std::array<float, maxBandCount> transientEnvelopes {};
     std::array<float, maxBandCount> bandCentres {};
+    std::array<std::atomic<float>, maxBandCount> bandAttackScales {};
+    std::array<std::atomic<float>, maxBandCount> bandAttackCoefficients {};
 
     double currentSampleRate = 44100.0;
     std::atomic<float> attackCoefficient { 0.0f };
