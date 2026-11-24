@@ -22,6 +22,7 @@ PROFILES = [
     "articulation_0", "articulation_2",
     "unvoiced_0", "unvoiced_2",
     "plosive_off", "plosive_on",
+    "plosive_detector_marker",
     "vowel_q4", "vowel_q10", "vowel_f0", "vowel_q10_f0",
     "carrier_saw_plosive_off", "carrier_saw_plosive_on",
     "carrier_square_plosive_off", "carrier_square_plosive_on",
@@ -87,7 +88,9 @@ def main() -> int:
         "attack_a01/a30 change only attack to 1/30 ms. "
         "articulation_0/2 change only articulation lift to 0/200%. "
         "unvoiced_0/2 change only unvoiced-noise amount to 0/200%. "
-        "plosive_off/on compare the new short stop-release burst path disabled/enabled. "
+        "plosive_off/on compare the short stop-release burst path disabled/enabled. "
+        "plosive_detector_marker is a 1 kHz monitor tone whose loudness follows the detector; "
+        "a tone burst means the detector fired, and its duration shows the release. "
         "vowel_q4/q10 compare filter Q4/Q10 at the -2 semitone formant setting; "
         "vowel_f0 compares zero formant shift at Q7; vowel_q10_f0 combines Q10 with zero shift. "
         "These four isolate spectral resolution and static formant offset while attack/release stay fixed. "
