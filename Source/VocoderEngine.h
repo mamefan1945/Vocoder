@@ -27,6 +27,7 @@ public:
     void setArticulationLift(float amount) noexcept;
     void setUnvoicedNoise(float amount) noexcept;
     void setSibilanceAmount(float amount) noexcept;
+    void setPreEmphasisAmount(float amount) noexcept;
     void setBandCount(int bands) noexcept;
     void setFilterQ(float q) noexcept;
 
@@ -79,6 +80,7 @@ private:
     std::atomic<float> articulationLift { 1.0f };
     std::atomic<float> unvoicedNoise { 1.0f };
     std::atomic<float> sibilanceAmount { 1.0f };
+    std::atomic<float> preEmphasisAmount { 0.15f };
     std::atomic<float> attackMs { 1.0f };
     std::atomic<float> releaseMs { 10.0f };
 

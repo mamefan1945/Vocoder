@@ -78,6 +78,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto articulationAmount = articulationLift.load(std::memory_order_relaxed);
     const auto noiseAmount = unvoicedNoise.load(std::memory_order_relaxed);
     const auto sibilanceGain = sibilanceAmount.load(std::memory_order_relaxed);
+    const auto preEmphasis = preEmphasisAmount.load(std::memory_order_relaxed);
     applyPendingConfiguration();
     const auto bandsPerOctave = static_cast<float>(activeBandCount - 1) / std::log2(highestBandHz / lowestBandHz);
     const auto bandOffset = shift * (bandsPerOctave / 12.0f);
@@ -87,9 +88,9 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     const auto crossedZero = (modulator >= 0.0f) != (previousModulator >= 0.0f);
     previousModulator = modulator;
     // Mild pre-emphasis raises consonant detail before the analysis filter bank.
-    // A 0.15 coefficient adds roughly 2.6 dB of tilt from low to high frequencies,
-    // without materially changing vowel fundamentals or the user's level controls.
-    const auto preEmphasized = 0.85f * modulator - 0.15f * previousPreEmphasisInput;
+    // The amount is adjustable so the optimizer can render a true bypass reference.
+    const auto preEmphasized = (1.0f - preEmphasis) * modulator
+                             - preEmphasis * previousPreEmphasisInput;
     previousPreEmphasisInput = modulator;
     const auto crossing = crossedZero ? 1.0f : 0.0f;
     zeroCrossingRate = voicingSmoothingCoefficient * zeroCrossingRate
@@ -326,6 +327,11 @@ void VocoderEngine::setUnvoicedNoise(float amount) noexcept
 void VocoderEngine::setSibilanceAmount(float amount) noexcept
 {
     sibilanceAmount.store(juce::jlimit(0.0f, 2.0f, amount), std::memory_order_relaxed);
+}
+
+void VocoderEngine::setPreEmphasisAmount(float amount) noexcept
+{
+    preEmphasisAmount.store(juce::jlimit(0.0f, 0.5f, amount), std::memory_order_relaxed);
 }
 
 
