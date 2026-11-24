@@ -118,7 +118,7 @@ jobs:
           cache: pip
           cache-dependency-path: Tests/requirements-stoi.txt
 
-      - name: Install STOI evaluator
+      - name: Install STOI evaluator and MP3 encoder
         run: python -m pip install -r Tests/requirements-stoi.txt
 
       - name: Evaluate vocoder speech intelligibility (STOI)
@@ -135,11 +135,22 @@ jobs:
       - name: Rank vocoder parameter candidates
         run: python Tests/rank_vocoder_candidates.py build/optimization-results
 
+      - name: Create MP3 listening pack
+        run: python Tests/create_vocoder_listening_pack.py build/optimization-results
+
       - name: Upload vocoder optimization results
         uses: actions/upload-artifact@v4
         with:
           name: PrismaVox-Vocoder-Optimization-${{ github.run_number }}
           path: build/optimization-results/**
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload MP3 listening pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrismaVox-Vocoder-Listening-MP3-${{ github.run_number }}
+          path: build/optimization-results/PrismaVox-Vocoder-Listening-Pack.zip
           if-no-files-found: error
           retention-days: 30
 
