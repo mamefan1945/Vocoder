@@ -185,14 +185,20 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         auto shiftedLevel = envelopes[static_cast<size_t>(lower)] * (1.0f - fraction)
                           + envelopes[static_cast<size_t>(upper)] * fraction;
         // A separate fast envelope restores the leading edge of short consonants
-        // without changing the user's vowel-envelope attack setting. Limit it to
-        // upper speech bands and use a short release so it does not smear into the
-        // following vowel. Mean-absolute level is scaled to an RMS-like level.
-        if (centre >= 1500.0f)
+        // without changing the user's vowel-envelope attack setting. Fade it in
+        // across the upper-mid bands rather than switching abruptly at 1.5 kHz:
+        // plosive bursts can carry useful energy below the sibilant region too.
+        // Mean-absolute level is scaled to an RMS-like level.
+        const auto transientPosition = juce::jlimit(0.0f, 1.0f,
+            (centre - 1000.0f) / 1000.0f);
+        const auto transientWeight = transientPosition * transientPosition
+                                   * (3.0f - 2.0f * transientPosition);
+        if (transientWeight > 0.0f)
         {
             const auto transientLevel = transientEnvelopes[static_cast<size_t>(lower)] * (1.0f - fraction)
                                       + transientEnvelopes[static_cast<size_t>(upper)] * fraction;
-            shiftedLevel = juce::jmax(shiftedLevel, transientLevel * 1.11f);
+            shiftedLevel = juce::jmax(shiftedLevel,
+                transientLevel * (1.0f + 0.11f * transientWeight));
         }
         // Use a soft-knee expander rather than subtracting a hard threshold.
         // Quiet consonants often sit well below vowel energy; a hard per-band
