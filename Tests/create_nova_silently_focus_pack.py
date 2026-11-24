@@ -21,6 +21,7 @@ PROFILES = [
     "attack_a01", "attack_a30",
     "articulation_0", "articulation_2",
     "unvoiced_0", "unvoiced_2",
+    "plosive_off", "plosive_on",
 ]
 
 def read_float(path: Path) -> tuple[int, np.ndarray]:
@@ -83,8 +84,10 @@ def main() -> int:
         "attack_a01/a30 change only attack to 1/30 ms. "
         "articulation_0/2 change only articulation lift to 0/200%. "
         "unvoiced_0/2 change only unvoiced-noise amount to 0/200%. "
-        "These are diagnostic extremes, not recommended settings.\n\n"
-        "Listen for the stop consonant /t/ and the middle sequence /n-t-l/. "
+        "plosive_off/on compare the new short stop-release burst path disabled/enabled. "
+        "These are diagnostic comparisons, not recommended settings.\n\n"
+        "Listen for the stop consonant /t/, the middle sequence /n-t-l/, and whether "
+        "the vowel glide in 'I' sounds like /aɪ/ rather than /ɛ/. "
         "Report whether any candidate makes 'silently' clearer, worse, or simply "
         "different. The optimizer carrier is a deterministic harmonic test tone, "
         "not the exact live Ash/Square carrier. Listening judgment is decisive.\n",
