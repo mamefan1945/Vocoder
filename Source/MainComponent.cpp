@@ -1826,8 +1826,12 @@ void MainComponent::processAudio(const float* const* inputChannelData,
         // do not fall back to the dry microphone in Harmonizer mode: the
         // harmonizer buffer already contains the dry/wet mix and output gain.
         const auto carrierReady = externalCarrier || hasActiveMidiNote;
-        const auto vocoderOutput = vocoderEnabled && carrierReady
-            ? vocoder.processSample(voice, external, externalCarrier, synth)
+        // Keep the analysis/envelope state moving even when no internal MIDI
+        // note is held. Passing silence as the carrier lets speech envelopes
+        // decay naturally without freezing stale state between notes.
+        const auto vocoderOutput = vocoderEnabled
+            ? vocoder.processSample(voice, external, externalCarrier,
+                                    carrierReady ? synth : 0.0f)
             : 0.0f;
         const auto harmonizerOutput = harmonizerEnabled
             ? harmonizerBuffer.getReadPointer(0)[sample]
