@@ -211,7 +211,7 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     // energy briefly outruns the slower RMS envelope. Track that excess separately
     // from the sustained fricative detector so /t/ and /k/ bursts are not required
     // to masquerade as long unvoiced-noise segments.
-    const auto plosiveExcess = juce::jmax(0.0f, plosiveFastEnergy - 1.05f * plosiveSlowEnergy);
+    const auto plosiveExcess = juce::jmax(0.0f, plosiveFastEnergy - 1.35f * plosiveSlowEnergy);
     const auto plosiveFloor = juce::jmax(0.0001f, std::sqrt(totalSpeechPower) * 0.08f);
     const auto plosiveCandidate = plosiveFastEnergy > plosiveFloor
         ? juce::jlimit(0.0f, 1.0f, plosiveExcess / (plosiveFastEnergy + 0.0001f)) : 0.0f;
