@@ -50,7 +50,7 @@ static const Profile profiles[] = {
 };
 
 bool render(const juce::File& inputFile, const juce::File& outputDir, const juce::String& speaker, const Profile& p,
-            float preEmphasis = 0.15f) {
+            float preEmphasis = 0.15f, float plosiveBurst = 1.0f) {
  juce::AudioFormatManager fm; fm.registerBasicFormats();
  std::unique_ptr<juce::AudioFormatReader> reader(fm.createReaderFor(inputFile));
  if (!reader || reader->lengthInSamples <= 0 || reader->numChannels <= 0) return false;
@@ -62,7 +62,7 @@ bool render(const juce::File& inputFile, const juce::File& outputDir, const juce
  engine.setAttackMs(p.attack); engine.setReleaseMs(p.release); engine.setFormantShift(p.formant);
  engine.setBandCount(p.bands); engine.setFilterQ(p.q); engine.setSibilanceAmount(p.sibilance);
  engine.setUnvoicedNoise(p.unvoiced); engine.setArticulationLift(p.articulation);
- engine.setPreEmphasisAmount(preEmphasis); engine.reset();
+ engine.setPreEmphasisAmount(preEmphasis); engine.setPlosiveBurst(plosiveBurst); engine.reset();
  constexpr double pi=3.14159265358979323846;
  for(int i=0;i<count;++i) {
   const double phase=2*pi*110.0*i/rate;
@@ -115,6 +115,10 @@ int main() {
   const Profile preEmphasisOn { "preemphasis_on",56,7,10,7,-2,.10f,.10f,1 };
   if(!render(input,dir,speaker,preEmphasisOff,0.0f))return 10;
   if(!render(input,dir,speaker,preEmphasisOn,0.15f))return 11;
+  const Profile plosiveOff { "plosive_off",56,7,10,7,-2,.10f,.10f,1 };
+  const Profile plosiveOn { "plosive_on",56,7,10,7,-2,.10f,.10f,1 };
+  if(!render(input,dir,speaker,plosiveOff,0.15f,0.0f))return 12;
+  if(!render(input,dir,speaker,plosiveOn,0.15f,1.0f))return 13;
   if(!renderCarrierComparison(input,dir,speaker,"rich",CarrierSynth::rich))return 6;
   if(!renderCarrierComparison(input,dir,speaker,"analog_stack",CarrierSynth::analogStack))return 7;
   if(!renderCarrierComparison(input,dir,speaker,"saw",CarrierSynth::saw))return 8;
