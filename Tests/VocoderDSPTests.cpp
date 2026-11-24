@@ -488,7 +488,7 @@ bool testPlosiveBurstIsTransientOnly()
     const auto transient = renderDifference(true);
     const auto steady = renderDifference(false);
     std::cout << "Plosive path A/B: transient delta RMS=" << transient.first
-              << "; steady-vowel delta RMS=" << steady.second << '\\n';
+              << "; steady-vowel delta RMS=" << steady.second << '\n';
     return transient.first > 1.0e-6 && steady.second < 1.0e-7;
 }
 
