@@ -44,6 +44,8 @@ void VocoderEngine::prepare(double sampleRate)
     transientReleaseCoefficient = std::exp(-1.0f / (0.015f * static_cast<float>(currentSampleRate)));
     plosiveAttackCoefficient = std::exp(-1.0f / (0.00015f * static_cast<float>(currentSampleRate)));
     plosiveReleaseCoefficient = std::exp(-1.0f / (0.004f * static_cast<float>(currentSampleRate)));
+    plosiveFastAttackCoefficient = std::exp(-1.0f / (0.00015f * static_cast<float>(currentSampleRate)));
+    plosiveFastReleaseCoefficient = std::exp(-1.0f / (0.004f * static_cast<float>(currentSampleRate)));
     plosiveSlowAttackCoefficient = std::exp(-1.0f / (0.0015f * static_cast<float>(currentSampleRate)));
     plosiveSlowReleaseCoefficient = std::exp(-1.0f / (0.012f * static_cast<float>(currentSampleRate)));
     carrierActivityAttackCoefficient = std::exp(-1.0f / (0.001f * static_cast<float>(currentSampleRate)));
@@ -70,6 +72,7 @@ void VocoderEngine::reset()
     envelopePowers.fill(0.0f);
     transientEnvelopes.fill(0.0f);
     plosiveEnvelope = 0.0f;
+    plosiveFastEnvelopes.fill(0.0f);
     plosiveSlowEnvelopes.fill(0.0f);
 }
 
@@ -147,7 +150,11 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         envelopes[index] = std::sqrt(juce::jmax(0.0f, envelopePowers[index]));
         if (bandCentres[index] >= 1400.0f && bandCentres[index] <= 7600.0f)
         {
-            plosiveFastEnergy += transientEnvelopes[index];
+            const auto fastCoefficient = transientLevel > plosiveFastEnvelopes[index]
+                ? plosiveFastAttackCoefficient : plosiveFastReleaseCoefficient;
+            plosiveFastEnvelopes[index] = fastCoefficient * plosiveFastEnvelopes[index]
+                                        + (1.0f - fastCoefficient) * transientLevel;
+            plosiveFastEnergy += plosiveFastEnvelopes[index];
             // Compare like-for-like amplitude envelopes. The previous detector
             // compared a fast mean-absolute envelope with a slow RMS envelope;
             // even steady noise has a lower mean-absolute value than its RMS,
@@ -433,6 +440,7 @@ void VocoderEngine::applyPendingConfiguration() noexcept
         envelopes[index] = 0.0f;
         envelopePowers[index] = 0.0f;
         transientEnvelopes[index] = 0.0f;
+        plosiveFastEnvelopes[index] = 0.0f;
         plosiveSlowEnvelopes[index] = 0.0f;
     }
     activeConfiguration = configuration;
