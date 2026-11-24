@@ -333,7 +333,7 @@ bool testReferenceSpeechFile(const juce::String& filename)
     if (renderDirectory.createDirectory().failed())
     {
         std::cerr << "Could not create STOI render directory: "
-                  << renderDirectory.getFullPathName() << '\\n';
+                  << renderDirectory.getFullPathName() << '\n';
         return false;
     }
     const auto renderFile = renderDirectory.getChildFile(
