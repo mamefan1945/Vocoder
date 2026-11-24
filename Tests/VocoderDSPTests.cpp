@@ -342,7 +342,7 @@ bool testReferenceSpeechFile(const juce::String& filename)
     if (outputStream == nullptr)
     {
         std::cerr << "Could not create STOI render file: "
-                  << renderFile.getFullPathName() << '\\n';
+                  << renderFile.getFullPathName() << '\n';
         return false;
     }
     juce::WavAudioFormat wavFormat;
