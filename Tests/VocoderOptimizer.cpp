@@ -36,7 +36,17 @@ static const Profile profiles[] = {
  {"r10_fm1p5",56,7,10,10,-1.5,.10f,.10f,1},
  {"r10_fm1",56,7,10,10,-1,.10f,.10f,1},
  {"r10_fm0p5",56,7,10,10,-0.5,.10f,.10f,1},
- {"r10_f0",56,7,10,10,0,.10f,.10f,1}
+ {"r10_f0",56,7,10,10,0,.10f,.10f,1},
+ // Wider, one-variable-at-a-time diagnostics for short consonants.
+ {"wide_r01",56,7,10,1,-2,.10f,.10f,1},
+ {"wide_r20",56,7,10,20,-2,.10f,.10f,1},
+ {"wide_r50",56,7,10,50,-2,.10f,.10f,1},
+ {"attack_a01",56,7,1,7,-2,.10f,.10f,1},
+ {"attack_a30",56,7,30,7,-2,.10f,.10f,1},
+ {"articulation_0",56,7,10,7,-2,.10f,.10f,0},
+ {"articulation_2",56,7,10,7,-2,.10f,.10f,2},
+ {"unvoiced_0",56,7,10,7,-2,.10f,0,1},
+ {"unvoiced_2",56,7,10,7,-2,.10f,.20f,1}
 };
 
 bool render(const juce::File& inputFile, const juce::File& outputDir, const juce::String& speaker, const Profile& p,
