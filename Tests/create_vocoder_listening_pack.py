@@ -59,7 +59,7 @@ def main() -> int:
         "refer to the app's Ash carrier preset. The parameter-profile renders "
         "use the optimizer's deterministic harmonic test carrier, not the "
         "exact live Ash/Square setup. The carrier comparison renders use the "
-        "built-in Rich, Analog Stack, and Saw oscillators.\n\n"
+        "built-in Rich, Analog Stack, Saw, and Square oscillators. Saw and Square use identical synthesis settings so the waveform is the only changed variable.\n\n"
         "r07_fm2 is the optimizer reference profile: 56 bands, Q 7, 10 ms "
         "attack, 7 ms release, -2 semitone formant shift, and 10% sibilance "
         "and unvoiced-noise amounts. Other profiles are diagnostic candidates "

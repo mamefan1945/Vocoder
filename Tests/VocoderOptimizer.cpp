@@ -102,6 +102,7 @@ int main() {
   if(!renderCarrierComparison(input,dir,speaker,"rich",CarrierSynth::rich))return 6;
   if(!renderCarrierComparison(input,dir,speaker,"analog_stack",CarrierSynth::analogStack))return 7;
   if(!renderCarrierComparison(input,dir,speaker,"saw",CarrierSynth::saw))return 8;
+  if(!renderCarrierComparison(input,dir,speaker,"square",CarrierSynth::square))return 9;
  }
  std::cout<<"Rendered "<<std::size(profiles)*2+6<<" candidate WAV files.\n"; return 0;
 }
