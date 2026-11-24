@@ -138,6 +138,17 @@ jobs:
       - name: Create MP3 listening pack
         run: python Tests/create_vocoder_listening_pack.py build/optimization-results
 
+      - name: Create focused Nova consonant listening pack
+        run: python Tests/create_nova_silently_focus_pack.py build/optimization-results
+
+      - name: Upload focused Nova consonant listening pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrismaVox-Nova-Silently-Focus-${{ github.run_number }}
+          path: build/optimization-results/nova-silently-focus/**
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Upload vocoder optimization results
         uses: actions/upload-artifact@v4
         with:
