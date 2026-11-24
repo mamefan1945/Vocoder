@@ -40,6 +40,8 @@ void VocoderEngine::prepare(double sampleRate)
     voicingSmoothingCoefficient = std::exp(-1.0f / (0.010f * static_cast<float>(currentSampleRate)));
     unvoicedAttackCoefficient = std::exp(-1.0f / (0.003f * static_cast<float>(currentSampleRate)));
     unvoicedReleaseCoefficient = std::exp(-1.0f / (0.025f * static_cast<float>(currentSampleRate)));
+    transientAttackCoefficient = std::exp(-1.0f / (0.0005f * static_cast<float>(currentSampleRate)));
+    transientReleaseCoefficient = std::exp(-1.0f / (0.015f * static_cast<float>(currentSampleRate)));
     carrierActivityAttackCoefficient = std::exp(-1.0f / (0.001f * static_cast<float>(currentSampleRate)));
     carrierActivityReleaseCoefficient = std::exp(-1.0f / (0.020f * static_cast<float>(currentSampleRate)));
     updateEnvelopeTimes();
@@ -61,6 +63,7 @@ void VocoderEngine::reset()
     carrierActivity = 0.0f;
     envelopes.fill(0.0f);
     envelopePowers.fill(0.0f);
+    transientEnvelopes.fill(0.0f);
 }
 
 float VocoderEngine::processSample(float modulator, float externalCarrier, bool useExternalCarrier,
@@ -119,6 +122,11 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         const auto voiceBand = modulatorFilters[index].processSample(modulator);
         const auto power = voiceBand * voiceBand;
         const auto coefficient = power > envelopePowers[index] ? attack : release;
+        const auto transientLevel = std::abs(voiceBand);
+        const auto transientCoefficient = transientLevel > transientEnvelopes[index]
+            ? transientAttackCoefficient : transientReleaseCoefficient;
+        transientEnvelopes[index] = transientCoefficient * transientEnvelopes[index]
+                                  + (1.0f - transientCoefficient) * transientLevel;
         envelopePowers[index] = coefficient * envelopePowers[index] + (1.0f - coefficient) * power;
         envelopes[index] = std::sqrt(juce::jmax(0.0f, envelopePowers[index]));
 
@@ -174,8 +182,18 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         const auto lower = static_cast<int>(sourcePosition);
         const auto upper = juce::jmin(lower + 1, activeBandCount - 1);
         const auto fraction = sourcePosition - static_cast<float>(lower);
-        const auto shiftedLevel = envelopes[static_cast<size_t>(lower)] * (1.0f - fraction)
-                                + envelopes[static_cast<size_t>(upper)] * fraction;
+        auto shiftedLevel = envelopes[static_cast<size_t>(lower)] * (1.0f - fraction)
+                          + envelopes[static_cast<size_t>(upper)] * fraction;
+        // A separate fast envelope restores the leading edge of short consonants
+        // without changing the user's vowel-envelope attack setting. Limit it to
+        // upper speech bands and use a short release so it does not smear into the
+        // following vowel. Mean-absolute level is scaled to an RMS-like level.
+        if (centre >= 1500.0f)
+        {
+            const auto transientLevel = transientEnvelopes[static_cast<size_t>(lower)] * (1.0f - fraction)
+                                      + transientEnvelopes[static_cast<size_t>(upper)] * fraction;
+            shiftedLevel = juce::jmax(shiftedLevel, transientLevel * 1.11f);
+        }
         // Use a soft-knee expander rather than subtracting a hard threshold.
         // Quiet consonants often sit well below vowel energy; a hard per-band
         // gate erases them and makes otherwise clear speech unintelligible.
@@ -314,6 +332,7 @@ void VocoderEngine::applyPendingConfiguration() noexcept
         const auto index = static_cast<size_t>(band);
         envelopes[index] = 0.0f;
         envelopePowers[index] = 0.0f;
+        transientEnvelopes[index] = 0.0f;
         transientEnvelopes[index] = 0.0f;
     }
     activeConfiguration = configuration;
