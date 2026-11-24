@@ -495,6 +495,38 @@ bool testPlosiveBurstIsTransientOnly()
     return transient.first > 1.0e-6 && steady.second < 1.0e-7;
 }
 
+
+bool testPlosiveDetectorTracksFastBurst()
+{
+    VocoderEngine engine;
+    engine.prepare(48000.0);
+    engine.setDryWet(1.0f);
+    engine.setGateThreshold(0.0f);
+    std::uint32_t randomState = 0x91e10da5u;
+    float burstPeak = 0.0f;
+    constexpr int burstStart = 6000;
+    constexpr int burstEnd = burstStart + 480;
+    for (int i = 0; i < 16000; ++i)
+    {
+        float voice = 0.0f;
+        if (i >= burstStart && i < burstEnd)
+        {
+            randomState ^= randomState << 13;
+            randomState ^= randomState >> 17;
+            randomState ^= randomState << 5;
+            voice = 0.35f * (static_cast<float>(randomState & 0x00ffffffu)
+                           / 8388607.5f - 1.0f);
+        }
+        const auto carrier = 0.5f * std::sin(static_cast<float>(2.0 * pi * 440.0 * i / 48000.0));
+        engine.processSample(voice, carrier, true, carrier);
+        if (i >= burstStart && i < burstEnd)
+            burstPeak = std::max(burstPeak, engine.getPlosiveEnvelopeForTesting());
+    }
+    const auto tail = engine.getPlosiveEnvelopeForTesting();
+    std::cout << "Plosive detector burst peak=" << burstPeak << "; tail=" << tail << '\n';
+    return burstPeak > 0.05f && tail < burstPeak * 0.25f;
+}
+
 bool testPlosivePathRespondsToReferenceSpeech()
 {
 #ifndef PRISMAVOX_TEST_AUDIO_DIR
@@ -571,6 +603,7 @@ int main()
     passed = testConfigurationChangesRemainFinite() && passed;
     passed = testUnvoicedDetectorUsesBothCues() && passed;
     passed = testPlosiveBurstIsTransientOnly() && passed;
+    passed = testPlosiveDetectorTracksFastBurst() && passed;
     passed = testPlosivePathRespondsToReferenceSpeech() && passed;
     passed = testReferenceSpeechCorpus() && passed;
 
