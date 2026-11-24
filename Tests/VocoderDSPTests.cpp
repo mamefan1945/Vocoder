@@ -430,6 +430,68 @@ bool testUnvoicedDetectorUsesBothCues()
     return broadbandNoise > 1.0e-5 && broadbandNoise > voicedNoise * 2.0;
 }
 
+
+bool testPlosiveBurstIsTransientOnly()
+{
+    const auto renderDifference = [](bool transientInput)
+    {
+        VocoderEngine enabled;
+        VocoderEngine disabled;
+        enabled.prepare(48000.0);
+        disabled.prepare(48000.0);
+        for (auto* engine : { &enabled, &disabled })
+        {
+            engine->setDryWet(1.0f);
+            engine->setGateThreshold(0.0f);
+            engine->setSibilanceAmount(0.0f);
+            engine->setUnvoicedNoise(0.0f);
+        }
+        enabled.setPlosiveBurst(1.0f);
+        disabled.setPlosiveBurst(0.0f);
+
+        std::uint32_t randomState = 0x2468ace1u;
+        double burstDifferenceEnergy = 0.0;
+        double steadyDifferenceEnergy = 0.0;
+        constexpr int sampleCount = 24000;
+        for (int i = 0; i < sampleCount; ++i)
+        {
+            float voice = 0.0f;
+            if (transientInput)
+            {
+                if (i >= 6000 && i < 6048)
+                {
+                    randomState ^= randomState << 13;
+                    randomState ^= randomState >> 17;
+                    randomState ^= randomState << 5;
+                    voice = 0.35f * (static_cast<float>(randomState & 0x00ffffffu)
+                                   / 8388607.5f - 1.0f);
+                }
+            }
+            else
+            {
+                voice = 0.25f * std::sin(static_cast<float>(2.0 * pi * 220.0 * i / 48000.0));
+            }
+            const auto carrier = 0.5f * std::sin(static_cast<float>(
+                2.0 * pi * 440.0 * i / 48000.0));
+            const auto difference = enabled.processSample(voice, carrier, true, carrier)
+                                  - disabled.processSample(voice, carrier, true, carrier);
+            if (transientInput && i >= 6000 && i < 7200)
+                burstDifferenceEnergy += static_cast<double>(difference) * difference;
+            if (!transientInput && i >= 12000)
+                steadyDifferenceEnergy += static_cast<double>(difference) * difference;
+        }
+        const auto burstRms = std::sqrt(burstDifferenceEnergy / 1200.0);
+        const auto steadyRms = std::sqrt(steadyDifferenceEnergy / 12000.0);
+        return std::pair<double, double> { burstRms, steadyRms };
+    };
+
+    const auto transient = renderDifference(true);
+    const auto steady = renderDifference(false);
+    std::cout << "Plosive path A/B: transient delta RMS=" << transient.first
+              << "; steady-vowel delta RMS=" << steady.second << '\\n';
+    return transient.first > 1.0e-6 && steady.second < 1.0e-7;
+}
+
 bool testReferenceSpeechCorpus()
 {
     const auto ash = testReferenceSpeechFile("vocoder_test_ash.wav");
@@ -448,6 +510,7 @@ int main()
     passed = testSampleRatesAndBlockSizes() && passed;
     passed = testConfigurationChangesRemainFinite() && passed;
     passed = testUnvoicedDetectorUsesBothCues() && passed;
+    passed = testPlosiveBurstIsTransientOnly() && passed;
     passed = testReferenceSpeechCorpus() && passed;
 
     std::cout << (passed ? "All vocoder DSP tests passed.\n"
