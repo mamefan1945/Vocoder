@@ -7,6 +7,7 @@
 #include <memory>
 #include <cstdint>
 #include <vector>
+#include <utility>
 
 namespace
 {
@@ -442,6 +443,8 @@ bool testPlosiveBurstIsTransientOnly()
         for (auto* engine : { &enabled, &disabled })
         {
             engine->setDryWet(1.0f);
+            engine->setAttackMs(10.0f);
+            engine->setReleaseMs(7.0f);
             engine->setGateThreshold(0.0f);
             engine->setSibilanceAmount(0.0f);
             engine->setUnvoicedNoise(0.0f);
