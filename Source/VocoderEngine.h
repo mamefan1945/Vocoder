@@ -49,6 +49,7 @@ private:
     std::atomic<int> requestedQIndex { 6 };
     std::uint32_t noiseState = 0x6d2b79f5u;
     float previousModulator = 0.0f;
+    float previousPreEmphasisInput = 0.0f;
     float zeroCrossingRate = 0.0f;
     float voicingSmoothingCoefficient = 0.0f;
     float unvoicedAmount = 0.0f;
