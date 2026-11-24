@@ -333,7 +333,6 @@ void VocoderEngine::applyPendingConfiguration() noexcept
         envelopes[index] = 0.0f;
         envelopePowers[index] = 0.0f;
         transientEnvelopes[index] = 0.0f;
-        transientEnvelopes[index] = 0.0f;
     }
     activeConfiguration = configuration;
 }
