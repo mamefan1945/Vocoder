@@ -1079,6 +1079,19 @@ void MainComponent::chooseTestAudio()
         });
 }
 
+void MainComponent::resetExternalMidiState()
+{
+    // A keyboard can disappear while sustain is held. Release sustain first,
+    // then stop any voices left active in FluidSynth on every MIDI channel.
+    for (int channel = 1; channel <= 16; ++channel)
+    {
+        externalMidiCollector.addMessageToQueue(
+            juce::MidiMessage::controllerEvent(channel, 64, 0));
+        externalMidiCollector.addMessageToQueue(
+            juce::MidiMessage::controllerEvent(channel, 120, 0));
+    }
+}
+
 void MainComponent::refreshMidiInputs()
 {
     writeStartupTrace("refreshMidiInputs entered");
@@ -1103,6 +1116,7 @@ void MainComponent::refreshMidiInputs()
         deviceManager.removeMidiInputDeviceCallback(previousIdentifier, &midiInputRouter);
         deviceManager.setMidiInputDeviceEnabled(previousIdentifier, false);
         activeMidiIdentifier.clear();
+        resetExternalMidiState();
         for (int channel = 1; channel <= 16; ++channel)
             keyboardState.allNotesOff(channel);
         statusLabel.setText("MIDI device disconnected. Select another input or refresh.",
@@ -1123,6 +1137,7 @@ void MainComponent::selectMidiInput()
         deviceManager.removeMidiInputDeviceCallback(activeMidiIdentifier, &midiInputRouter);
         deviceManager.setMidiInputDeviceEnabled(activeMidiIdentifier, false);
         activeMidiIdentifier.clear();
+        resetExternalMidiState();
     }
 
     for (int channel = 1; channel <= 16; ++channel)
