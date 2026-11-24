@@ -495,6 +495,63 @@ bool testPlosiveBurstIsTransientOnly()
     return transient.first > 1.0e-6 && steady.second < 1.0e-7;
 }
 
+bool testPlosivePathRespondsToReferenceSpeech()
+{
+#ifndef PRISMAVOX_TEST_AUDIO_DIR
+    std::cout << "Reference speech plosive test skipped: audio directory is not configured.\n";
+    return true;
+#else
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    const auto file = juce::File(PRISMAVOX_TEST_AUDIO_DIR).getChildFile("vocoder_test_nova.wav");
+    std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
+    if (reader == nullptr || reader->lengthInSamples <= 0)
+        return false;
+
+    const auto sampleCount = static_cast<int>(juce::jmin<juce::int64>(
+        reader->lengthInSamples, static_cast<juce::int64>(reader->sampleRate * 120.0)));
+    juce::AudioBuffer<float> input(1, sampleCount);
+    if (!reader->read(&input, 0, sampleCount, 0, true, false))
+        return false;
+
+    VocoderEngine enabled;
+    VocoderEngine disabled;
+    enabled.prepare(reader->sampleRate);
+    disabled.prepare(reader->sampleRate);
+    for (auto* engine : { &enabled, &disabled })
+    {
+        engine->setDryWet(1.0f);
+        engine->setAttackMs(10.0f);
+        engine->setReleaseMs(7.0f);
+        engine->setFormantShift(-2.0f);
+        engine->setBandCount(56);
+        engine->setFilterQ(7.0f);
+        engine->setSibilanceAmount(0.10f);
+        engine->setUnvoicedNoise(0.10f);
+    }
+    enabled.setPlosiveBurst(1.0f);
+    disabled.setPlosiveBurst(0.0f);
+
+    double differenceEnergy = 0.0;
+    for (int i = 0; i < sampleCount; ++i)
+    {
+        const auto time = static_cast<double>(i) / reader->sampleRate;
+        const auto phase = 2.0 * pi * 110.0 * time;
+        const auto carrier = 0.13f * static_cast<float>(
+            std::sin(phase) + 0.5 * std::sin(2.0 * phase)
+            + 0.333333 * std::sin(3.0 * phase) + 0.25 * std::sin(4.0 * phase)
+            + 0.2 * std::sin(5.0 * phase));
+        const auto voice = input.getSample(0, i);
+        const auto delta = enabled.processSample(voice, carrier, true, carrier)
+                         - disabled.processSample(voice, carrier, true, carrier);
+        differenceEnergy += static_cast<double>(delta) * delta;
+    }
+    const auto differenceRms = std::sqrt(differenceEnergy / juce::jmax(1, sampleCount));
+    std::cout << "Reference speech plosive A/B delta RMS=" << differenceRms << '\n';
+    return differenceRms > 1.0e-7;
+#endif
+}
+
 bool testReferenceSpeechCorpus()
 {
     const auto ash = testReferenceSpeechFile("vocoder_test_ash.wav");
@@ -514,6 +571,7 @@ int main()
     passed = testConfigurationChangesRemainFinite() && passed;
     passed = testUnvoicedDetectorUsesBothCues() && passed;
     passed = testPlosiveBurstIsTransientOnly() && passed;
+    passed = testPlosivePathRespondsToReferenceSpeech() && passed;
     passed = testReferenceSpeechCorpus() && passed;
 
     std::cout << (passed ? "All vocoder DSP tests passed.\n"
