@@ -64,9 +64,13 @@ private:
         void handleIncomingMidiMessage(juce::MidiInput*, const juce::MidiMessage& message) override
         {
             keyboardState.processNextMidiEvent(message);
-            // MidiKeyboardState tracks note keys, not continuous controller data.
-            // Queue pitch wheel separately so it reaches the audio thread and DSP.
-            if (message.isPitchWheel())
+            // MidiKeyboardState tracks note keys, but does not forward the full
+            // MIDI performance stream. Queue supported non-note messages so
+            // FluidSynth receives controllers, program changes and expression.
+            // Note-on/off are already emitted by keyboardState into the block.
+            if (message.isController() || message.isPitchWheel()
+                || message.isProgramChange() || message.isChannelPressure()
+                || message.isAftertouch())
                 midiCollector.addMessageToQueue(message);
         }
     private:
