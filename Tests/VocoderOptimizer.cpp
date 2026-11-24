@@ -82,7 +82,7 @@ bool render(const juce::File& inputFile, const juce::File& outputDir, const juce
 
 bool renderCarrierComparison(const juce::File& inputFile, const juce::File& outputDir,
                              const juce::String& speaker, const juce::String& profile,
-                             int waveform)
+                             int waveform, float plosiveBurst)
 {
  juce::AudioFormatManager fm; fm.registerBasicFormats();
  std::unique_ptr<juce::AudioFormatReader> reader(fm.createReaderFor(inputFile));
@@ -99,10 +99,11 @@ bool renderCarrierComparison(const juce::File& inputFile, const juce::File& outp
  VocoderEngine engine; engine.prepare(rate); engine.setDryWet(1); engine.setOutputGain(1);
  engine.setAttackMs(10); engine.setReleaseMs(5); engine.setFormantShift(0);
  engine.setBandCount(56); engine.setFilterQ(7); engine.setSibilanceAmount(.10f);
- engine.setUnvoicedNoise(.10f); engine.setArticulationLift(1); engine.reset();
+ engine.setUnvoicedNoise(.10f); engine.setArticulationLift(1);
+ engine.setPreEmphasisAmount(.15f); engine.setPlosiveBurst(plosiveBurst); engine.reset();
  for(int i=0;i<count;++i)
   output.setSample(0,i,engine.processSample(input.getSample(0,i),0.0f,false,carrier.getSample(0,i)));
- auto file=outputDir.getChildFile(speaker+"_carrier_"+profile+".wav");
+ auto file=outputDir.getChildFile(speaker+"_carrier_"+profile+(plosiveBurst > 0.0f ? "_plosive_on" : "_plosive_off")+".wav");
  auto stream=std::unique_ptr<juce::FileOutputStream>(file.createOutputStream()); if(!stream)return false;
  juce::WavAudioFormat wav; auto writer=std::unique_ptr<juce::AudioFormatWriter>(wav.createWriterFor(stream.get(),rate,1,24,{},0));
  if(!writer)return false; stream.release(); return writer->writeFromAudioSampleBuffer(output,0,count);
@@ -126,8 +127,10 @@ int main() {
   if(!render(input,dir,speaker,plosiveOn,0.15f,1.0f))return 13;
   if(!renderCarrierComparison(input,dir,speaker,"rich",CarrierSynth::rich))return 6;
   if(!renderCarrierComparison(input,dir,speaker,"analog_stack",CarrierSynth::analogStack))return 7;
-  if(!renderCarrierComparison(input,dir,speaker,"saw",CarrierSynth::saw))return 8;
-  if(!renderCarrierComparison(input,dir,speaker,"square",CarrierSynth::square))return 9;
+  if(!renderCarrierComparison(input,dir,speaker,"saw",CarrierSynth::saw,0.0f))return 8;
+  if(!renderCarrierComparison(input,dir,speaker,"saw",CarrierSynth::saw,1.0f))return 14;
+  if(!renderCarrierComparison(input,dir,speaker,"square",CarrierSynth::square,0.0f))return 9;
+  if(!renderCarrierComparison(input,dir,speaker,"square",CarrierSynth::square,1.0f))return 15;
  }
  std::cout<<"Rendered "<<std::size(profiles)*2+12<<" candidate WAV files.\n"; return 0;
 }
