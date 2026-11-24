@@ -534,27 +534,92 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
     auto bestMark = expected;
     float bestPeak = -std::numeric_limits<float>::max();
     float bestScore = -std::numeric_limits<float>::max();
+    const auto useInputHistory = getAlgorithm() == Algorithm::timeDomain;
+    const auto readMarkSource = [this, useInputHistory](int64_t absolute) noexcept
+    {
+        if (absolute < 0)
+            return 0.0f;
+        const auto index = static_cast<size_t>(absolute) & inputRingMask;
+        return useInputHistory ? inputHistory[index] : residualHistory[index];
+    };
 
-    // Select a same-polarity local peak near the predicted phase. The small
-    // proximity bias prevents a louder neighbouring cycle peak from pulling
-    // the mark train toward the edge of its search window.
+    // When a previous mark exists, compare each candidate cycle against the
+    // preceding voiced cycle. Normalized correlation is insensitive to level
+    // changes and is more reliable than choosing the tallest nearby peak when
+    // a voice has several strong harmonics or a changing waveform shape.
+    const auto correlationHalfWindow = juce::jlimit(12,
+        96, static_cast<int>(std::lround(estimatedPeriod * 0.22)));
+    double templateMean = 0.0;
+    double templateEnergy = 0.0;
+    int correlationSamples = 0;
+    if (previousPitchMark >= correlationHalfWindow
+        && previousPitchMark + correlationHalfWindow
+            < static_cast<int64_t>(totalSamples))
+    {
+        for (int offset = -correlationHalfWindow;
+             offset <= correlationHalfWindow; offset += 2)
+        {
+            templateMean += readMarkSource(previousPitchMark + offset);
+            ++correlationSamples;
+        }
+        templateMean /= static_cast<double>(correlationSamples);
+        for (int offset = -correlationHalfWindow;
+             offset <= correlationHalfWindow; offset += 2)
+        {
+            const auto value = static_cast<double>(
+                readMarkSource(previousPitchMark + offset)) - templateMean;
+            templateEnergy += value * value;
+        }
+    }
+    const auto haveCorrelationTemplate = correlationSamples >= 8
+        && templateEnergy > 1.0e-10;
+
     for (auto candidate = first; candidate <= last; ++candidate)
     {
-        const auto index = static_cast<size_t>(candidate) & inputRingMask;
-        const auto markSource = getAlgorithm() == Algorithm::timeDomain
-            ? inputHistory[index] : residualHistory[index];
-        const auto sample = markSource * pitchMarkPolarity;
-        const auto beforeIndex = static_cast<size_t>(candidate - 1) & inputRingMask;
-        const auto afterIndex = static_cast<size_t>(candidate + 1) & inputRingMask;
-        const auto before = (getAlgorithm() == Algorithm::timeDomain
-            ? inputHistory[beforeIndex] : residualHistory[beforeIndex]) * pitchMarkPolarity;
-        const auto after = (getAlgorithm() == Algorithm::timeDomain
-            ? inputHistory[afterIndex] : residualHistory[afterIndex]) * pitchMarkPolarity;
+        const auto sample = readMarkSource(candidate) * pitchMarkPolarity;
+        const auto before = readMarkSource(candidate - 1) * pitchMarkPolarity;
+        const auto after = readMarkSource(candidate + 1) * pitchMarkPolarity;
         if (sample < before || sample < after)
             continue;
+
         const auto proximity = static_cast<float>(std::abs(candidate - expected))
                              / static_cast<float>(searchRadius);
-        const auto score = sample * (1.0f - 0.20f * proximity);
+        auto score = sample * (1.0f - 0.20f * proximity);
+        if (haveCorrelationTemplate
+            && candidate >= correlationHalfWindow
+            && candidate + correlationHalfWindow
+                < static_cast<int64_t>(totalSamples))
+        {
+            double candidateMean = 0.0;
+            for (int offset = -correlationHalfWindow;
+                 offset <= correlationHalfWindow; offset += 2)
+                candidateMean += readMarkSource(candidate + offset);
+            candidateMean /= static_cast<double>(correlationSamples);
+
+            double crossEnergy = 0.0;
+            double candidateEnergy = 0.0;
+            for (int offset = -correlationHalfWindow;
+                 offset <= correlationHalfWindow; offset += 2)
+            {
+                const auto reference = static_cast<double>(
+                    readMarkSource(previousPitchMark + offset)) - templateMean;
+                const auto value = static_cast<double>(
+                    readMarkSource(candidate + offset)) - candidateMean;
+                crossEnergy += reference * value;
+                candidateEnergy += value * value;
+            }
+            const auto denominator = std::sqrt(templateEnergy * candidateEnergy);
+            if (denominator > 1.0e-10)
+            {
+                const auto correlation = juce::jlimit(-1.0, 1.0,
+                    crossEnergy / denominator);
+                // Correlation selects the matching cycle phase; a small
+                // proximity penalty prevents a distant harmonic peak from
+                // winning when two candidates correlate almost equally.
+                score = static_cast<float>(correlation) - 0.06f * proximity;
+            }
+        }
+
         if (score > bestScore)
         {
             bestScore = score;
@@ -566,9 +631,7 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
     {
         for (auto candidate = first; candidate <= last; ++candidate)
         {
-            const auto index = static_cast<size_t>(candidate) & inputRingMask;
-            const auto sample = (getAlgorithm() == Algorithm::timeDomain
-                ? inputHistory[index] : residualHistory[index]) * pitchMarkPolarity;
+            const auto sample = readMarkSource(candidate) * pitchMarkPolarity;
             if (sample > bestPeak)
             {
                 bestPeak = sample;
@@ -583,9 +646,7 @@ void HarmonizerEngine::detectAndProcessPitchMark() noexcept
         bestPeak = -std::numeric_limits<float>::max();
         for (auto candidate = first; candidate <= last; ++candidate)
         {
-            const auto index = static_cast<size_t>(candidate) & inputRingMask;
-            const auto sample = (getAlgorithm() == Algorithm::timeDomain
-                ? inputHistory[index] : residualHistory[index]) * pitchMarkPolarity;
+            const auto sample = readMarkSource(candidate) * pitchMarkPolarity;
             if (sample > bestPeak)
             {
                 bestPeak = sample;
