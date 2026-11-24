@@ -824,6 +824,9 @@ int main()
     passed &= testPolyphony(HarmonizerEngine::Algorithm::timeDomain, "TD-PSOLA");
     passed &= testPolyphony(HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
     passed &= testPolyphony(HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
+    passed &= testStaggeredChordTransitions(HarmonizerEngine::Algorithm::timeDomain, "TD-PSOLA");
+    passed &= testStaggeredChordTransitions(HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
+    passed &= testStaggeredChordTransitions(HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
     passed &= testSpeechFile("vocoder_test_ash.wav", HarmonizerEngine::Algorithm::timeDomain, "TD-PSOLA");
     passed &= testSpeechFile("vocoder_test_ash.wav", HarmonizerEngine::Algorithm::lpc, "LP-PSOLA");
     passed &= testSpeechFile("vocoder_test_ash.wav", HarmonizerEngine::Algorithm::frequencyDomain, "FD-PSOLA");
