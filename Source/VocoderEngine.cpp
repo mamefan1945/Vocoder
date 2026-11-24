@@ -145,12 +145,21 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
     // Requiring both cues makes the noise path follow fricatives more reliably.
     float totalSpeechPower = 0.0f;
     float upperSpeechPower = 0.0f;
+    double upperLogPower = 0.0;
+    int upperBandCount = 0;
     for (int band = 0; band < activeBandCount; ++band)
     {
         const auto power = envelopePowers[static_cast<size_t>(band)];
         totalSpeechPower += power;
         if (bandCentres[static_cast<size_t>(band)] >= 2200.0f)
+        {
             upperSpeechPower += power;
+            // Spectral flatness distinguishes broadband turbulent consonants
+            // from voiced harmonics that happen to extend into the same range.
+            // The small floor keeps the logarithm defined during silence.
+            upperLogPower += std::log(static_cast<double>(power) + 1.0e-12);
+            ++upperBandCount;
+        }
     }
     const auto upperEnergyRatio = upperSpeechPower / juce::jmax(totalSpeechPower, 1.0e-12f);
     const auto zcrPosition = juce::jlimit(0.0f, 1.0f,
@@ -160,7 +169,21 @@ float VocoderEngine::processSample(float modulator, float externalCarrier, bool 
         (upperEnergyRatio - 0.08f) / 0.27f);
     const auto spectralScore = spectralPosition * spectralPosition
                              * (3.0f - 2.0f * spectralPosition);
-    const auto unvoicedCandidate = std::sqrt(zcrScore * spectralScore);
+    const auto upperArithmeticMean = upperSpeechPower
+        / static_cast<float>(juce::jmax(1, upperBandCount));
+    const auto upperGeometricMean = upperBandCount > 0
+        ? static_cast<float>(std::exp(upperLogPower / upperBandCount)) : 0.0f;
+    const auto spectralFlatness = upperGeometricMean
+        / juce::jmax(upperArithmeticMean, 1.0e-12f);
+    const auto flatnessPosition = juce::jlimit(0.0f, 1.0f,
+        (spectralFlatness - 0.12f) / 0.48f);
+    const auto flatnessScore = flatnessPosition * flatnessPosition
+                             * (3.0f - 2.0f * flatnessPosition);
+    // Three complementary cues are required: rapid zero crossings, a strong
+    // upper-frequency share, and a relatively flat upper-band spectrum. The
+    // geometric combination prevents any one cue (especially bright vowels)
+    // from opening the noise path on its own.
+    const auto unvoicedCandidate = std::cbrt(zcrScore * spectralScore * flatnessScore);
     const auto unvoicedCoefficient = unvoicedCandidate > unvoicedAmount
         ? unvoicedAttackCoefficient : unvoicedReleaseCoefficient;
     unvoicedAmount = unvoicedCoefficient * unvoicedAmount
