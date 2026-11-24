@@ -65,7 +65,7 @@ lines = ["# Vocoder candidate screening results", "",
  "|---:|---|---:|---:|---:|"]
 for index, item in enumerate(rank[:10], 1):
     lines.append(f"| {index} | {item['profile']} | {item['diagnostic_composite']:.4f} | {item['stoi_mean']:.4f} | {item['band_weighted_mean']:.4f} |")
-lines += ["", "Compare Ash and Nova WAVs for each profile at matched playback levels. Baseline is 56 bands, Q7, 10 ms attack/release, -2 formant, and 10% sibilance/unvoiced."]
+lines += ["", "Compare Ash and Nova WAVs for each profile at matched playback levels. Reference baseline is r07_fm2: 56 bands, Q7, 10 ms attack, 7 ms release, -2 semitone formant shift, and 10% sibilance/unvoiced."]
 for item in rank[:8]:
     lines.append(f"- {item['profile']}: Ash_{item['profile']}.wav and Nova_{item['profile']}.wav")
 (outdir / "README-RESULTS.md").write_text("\n".join(lines), encoding="utf-8")
