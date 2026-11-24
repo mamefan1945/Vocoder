@@ -109,6 +109,37 @@ bool renderCarrierComparison(const juce::File& inputFile, const juce::File& outp
  if(!writer)return false; stream.release(); return writer->writeFromAudioSampleBuffer(output,0,count);
 }
 
+
+bool renderPlosiveDetectorMarker(const juce::File& inputFile, const juce::File& outputDir,
+                                 const juce::String& speaker)
+{
+ juce::AudioFormatManager fm; fm.registerBasicFormats();
+ std::unique_ptr<juce::AudioFormatReader> reader(fm.createReaderFor(inputFile));
+ if (!reader || reader->lengthInSamples <= 0 || reader->numChannels <= 0) return false;
+ const int count=(int)juce::jmin<juce::int64>(reader->lengthInSamples,(juce::int64)(reader->sampleRate*120.0));
+ const double rate=reader->sampleRate;
+ juce::AudioBuffer<float> input(1,count), marker(1,count);
+ if(!reader->read(&input,0,count,0,true,false)) return false;
+ VocoderEngine engine; engine.prepare(rate); engine.setDryWet(1.0f);
+ engine.setAttackMs(10.0f); engine.setReleaseMs(7.0f); engine.setFormantShift(-2.0f);
+ engine.setBandCount(56); engine.setFilterQ(7.0f); engine.setSibilanceAmount(0.10f);
+ engine.setUnvoicedNoise(0.10f); engine.setPlosiveBurst(0.0f); engine.reset();
+ for(int i=0;i<count;++i) {
+  const auto time=static_cast<double>(i)/rate;
+  const auto phase=2.0*juce::MathConstants<double>::pi*110.0*time;
+  const auto carrier=0.13f*static_cast<float>(std::sin(phase)+0.5*std::sin(2.0*phase)
+      +0.333333*std::sin(3.0*phase)+0.25*std::sin(4.0*phase)+0.2*std::sin(5.0*phase));
+  engine.processSample(input.getSample(0,i),carrier,true,carrier);
+  const auto markerPhase=2.0*juce::MathConstants<double>::pi*1000.0*time;
+  marker.setSample(0,i,0.35f*engine.getPlosiveEnvelopeForTesting()
+                         *static_cast<float>(std::sin(markerPhase)));
+ }
+ auto file=outputDir.getChildFile(speaker+"_plosive_detector_marker.wav");
+ auto stream=std::unique_ptr<juce::FileOutputStream>(file.createOutputStream()); if(!stream)return false;
+ juce::WavAudioFormat wav; auto writer=std::unique_ptr<juce::AudioFormatWriter>(wav.createWriterFor(stream.get(),rate,1,24,{},0));
+ if(!writer)return false; stream.release(); return writer->writeFromAudioSampleBuffer(marker,0,count);
+}
+
 int main() {
  const auto dir=juce::File::getCurrentWorkingDirectory().getChildFile("build").getChildFile("optimization-results");
  if(dir.createDirectory().failed())return 3;
@@ -125,6 +156,7 @@ int main() {
   const Profile plosiveOn { "plosive_on",56,7,10,7,-2,.10f,.10f,1 };
   if(!render(input,dir,speaker,plosiveOff,0.15f,0.0f))return 12;
   if(!render(input,dir,speaker,plosiveOn,0.15f,1.0f))return 13;
+  if(!renderPlosiveDetectorMarker(input,dir,speaker))return 16;
   if(!renderCarrierComparison(input,dir,speaker,"rich",CarrierSynth::rich,0.0f))return 6;
   if(!renderCarrierComparison(input,dir,speaker,"analog_stack",CarrierSynth::analogStack,0.0f))return 7;
   if(!renderCarrierComparison(input,dir,speaker,"saw",CarrierSynth::saw,0.0f))return 8;
