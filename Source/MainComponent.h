@@ -91,6 +91,7 @@ private:
     void sliderValueChanged(juce::Slider* slider) override;
     void timerCallback() override;
     void selectMidiInput();
+    void resetExternalMidiState();
     void refreshMidiInputs();
     void initializeAudioAndInstruments();
     void updateSoundFontControls();
