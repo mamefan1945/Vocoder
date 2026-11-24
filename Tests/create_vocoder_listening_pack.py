@@ -25,7 +25,9 @@ def main() -> int:
     selected_profiles = list(dict.fromkeys(["r07_fm2", *ranked_profiles[:4]]))
     selected_wavs = []
     for speaker in ("Ash", "Nova"):
-        for profile in selected_profiles:
+        # Always include the matched pre-emphasis bypass/on pair, even when
+        # neither candidate falls inside the top-ranked diagnostic profiles.
+        for profile in [*selected_profiles, "preemphasis_off", "preemphasis_on"]:
             candidate = results / f"{speaker}_{profile}.wav"
             if candidate.is_file():
                 selected_wavs.append(candidate)
@@ -62,8 +64,11 @@ def main() -> int:
         "built-in Rich, Analog Stack, Saw, and Square oscillators. Saw and Square use identical synthesis settings so the waveform is the only changed variable.\n\n"
         "r07_fm2 is the optimizer reference profile: 56 bands, Q 7, 10 ms "
         "attack, 7 ms release, -2 semitone formant shift, and 10% sibilance "
-        "and unvoiced-noise amounts. Other profiles are diagnostic candidates "
-        "ranked by objective metrics, not confirmed sound-quality winners.\n\n"
+        "and unvoiced-noise amounts. The preemphasis_off/on files are a matched "
+        "A/B pair: off bypasses speech-analysis pre-emphasis; on uses the "
+        "current 0.15 coefficient. Compare each speaker pair at matched loudness. "
+        "Other profiles are diagnostic candidates ranked by objective metrics, "
+        "not confirmed sound-quality winners.\n\n"
         "Compare files with the same speaker name at the same playback level. "
         "Listen for consonant clarity, vowel smoothness, hiss, buzzing, and "
         "abrupt transitions. The objective ranking is only a screening aid; "
