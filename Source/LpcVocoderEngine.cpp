@@ -71,7 +71,7 @@ void LpcVocoderEngine::updateModel() noexcept
             residual += static_cast<double>(candidateCoefficients[static_cast<size_t>(j)])
                       * autocorrelation[static_cast<size_t>(order - j)];
 
-        const auto reflection = juce::jlimit(-0.96, 0.96, -residual / predictionError);
+        if (!std::isfinite(residual) || !std::isfinite(predictionError)\n            || predictionError <= r0 * 1.0e-10)\n            break;\n        const auto rawReflection = -residual / predictionError;\n        if (!std::isfinite(rawReflection))\n            break;\n        const auto reflection = juce::jlimit(-0.92, 0.92, rawReflection);
         std::array<float, lpcOrder + 1> next = candidateCoefficients;
         next[static_cast<size_t>(order)] = static_cast<float>(reflection);
         for (int j = 1; j < order; ++j)
@@ -83,7 +83,7 @@ void LpcVocoderEngine::updateModel() noexcept
             break;
     }
 
-    // Smooth model changes to avoid zippering as the analysis frame advances.
+    for (auto& coefficient : coefficients)\n        if (!std::isfinite(coefficient))\n        {\n            coefficients.fill(0.0f);\n            coefficients[0] = 1.0f;\n            previousOutput.fill(0.0f);\n            break;\n        }\n\n    // Smooth model changes to avoid zippering as the analysis frame advances.
     for (int i = 1; i <= lpcOrder; ++i)
         coefficients[static_cast<size_t>(i)] += 0.28f
             * (candidateCoefficients[static_cast<size_t>(i)] - coefficients[static_cast<size_t>(i)]);
@@ -97,7 +97,7 @@ void LpcVocoderEngine::updateModel() noexcept
     const auto zcr = static_cast<float>(zeroCrossings / frameSize);
     const auto unvoicedTarget = juce::jlimit(0.0f, 1.0f, (zcr - 0.08f) / 0.20f);
     unvoicedAmount += 0.35f * (unvoicedTarget - unvoicedAmount);
-    voiceRms = std::sqrt(static_cast<float>(r0 / frameSize));
+    voiceRms = std::sqrt(static_cast<float>(r0 / frameSize));\n    if (!std::isfinite(voiceRms))\n        voiceRms = 0.0f;
 }
 
 float LpcVocoderEngine::processSample(float voice, float carrier) noexcept
@@ -135,7 +135,7 @@ float LpcVocoderEngine::processSample(float voice, float carrier) noexcept
         previousOutput[static_cast<size_t>(i)] = previousOutput[static_cast<size_t>(i - 1)];
         previousInput[static_cast<size_t>(i)] = previousInput[static_cast<size_t>(i - 1)];
     }
-    previousOutput[0] = synthesized;
+    if (!std::isfinite(synthesized))\n    {\n        previousOutput.fill(0.0f);\n        coefficients.fill(0.0f);\n        coefficients[0] = 1.0f;\n        synthesized = 0.0f;\n    }\n    previousOutput[0] = synthesized;
     previousInput[0] = emphasized;
 
     // A small unvoiced residual contribution retains stop/fricative detail that
@@ -144,5 +144,5 @@ float LpcVocoderEngine::processSample(float voice, float carrier) noexcept
     const auto wet = std::tanh((synthesized + voice * 0.10f * unvoicedAmount) * 1.6f);
     const auto mix = dryWet.load(std::memory_order_relaxed);
     const auto gain = outputGain.load(std::memory_order_relaxed);
-    return (wet * mix + voice * (1.0f - mix)) * gain;
+    const auto output = (wet * mix + voice * (1.0f - mix)) * gain;\n    return std::isfinite(output) ? output : 0.0f;
 }

@@ -93,6 +93,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
       keyboardComponent(keyboardState),
       startupCompleteCallback(onStartupComplete)
 {
+    setLookAndFeel(&proAudioLookAndFeel);
     writeStartupTrace("MainComponent constructor entered");
     // Start a fresh trace for each application launch.
     juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
@@ -331,7 +332,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     outputLevel.setRange(0.0, 2.0, 0.01);
     outputLevel.setValue(1.0);
     outputLevel.setTextValueSuffix(" x");
-    outputLevel.setSliderStyle(juce::Slider::LinearHorizontal);
+    outputLevel.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);\n    outputLevel.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 68, 18);
     outputLevel.setTextBoxStyle(juce::Slider::TextBoxRight, false, 72, 28);
     outputLevel.addListener(this);
     addAndMakeVisible(outputLevel);
@@ -352,11 +353,11 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
         addAndMakeVisible(slider);
     };
 
-    configureControl(attackTime, attackLabel, "Attack", 0.1, 30.0, 0.1, 1.0, " ms");
-    configureControl(releaseTime, releaseLabel, "Release", 1.0, 250.0, 0.5, 10.0, " ms");
+    configureControl(attackTime, attackLabel, "Attack", 0.1, 30.0, 0.1, 1.0, " ms");\n    attackTime.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);\n    attackTime.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 68, 18);
+    configureControl(releaseTime, releaseLabel, "Release", 1.0, 250.0, 0.5, 10.0, " ms");\n    releaseTime.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);\n    releaseTime.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 68, 18);
     configureControl(lowFrequency, lowFrequencyLabel, "Low freq", 120.0, 4000.0, 10.0, 120.0, " Hz");
     configureControl(highFrequency, highFrequencyLabel, "High freq", 500.0, 8000.0, 10.0, 8000.0, " Hz");
-    configureControl(dryWetMix, dryWetLabel, "Dry / wet", 0.0, 100.0, 1.0, 100.0, " %");
+    configureControl(dryWetMix, dryWetLabel, "Dry / wet", 0.0, 100.0, 1.0, 100.0, " %");\n    dryWetMix.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);\n    dryWetMix.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 68, 18);
     configureControl(formantShiftSlider, formantShiftLabel, "Formant", -12.0, 12.0, 0.5, 0.0, " st");
     configureControl(gateThresholdSlider, gateThresholdLabel, "Noise gate", 0.0, 0.02, 0.0005, 0.003, " RMS");
     configureControl(articulationLiftSlider, articulationLiftLabel, "Articulation", 0.0, 200.0, 1.0, 100.0, " %");
@@ -1296,23 +1297,27 @@ void MainComponent::resized()
         harmonizerAlgorithm.setBounds(row.removeFromLeft(220));
     }
     area.removeFromTop(8);
-    outputLevelLabel.setBounds(area.removeFromTop(22));
-    outputLevel.setBounds(area.removeFromTop(34));
+    row = area.removeFromTop(104);
+    auto knobCell = row.removeFromLeft(112);
+    outputLevelLabel.setBounds(knobCell.removeFromTop(20));
+    outputLevel.setBounds(knobCell);
+    if (vocoderMode)
+    {
+        row.removeFromLeft(8);
+        knobCell = row.removeFromLeft(112);
+        attackLabel.setBounds(knobCell.removeFromTop(20));
+        attackTime.setBounds(knobCell);
+        row.removeFromLeft(8);
+        knobCell = row.removeFromLeft(112);
+        releaseLabel.setBounds(knobCell.removeFromTop(20));
+        releaseTime.setBounds(knobCell);
+        row.removeFromLeft(8);
+    }
     if (vocoderMode || harmonizerMode)
     {
-        area.removeFromTop(8);
-        row = area.removeFromTop(30);
-        if (vocoderMode)
-        {
-            attackLabel.setBounds(row.removeFromLeft(52));
-            attackTime.setBounds(row.removeFromLeft(150));
-            row.removeFromLeft(12);
-            releaseLabel.setBounds(row.removeFromLeft(58));
-            releaseTime.setBounds(row.removeFromLeft(170));
-            row.removeFromLeft(12);
-        }
-        dryWetLabel.setBounds(row.removeFromLeft(64));
-        dryWetMix.setBounds(row);
+        knobCell = row.removeFromLeft(112);
+        dryWetLabel.setBounds(knobCell.removeFromTop(20));
+        dryWetMix.setBounds(knobCell);
     }
     if (vocoderMode)
     {

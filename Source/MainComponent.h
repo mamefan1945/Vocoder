@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include "CarrierSynth.h"
 #include "VocoderEngine.h"
+#include "ProAudioLookAndFeel.h"
 #include "LpcVocoderEngine.h"
 #include "SoundFontEngine.h"
 #include "HarmonizerEngine.h"
@@ -117,6 +118,7 @@ private:
                       const juce::MidiBuffer& midi,
                       const float* prerecordedVoice);
 
+    ProAudioLookAndFeel proAudioLookAndFeel;
     juce::AudioDeviceManager deviceManager;
     juce::AudioDeviceSelectorComponent deviceSelector;
     juce::Viewport deviceViewport;
