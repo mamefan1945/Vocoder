@@ -9,7 +9,8 @@ namespace
         const auto traceFile = juce::File::getSpecialLocation(
             juce::File::userDesktopDirectory).getChildFile("PrismaVox-startup.log");
         traceFile.appendText(juce::Time::getCurrentTime().toISO8601(true)
-            + " | " + message + "\r\n");
+            + " | " + message + "\r
+");
     }
 
     class ControlInfoButton final : public juce::TextButton
@@ -332,8 +333,8 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     outputLevel.setRange(0.0, 2.0, 0.01);
     outputLevel.setValue(1.0);
     outputLevel.setTextValueSuffix(" x");
-    outputLevel.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);\n    outputLevel.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 68, 18);
-    outputLevel.setTextBoxStyle(juce::Slider::TextBoxRight, false, 72, 28);
+    outputLevel.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    outputLevel.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 68, 18);
     outputLevel.addListener(this);
     addAndMakeVisible(outputLevel);
 
@@ -353,11 +354,17 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
         addAndMakeVisible(slider);
     };
 
-    configureControl(attackTime, attackLabel, "Attack", 0.1, 30.0, 0.1, 1.0, " ms");\n    attackTime.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);\n    attackTime.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 68, 18);
-    configureControl(releaseTime, releaseLabel, "Release", 1.0, 250.0, 0.5, 10.0, " ms");\n    releaseTime.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);\n    releaseTime.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 68, 18);
+    configureControl(attackTime, attackLabel, "Attack", 0.1, 30.0, 0.1, 1.0, " ms");
+    attackTime.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    attackTime.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 68, 18);
+    configureControl(releaseTime, releaseLabel, "Release", 1.0, 250.0, 0.5, 10.0, " ms");
+    releaseTime.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    releaseTime.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 68, 18);
     configureControl(lowFrequency, lowFrequencyLabel, "Low freq", 120.0, 4000.0, 10.0, 120.0, " Hz");
     configureControl(highFrequency, highFrequencyLabel, "High freq", 500.0, 8000.0, 10.0, 8000.0, " Hz");
-    configureControl(dryWetMix, dryWetLabel, "Dry / wet", 0.0, 100.0, 1.0, 100.0, " %");\n    dryWetMix.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);\n    dryWetMix.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 68, 18);
+    configureControl(dryWetMix, dryWetLabel, "Dry / wet", 0.0, 100.0, 1.0, 100.0, " %");
+    dryWetMix.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    dryWetMix.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 68, 18);
     configureControl(formantShiftSlider, formantShiftLabel, "Formant", -12.0, 12.0, 0.5, 0.0, " st");
     configureControl(gateThresholdSlider, gateThresholdLabel, "Noise gate", 0.0, 0.02, 0.0005, 0.003, " RMS");
     configureControl(articulationLiftSlider, articulationLiftLabel, "Articulation", 0.0, 200.0, 1.0, 100.0, " %");
@@ -640,6 +647,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
 
 MainComponent::~MainComponent()
 {
+    setLookAndFeel(nullptr);
     writeStartupTrace("MainComponent destructor entered");
     shuttingDown.store(true, std::memory_order_release);
     if (startupThread.joinable())
