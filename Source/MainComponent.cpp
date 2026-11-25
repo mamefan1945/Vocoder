@@ -1222,9 +1222,33 @@ bool MainComponent::keyStateChanged(bool, juce::Component*)
 
 void MainComponent::paint(juce::Graphics& graphics)
 {
-    graphics.fillAll(juce::Colour(0xff171a20));
-    graphics.setColour(juce::Colour(0xff2b303a));
-    graphics.drawRoundedRectangle(getLocalBounds().toFloat().reduced(12.0f), 10.0f, 1.0f);
+    auto bounds = getLocalBounds().toFloat();
+
+    // Layered charcoal metal base with a restrained vertical lighting gradient.
+    juce::ColourGradient base(juce::Colour(0xff30363d), 0.0f, 0.0f,
+                              juce::Colour(0xff151a20), 0.0f, bounds.getBottom(), false);
+    graphics.setGradientFill(base);
+    graphics.fillAll();
+
+    // Fine horizontal grain gives the entire control surface a brushed-metal finish.
+    // Varying the length and brightness keeps the texture subtle rather than striped.
+    for (int y = 2; y < getHeight(); y += 3)
+    {
+        const auto band = (y * 37 + 19) % 101;
+        const auto alpha = static_cast<uint8_t>(5 + band % 8);
+        const auto inset = (y * 13) % 23;
+        const auto width = juce::jmax(0, getWidth() - inset - ((y * 7) % 31));
+        graphics.setColour(juce::Colour(0xffd5dde5).withAlpha(
+            static_cast<float>(alpha) / 255.0f));
+        graphics.drawHorizontalLine(y, static_cast<float>(inset),
+                                    static_cast<float>(inset + width));
+    }
+
+    // Subtle darker edge and fine rim define the chassis.
+    graphics.setColour(juce::Colour(0x66070a0e));
+    graphics.drawRoundedRectangle(bounds.reduced(12.0f), 10.0f, 4.0f);
+    graphics.setColour(juce::Colour(0xff59636d));
+    graphics.drawRoundedRectangle(bounds.reduced(12.0f), 10.0f, 1.0f);
 }
 
 void MainComponent::resized()
