@@ -99,8 +99,13 @@ public:
     void resized() override
     {
         if (auto* content = getViewedComponent())
+        {
+            const auto* mainComponent = dynamic_cast<const MainComponent*>(content);
+            const auto preferredHeight = mainComponent != nullptr
+                ? mainComponent->getPreferredContentHeight() : 790;
             content->setSize(juce::jmax(1380, getWidth() - 12),
-                             juce::jmax(790, getHeight() - 12));
+                             juce::jmax(preferredHeight, getHeight() - 12));
+        }
         juce::Viewport::resized();
     }
 
