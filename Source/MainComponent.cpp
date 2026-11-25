@@ -1279,13 +1279,13 @@ void MainComponent::resized()
         carrierLabel.setBounds(row.removeFromLeft(58));
         carrierSource.setBounds(row.removeFromLeft(150));
         row.removeFromLeft(8);
-        carrierPresetLabel.setBounds(row.removeFromLeft(48));
+        carrierPresetLabel.setBounds(row.removeFromLeft(68));
         carrierPreset.setBounds(row.removeFromLeft(150));
         row.removeFromLeft(8);
         waveformLabel.setBounds(row.removeFromLeft(82));
         waveform.setBounds(row.removeFromLeft(125));
         row.removeFromLeft(8);
-        octaveLabel.setBounds(row.removeFromLeft(55));
+        octaveLabel.setBounds(row.removeFromLeft(72));
         octave.setBounds(row.removeFromLeft(75));
         if (waveform.getSelectedId() == 8)
         {
@@ -1356,10 +1356,10 @@ void MainComponent::resized()
         sibilanceLabel.setBounds(row.removeFromLeft(86));
         sibilanceSlider.setBounds(row.removeFromLeft(210));
         row.removeFromLeft(12);
-        filterBandCountLabel.setBounds(row.removeFromLeft(52));
+        filterBandCountLabel.setBounds(row.removeFromLeft(72));
         filterBandCount.setBounds(row.removeFromLeft(76));
         row.removeFromLeft(10);
-        filterQLabel.setBounds(row.removeFromLeft(62));
+        filterQLabel.setBounds(row.removeFromLeft(72));
         filterQSlider.setBounds(row.removeFromLeft(210));
     }
     else if (harmonizerMode)
