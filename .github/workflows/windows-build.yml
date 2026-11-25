@@ -208,6 +208,39 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Capture harmonizer UI screenshot
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem "build" -Filter "PrismaVox.exe" -Recurse -File | Select-Object -First 1
+          if (-not $exe) { throw "PrismaVox.exe was not found for harmonizer UI capture." }
+          $capture = Join-Path $env:RUNNER_TEMP "PrismaVox-Harmonizer-UI.png"
+          $env:PRISMAVOX_CAPTURE_UI = $capture
+          $env:PRISMAVOX_CAPTURE_UI_MODE = "3"
+          $process = Start-Process -FilePath $exe.FullName -WorkingDirectory $exe.DirectoryName -PassThru
+          try {
+            $deadline = (Get-Date).AddSeconds(30)
+            while (-not (Test-Path $capture) -and -not $process.HasExited -and (Get-Date) -lt $deadline) {
+              Start-Sleep -Milliseconds 500
+              $process.Refresh()
+            }
+            if (-not (Test-Path $capture)) { throw "PrismaVox did not produce a harmonizer UI snapshot within 30 seconds." }
+            Copy-Item $capture "build/PrismaVox-Harmonizer-UI.png" -Force
+          }
+          finally {
+            $process.Refresh()
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+          }
+
+      - name: Upload harmonizer UI screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrismaVox-Harmonizer-UI-Screenshot-${{ github.run_number }}
+          path: build/PrismaVox-Harmonizer-UI.png
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload application
         uses: actions/upload-artifact@v4
         with:
