@@ -205,7 +205,12 @@ private:
     {
     public:
         explicit StereoLedMeter(const juce::String& title) : name(title) {}
-        void setLevelDb(float db) { levelDb = juce::jlimit(-60.0f, 0.0f, db); repaint(); }
+        void setLevelsDb(float leftDb, float rightDb)
+        {
+            levelsDb[0] = juce::jlimit(-60.0f, 0.0f, leftDb);
+            levelsDb[1] = juce::jlimit(-60.0f, 0.0f, rightDb);
+            repaint();
+        }
         void paint(juce::Graphics& g) override
         {
             auto bounds = getLocalBounds().toFloat();
@@ -220,10 +225,10 @@ private:
             const int segments = 24;
             const float segmentGap = 2.0f;
             const float segmentHeight = (area.getHeight() - (segments - 1) * segmentGap) / segments;
-            const int lit = juce::jlimit(0, segments, juce::roundToInt(
-                (levelDb + 60.0f) / 60.0f * segments));
             for (int channel = 0; channel < 2; ++channel)
             {
+                const int lit = juce::jlimit(0, segments, juce::roundToInt(
+                    (levelsDb[static_cast<size_t>(channel)] + 60.0f) / 60.0f * segments));
                 const float x = area.getX() + channel * (barWidth + gap);
                 g.setColour(juce::Colour(0xff0b1015));
                 g.fillRoundedRectangle(x, area.getY(), barWidth, area.getHeight(), 2.0f);
@@ -246,7 +251,7 @@ private:
         }
     private:
         juce::String name;
-        float levelDb = -60.0f;
+        std::array<float, 2> levelsDb { -60.0f, -60.0f };
     };
     StereoLedMeter inputLevelMeter { "INPUT" };
     StereoLedMeter outputLevelMeter { "OUTPUT" };
@@ -278,8 +283,10 @@ private:
     std::atomic<float> outputGain { 1.0f };
     std::atomic<float> harmonizerMix { 1.0f };
     std::atomic<int> harmonizerOctaveShift { 0 };
-    std::atomic<float> inputPeak { 0.0f };
-    std::atomic<float> outputPeak { 0.0f };
+    std::atomic<float> inputLeftPeak { 0.0f };
+    std::atomic<float> inputRightPeak { 0.0f };
+    std::atomic<float> outputLeftPeak { 0.0f };
+    std::atomic<float> outputRightPeak { 0.0f };
     std::atomic<int> selectedMode { 0 };
     std::atomic<int> selectedVocoderEngine { 0 };
     int audioCurrentVocoderEngine = 0;
