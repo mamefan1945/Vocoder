@@ -81,14 +81,19 @@ public:
     MainContentViewport()
     {
         setScrollBarsShown(true, true);
-        setScrollBarThickness(12);
-        setViewedComponent(new MainComponent(), true);
 
         // CI can request a genuine JUCE-rendered snapshot of the live component
-        // tree. Normal launches do not write screenshots or touch user files.
+        // tree. Normal launches do not write screenshots or alter startup mode.
         capturePath = juce::SystemStats::getEnvironmentVariable("PRISMAVOX_CAPTURE_UI", {});
+        auto* mainComponent = new MainComponent();
+        setViewedComponent(mainComponent, true);
         if (capturePath.isNotEmpty())
+        {
+            const auto captureMode = juce::SystemStats::getEnvironmentVariable(
+                "PRISMAVOX_CAPTURE_UI_MODE", "2").getIntValue();
+            mainComponent->selectModeForUiCapture(captureMode);
             startTimer(3000);
+        }
     }
 
     void resized() override
