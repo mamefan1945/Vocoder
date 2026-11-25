@@ -40,12 +40,14 @@ namespace
 
             g.setColour(juce::Colour(0xffaeb8c6));
             g.setFont(juce::Font(juce::FontOptions(14.0f)));
+            const auto messageY = juce::roundToInt(bounds.getHeight() * 0.87f);
             g.drawFittedText("Starting audio engine and loading instruments...",
-                             getLocalBounds().withY(735).withHeight(22),
+                             getLocalBounds().withY(messageY).withHeight(
+                                 juce::jmax(18, juce::roundToInt(bounds.getHeight() * 0.035f))),
                              juce::Justification::centred, 1);
 
             const auto progressArea = juce::Rectangle<float>(
-                getWidth() * 0.18f, 768.0f, getWidth() * 0.64f, 4.0f);
+                getWidth() * 0.18f, bounds.getHeight() * 0.92f, getWidth() * 0.64f, 4.0f);
             g.setColour(juce::Colour(0xff303744));
             g.fillRoundedRectangle(progressArea, 2.0f);
             const auto segmentWidth = progressArea.getWidth() * 0.22f;
@@ -72,7 +74,8 @@ namespace
 // Keep the full control surface available on compact/high-DPI displays.
 // The application layout retains its design size; the viewport exposes any
 // content that cannot fit and expands the viewed component on larger windows.
-class MainContentViewport final : public juce::Viewport
+class MainContentViewport final : public juce::Viewport,
+                                 private juce::Timer
 {
 public:
     MainContentViewport()
@@ -80,6 +83,12 @@ public:
         setScrollBarsShown(true, true);
         setScrollBarThickness(12);
         setViewedComponent(new MainComponent(), true);
+
+        // CI can request a genuine JUCE-rendered snapshot of the live component
+        // tree. Normal launches do not write screenshots or touch user files.
+        capturePath = juce::SystemStats::getEnvironmentVariable("PRISMAVOX_CAPTURE_UI", {});
+        if (capturePath.isNotEmpty())
+            startTimer(3000);
     }
 
     void resized() override
@@ -89,6 +98,24 @@ public:
                              juce::jmax(790, getHeight() - 12));
         juce::Viewport::resized();
     }
+
+private:
+    void timerCallback() override
+    {
+        stopTimer();
+        const auto image = createComponentSnapshot(getLocalBounds(), true, 1.0f);
+        if (image.isNull())
+            return;
+        juce::File outputFile(capturePath);
+        outputFile.getParentDirectory().createDirectory();
+        if (auto output = outputFile.createOutputStream())
+        {
+            juce::PNGImageFormat png;
+            png.writeImageToStream(image, *output);
+        }
+    }
+
+    juce::String capturePath;
 };
 
 class VocoderApplication final : public juce::JUCEApplication
