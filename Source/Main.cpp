@@ -159,7 +159,7 @@ private:
             const auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
             const auto available = display != nullptr
                 ? display->userArea : juce::Rectangle<int>(0, 0, 1380, 790);
-            setResizeLimits(680, 480, 0, 0);
+            setResizeLimits(680, 480, 16384, 16384);
             centreWithSize(juce::jmax(680, juce::jmin(1380,
                                 static_cast<int>(available.getWidth() * 0.90f))),
                            juce::jmax(480, juce::jmin(790,
