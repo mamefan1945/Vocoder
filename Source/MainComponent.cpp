@@ -1307,82 +1307,60 @@ void MainComponent::resized()
         harmonizerAlgorithm.setBounds(row.removeFromLeft(220));
     }
     area.removeFromTop(8);
-    row = area.removeFromTop(104);
+    row = area.removeFromTop(vocoderMode ? 206 : (harmonizerMode ? 190 : 104));
+    const auto placeVerticalFader = [](juce::Rectangle<int> cell,
+                                       juce::Label& label, juce::Slider& slider)
+    {
+        label.setFont(juce::Font(juce::FontOptions(11.5f)));
+        label.setBounds(cell.removeFromTop(20));
+        auto faderArea = cell.reduced(5, 0);
+        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 74, 20);
+        slider.setBounds(faderArea.withSizeKeepingCentre(82, faderArea.getHeight()));
+    };
+
     auto knobCell = row.removeFromLeft(112);
     outputLevelLabel.setBounds(knobCell.removeFromTop(20));
     outputLevel.setBounds(knobCell);
+
     if (vocoderMode)
     {
-        row.removeFromLeft(8);
         knobCell = row.removeFromLeft(112);
         attackLabel.setBounds(knobCell.removeFromTop(20));
         attackTime.setBounds(knobCell);
-        row.removeFromLeft(8);
         knobCell = row.removeFromLeft(112);
         releaseLabel.setBounds(knobCell.removeFromTop(20));
         releaseTime.setBounds(knobCell);
-        row.removeFromLeft(8);
+        knobCell = row.removeFromLeft(112);
+        dryWetLabel.setBounds(knobCell.removeFromTop(20));
+        dryWetMix.setBounds(knobCell);
+
+        const auto faderCellWidth = (row.getWidth() - 112) / 8;
+        placeVerticalFader(row.removeFromLeft(faderCellWidth), lowFrequencyLabel, lowFrequency);
+        placeVerticalFader(row.removeFromLeft(faderCellWidth), highFrequencyLabel, highFrequency);
+        placeVerticalFader(row.removeFromLeft(faderCellWidth), formantShiftLabel, formantShiftSlider);
+        placeVerticalFader(row.removeFromLeft(faderCellWidth), gateThresholdLabel, gateThresholdSlider);
+        placeVerticalFader(row.removeFromLeft(faderCellWidth), articulationLiftLabel, articulationLiftSlider);
+        placeVerticalFader(row.removeFromLeft(faderCellWidth), unvoicedNoiseLabel, unvoicedNoiseSlider);
+        placeVerticalFader(row.removeFromLeft(faderCellWidth), sibilanceLabel, sibilanceSlider);
+        placeVerticalFader(row.removeFromLeft(faderCellWidth), filterQLabel, filterQSlider);
+        auto bandsCell = row;
+        filterBandCountLabel.setBounds(bandsCell.removeFromTop(20));
+        filterBandCount.setBounds(bandsCell.removeFromTop(30).reduced(4, 0));
     }
-    if (vocoderMode || harmonizerMode)
+    else if (harmonizerMode)
     {
         knobCell = row.removeFromLeft(112);
         dryWetLabel.setBounds(knobCell.removeFromTop(20));
         dryWetMix.setBounds(knobCell);
-    }
-    const auto placeVerticalFader = [](juce::Rectangle<int> cell,
-                                       juce::Label& label, juce::Slider& slider)
-    {
-        label.setBounds(cell.removeFromTop(20));
-        auto faderArea = cell.reduced(8, 0);
-        slider.setBounds(faderArea.withSizeKeepingCentre(82, faderArea.getHeight()));
-    };
-    if (vocoderMode)
-    {
-        // Two compact rows of vertical faders. The final cell holds the
-        // discrete filter-band selector rather than pretending it is a fader.
-        area.removeFromTop(6);
-        row = area.removeFromTop(112);
         const auto cellWidth = row.getWidth() / 5;
-        auto cell = row.removeFromLeft(cellWidth);
-        placeVerticalFader(cell, lowFrequencyLabel, lowFrequency);
-        cell = row.removeFromLeft(cellWidth);
-        placeVerticalFader(cell, highFrequencyLabel, highFrequency);
-        cell = row.removeFromLeft(cellWidth);
-        placeVerticalFader(cell, formantShiftLabel, formantShiftSlider);
-        cell = row.removeFromLeft(cellWidth);
-        placeVerticalFader(cell, gateThresholdLabel, gateThresholdSlider);
-        cell = row;
-        placeVerticalFader(cell, articulationLiftLabel, articulationLiftSlider);
+        placeVerticalFader(row.removeFromLeft(cellWidth), formantPreservationLabel, formantPreservationSlider);
+        placeVerticalFader(row.removeFromLeft(cellWidth), transientProtectionLabel, transientProtectionSlider);
+        placeVerticalFader(row.removeFromLeft(cellWidth), pitchSensitivityLabel, pitchSensitivitySlider);
+        placeVerticalFader(row.removeFromLeft(cellWidth), pitchHoldLabel, pitchHoldSlider);
+        placeVerticalFader(row, pitchRecoveryLabel, pitchRecoverySlider);
+    }
 
-        area.removeFromTop(5);
-        row = area.removeFromTop(112);
-        const auto secondCellWidth = row.getWidth() / 5;
-        cell = row.removeFromLeft(secondCellWidth);
-        placeVerticalFader(cell, unvoicedNoiseLabel, unvoicedNoiseSlider);
-        cell = row.removeFromLeft(secondCellWidth);
-        placeVerticalFader(cell, sibilanceLabel, sibilanceSlider);
-        cell = row.removeFromLeft(secondCellWidth);
-        placeVerticalFader(cell, filterQLabel, filterQSlider);
-        cell = row.removeFromLeft(secondCellWidth);
-        filterBandCountLabel.setBounds(cell.removeFromTop(20));
-        filterBandCount.setBounds(cell.removeFromTop(30).reduced(8, 0));
-    }
-    else if (harmonizerMode)
-    {
-        area.removeFromTop(6);
-        row = area.removeFromTop(112);
-        const auto cellWidth = row.getWidth() / 5;
-        auto cell = row.removeFromLeft(cellWidth);
-        placeVerticalFader(cell, formantPreservationLabel, formantPreservationSlider);
-        cell = row.removeFromLeft(cellWidth);
-        placeVerticalFader(cell, transientProtectionLabel, transientProtectionSlider);
-        cell = row.removeFromLeft(cellWidth);
-        placeVerticalFader(cell, pitchSensitivityLabel, pitchSensitivitySlider);
-        cell = row.removeFromLeft(cellWidth);
-        placeVerticalFader(cell, pitchHoldLabel, pitchHoldSlider);
-        cell = row;
-        placeVerticalFader(cell, pitchRecoveryLabel, pitchRecoverySlider);
-    }
+    area.removeFromTop(6);
     row = area.removeFromTop(116);
     inputLevelMeter.setBounds(row.removeFromLeft(86));
     row.removeFromLeft(10);
