@@ -1698,14 +1698,16 @@ void MainComponent::timerCallback()
         lastVocalMidiPosition = position;
     }
 
-    const auto input = inputPeak.exchange(0.0f, std::memory_order_relaxed);
-    const auto output = outputPeak.exchange(0.0f, std::memory_order_relaxed);
+    const auto inputLeft = inputLeftPeak.exchange(0.0f, std::memory_order_relaxed);
+    const auto inputRight = inputRightPeak.exchange(0.0f, std::memory_order_relaxed);
+    const auto outputLeft = outputLeftPeak.exchange(0.0f, std::memory_order_relaxed);
+    const auto outputRight = outputRightPeak.exchange(0.0f, std::memory_order_relaxed);
     const auto toDb = [](float peak)
     {
         return peak > 0.000001f ? juce::Decibels::gainToDecibels(peak, -120.0f) : -120.0f;
     };
-    inputLevelMeter.setLevelDb(toDb(input));
-    outputLevelMeter.setLevelDb(toDb(output));
+    inputLevelMeter.setLevelsDb(toDb(inputLeft), toDb(inputRight));
+    outputLevelMeter.setLevelsDb(toDb(outputLeft), toDb(outputRight));
 
     if (processingMode.getSelectedId() == 3)
     {
@@ -1871,8 +1873,8 @@ void MainComponent::processAudio(const float* const* inputChannelData,
         for (int note = 0; note < 128 && !hasActiveMidiNote; ++note)
             hasActiveMidiNote = keyboardState.isNoteOnForChannels(0xffff, note);
 
-    float blockInputPeak = 0.0f;
-    float blockOutputPeak = 0.0f;
+    std::array<float, 2> blockInputPeaks {};
+    std::array<float, 2> blockOutputPeaks {};
 
     for (int sample = 0; sample < numSamples; ++sample)
     {
@@ -1882,7 +1884,11 @@ void MainComponent::processAudio(const float* const* inputChannelData,
         const auto external = numInputChannels > 1 && inputChannelData[1] != nullptr
             ? inputChannelData[1][sample] : 0.0f;
         const auto synth = internalCarrier != nullptr ? internalCarrier[sample] : 0.0f;
-        blockInputPeak = juce::jmax(blockInputPeak, std::abs(voice));
+        const auto inputLeft = prerecordedVoice != nullptr ? voice : voice;
+        const auto inputRight = prerecordedVoice != nullptr || numInputChannels < 2
+            || inputChannelData[1] == nullptr ? inputLeft : inputChannelData[1][sample];
+        blockInputPeaks[0] = juce::jmax(blockInputPeaks[0], std::abs(inputLeft));
+        blockInputPeaks[1] = juce::jmax(blockInputPeaks[1], std::abs(inputRight));
 
         // Each processing mode must use its own engine output. In particular,
         // do not fall back to the dry microphone in Harmonizer mode: the
@@ -1926,12 +1932,19 @@ void MainComponent::processAudio(const float* const* inputChannelData,
         const auto output = passThroughOutput + vocoderOutput + harmonizerOutput
                           + microphoneOutput + carrierOutput;
 
-        blockOutputPeak = juce::jmax(blockOutputPeak, std::abs(output));
         for (int channel = 0; channel < numOutputChannels; ++channel)
         {
             if (outputChannelData[channel] != nullptr)
+            {
                 outputChannelData[channel][sample] = output;
+                const auto meterChannel = juce::jmin(channel, 1);
+                blockOutputPeaks[static_cast<size_t>(meterChannel)] = juce::jmax(
+                    blockOutputPeaks[static_cast<size_t>(meterChannel)],
+                    std::abs(outputChannelData[channel][sample]));
+            }
         }
+        if (numOutputChannels == 1)
+            blockOutputPeaks[1] = juce::jmax(blockOutputPeaks[1], blockOutputPeaks[0]);
     }
 
     const auto updatePeak = [](std::atomic<float>& peak, float blockPeak)
@@ -1944,6 +1957,8 @@ void MainComponent::processAudio(const float* const* inputChannelData,
         {
         }
     };
-    updatePeak(inputPeak, blockInputPeak);
-    updatePeak(outputPeak, blockOutputPeak);
+    updatePeak(inputLeftPeak, blockInputPeaks[0]);
+    updatePeak(inputRightPeak, blockInputPeaks[1]);
+    updatePeak(outputLeftPeak, blockOutputPeaks[0]);
+    updatePeak(outputRightPeak, blockOutputPeaks[1]);
 }
