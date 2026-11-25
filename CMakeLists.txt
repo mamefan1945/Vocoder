@@ -48,7 +48,7 @@ set(GENERALUSER_SF2 "${SOUNDFONT_DIR}/GeneralUser-GS.sf2")
 set(GENERALUSER_LICENSE "${SOUNDFONT_DIR}/GeneralUser-GS-LICENSE.txt")
 if(NOT EXISTS "${GENERALUSER_SF2}")
     file(DOWNLOAD
-        "https://github.com/HKT0131/audio-assets/releases/download/v2.0.3/GeneralUser-GS.sf2"
+        "https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/684543d5e5efaef08d02be50dcda8d552478fa60/GeneralUser-GS.sf2"
         "${GENERALUSER_SF2}"
         EXPECTED_HASH SHA256=9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe
         SHOW_PROGRESS
@@ -61,7 +61,7 @@ if(NOT EXISTS "${GENERALUSER_SF2}")
 endif()
 if(NOT EXISTS "${GENERALUSER_LICENSE}")
     file(DOWNLOAD
-        "https://github.com/HKT0131/audio-assets/releases/download/v2.0.3/LICENSE.txt"
+        "https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/684543d5e5efaef08d02be50dcda8d552478fa60/documentation/LICENSE.txt"
         "${GENERALUSER_LICENSE}"
         EXPECTED_HASH SHA256=7b32efefdf95ce38a043799f0659853ddc00fbaa14d8c50f0aca16b9b8b405be
         STATUS SOUNDFONT_LICENSE_STATUS
