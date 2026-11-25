@@ -100,6 +100,14 @@ target_sources(PrismaVox PRIVATE
 
 if(WIN32)
     target_sources(PrismaVox PRIVATE PrismaVox.rc)
+    if(MSVC)
+        # Merge the custom DPI-awareness manifest through the linker. Embedding
+        # it as an RC resource duplicates JUCE's generated application manifest.
+        target_link_options(PrismaVox PRIVATE
+            "/MANIFEST:EMBED"
+            "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/PrismaVox.manifest"
+        )
+    endif()
 endif()
 
 target_compile_definitions(PrismaVox PRIVATE
