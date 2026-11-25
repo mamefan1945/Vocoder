@@ -347,8 +347,8 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
         slider.setRange(minimum, maximum, step);
         slider.setValue(initial, juce::dontSendNotification);
         slider.setTextValueSuffix(suffix);
-        slider.setSliderStyle(juce::Slider::LinearHorizontal);
-        slider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 68, 24);
+        slider.setSliderStyle(juce::Slider::LinearVertical);
+        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 58, 20);
         slider.addListener(this);
         addAndMakeVisible(slider);
     };
@@ -1329,58 +1329,59 @@ void MainComponent::resized()
         dryWetLabel.setBounds(knobCell.removeFromTop(20));
         dryWetMix.setBounds(knobCell);
     }
+    const auto placeVerticalFader = [](juce::Rectangle<int> cell,
+                                       juce::Label& label, juce::Slider& slider)
+    {
+        label.setBounds(cell.removeFromTop(20));
+        auto faderArea = cell.reduced(8, 0);
+        slider.setBounds(faderArea.withSizeKeepingCentre(82, faderArea.getHeight()));
+    };
     if (vocoderMode)
     {
+        // Two compact rows of vertical faders. The final cell holds the
+        // discrete filter-band selector rather than pretending it is a fader.
         area.removeFromTop(6);
-        row = area.removeFromTop(30);
-        lowFrequencyLabel.setBounds(row.removeFromLeft(64));
-        lowFrequency.setBounds(row.removeFromLeft(180));
-        row.removeFromLeft(12);
-        highFrequencyLabel.setBounds(row.removeFromLeft(70));
-        highFrequency.setBounds(row.removeFromLeft(190));
-        area.removeFromTop(6);
-        row = area.removeFromTop(30);
-        formantShiftLabel.setBounds(row.removeFromLeft(64));
-        formantShiftSlider.setBounds(row.removeFromLeft(210));
-        gateThresholdLabel.setBounds(row.removeFromLeft(86));
-        gateThresholdSlider.setBounds(row.removeFromLeft(220));
-        area.removeFromTop(6);
-        row = area.removeFromTop(30);
-        articulationLiftLabel.setBounds(row.removeFromLeft(86));
-        articulationLiftSlider.setBounds(row.removeFromLeft(210));
-        row.removeFromLeft(12);
-        unvoicedNoiseLabel.setBounds(row.removeFromLeft(100));
-        unvoicedNoiseSlider.setBounds(row.removeFromLeft(210));
-        area.removeFromTop(6);
-        row = area.removeFromTop(30);
-        sibilanceLabel.setBounds(row.removeFromLeft(86));
-        sibilanceSlider.setBounds(row.removeFromLeft(210));
-        row.removeFromLeft(12);
-        filterBandCountLabel.setBounds(row.removeFromLeft(72));
-        filterBandCount.setBounds(row.removeFromLeft(76));
-        row.removeFromLeft(10);
-        filterQLabel.setBounds(row.removeFromLeft(72));
-        filterQSlider.setBounds(row.removeFromLeft(210));
+        row = area.removeFromTop(112);
+        const auto cellWidth = row.getWidth() / 5;
+        auto cell = row.removeFromLeft(cellWidth);
+        placeVerticalFader(cell, lowFrequencyLabel, lowFrequency);
+        cell = row.removeFromLeft(cellWidth);
+        placeVerticalFader(cell, highFrequencyLabel, highFrequency);
+        cell = row.removeFromLeft(cellWidth);
+        placeVerticalFader(cell, formantShiftLabel, formantShiftSlider);
+        cell = row.removeFromLeft(cellWidth);
+        placeVerticalFader(cell, gateThresholdLabel, gateThresholdSlider);
+        cell = row;
+        placeVerticalFader(cell, articulationLiftLabel, articulationLiftSlider);
+
+        area.removeFromTop(5);
+        row = area.removeFromTop(112);
+        const auto secondCellWidth = row.getWidth() / 5;
+        cell = row.removeFromLeft(secondCellWidth);
+        placeVerticalFader(cell, unvoicedNoiseLabel, unvoicedNoiseSlider);
+        cell = row.removeFromLeft(secondCellWidth);
+        placeVerticalFader(cell, sibilanceLabel, sibilanceSlider);
+        cell = row.removeFromLeft(secondCellWidth);
+        placeVerticalFader(cell, filterQLabel, filterQSlider);
+        cell = row.removeFromLeft(secondCellWidth);
+        filterBandCountLabel.setBounds(cell.removeFromTop(20));
+        filterBandCount.setBounds(cell.removeFromTop(30).reduced(8, 0));
     }
     else if (harmonizerMode)
     {
         area.removeFromTop(6);
-        row = area.removeFromTop(30);
-        formantPreservationLabel.setBounds(row.removeFromLeft(126));
-        formantPreservationSlider.setBounds(row.removeFromLeft(260));
-        row.removeFromLeft(12);
-        transientProtectionLabel.setBounds(row.removeFromLeft(126));
-        transientProtectionSlider.setBounds(row.removeFromLeft(260));
-        area.removeFromTop(6);
-        row = area.removeFromTop(30);
-        pitchSensitivityLabel.setBounds(row.removeFromLeft(96));
-        pitchSensitivitySlider.setBounds(row.removeFromLeft(150));
-        row.removeFromLeft(10);
-        pitchHoldLabel.setBounds(row.removeFromLeft(72));
-        pitchHoldSlider.setBounds(row.removeFromLeft(140));
-        row.removeFromLeft(10);
-        pitchRecoveryLabel.setBounds(row.removeFromLeft(90));
-        pitchRecoverySlider.setBounds(row.removeFromLeft(150));
+        row = area.removeFromTop(112);
+        const auto cellWidth = row.getWidth() / 5;
+        auto cell = row.removeFromLeft(cellWidth);
+        placeVerticalFader(cell, formantPreservationLabel, formantPreservationSlider);
+        cell = row.removeFromLeft(cellWidth);
+        placeVerticalFader(cell, transientProtectionLabel, transientProtectionSlider);
+        cell = row.removeFromLeft(cellWidth);
+        placeVerticalFader(cell, pitchSensitivityLabel, pitchSensitivitySlider);
+        cell = row.removeFromLeft(cellWidth);
+        placeVerticalFader(cell, pitchHoldLabel, pitchHoldSlider);
+        cell = row;
+        placeVerticalFader(cell, pitchRecoveryLabel, pitchRecoverySlider);
     }
     row = area.removeFromTop(116);
     inputLevelMeter.setBounds(row.removeFromLeft(86));
