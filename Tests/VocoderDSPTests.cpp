@@ -1,4 +1,5 @@
 #include "VocoderEngine.h"
+#include "LpcVocoderEngine.h"
 
 #include <algorithm>
 #include <array>
@@ -380,6 +381,33 @@ bool testReferenceSpeechFile(const juce::String& filename)
 #endif
 }
 
+
+bool testLpcVocoderSignalIntegrity()
+{
+    LpcVocoderEngine engine;
+    engine.prepare(48000.0);
+    double energy = 0.0;
+    float peak = 0.0f;
+    bool finite = true;
+    constexpr int sampleCount = 48000;
+    for (int i = 0; i < sampleCount; ++i)
+    {
+        const auto t = static_cast<float>(i) / 48000.0f;
+        const auto voice = 0.18f * std::sin(2.0f * juce::MathConstants<float>::pi * 180.0f * t)
+            + (i > 12000 && i < 18000 ? 0.035f * std::sin(2.0f * juce::MathConstants<float>::pi * 3200.0f * t) : 0.0f);
+        const auto carrier = 0.20f * (std::sin(2.0f * juce::MathConstants<float>::pi * 110.0f * t)
+            + 0.5f * std::sin(2.0f * juce::MathConstants<float>::pi * 220.0f * t));
+        const auto output = engine.processSample(voice, carrier);
+        finite = finite && std::isfinite(output);
+        peak = juce::jmax(peak, std::abs(output));
+        energy += static_cast<double>(output) * output;
+    }
+    const auto rms = std::sqrt(energy / sampleCount);
+    std::cout << "LPC source-filter: RMS=" << rms << "; peak=" << peak
+              << "; finite=" << finite << '\\n';
+    return finite && rms > 1.0e-5 && peak < 1.5f;
+}
+
 bool testUnvoicedDetectorUsesBothCues()
 {
     const auto measureNoisePath = [](bool broadband)
@@ -601,6 +629,7 @@ int main()
     passed = testDeterministicReset() && passed;
     passed = testSampleRatesAndBlockSizes() && passed;
     passed = testConfigurationChangesRemainFinite() && passed;
+    passed = testLpcVocoderSignalIntegrity() && passed;
     passed = testUnvoicedDetectorUsesBothCues() && passed;
     passed = testPlosiveBurstIsTransientOnly() && passed;
     passed = testPlosiveDetectorTracksFastBurst() && passed;

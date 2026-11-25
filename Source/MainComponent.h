@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include "CarrierSynth.h"
 #include "VocoderEngine.h"
+#include "LpcVocoderEngine.h"
 #include "SoundFontEngine.h"
 #include "HarmonizerEngine.h"
 #include <thread>
@@ -127,6 +128,8 @@ private:
     juce::StringArray midiInputIdentifiers;
 
     juce::ComboBox processingMode;
+    juce::ComboBox vocoderEngineSelector;
+    juce::Label vocoderEngineLabel;
     juce::ComboBox carrierSource;
     juce::ComboBox midiInput;
     juce::TextButton refreshMidiButton { "Refresh" };
@@ -215,6 +218,7 @@ private:
     juce::MidiBuffer midiBuffer;
     juce::AudioBuffer<float> synthBuffer;
     VocoderEngine vocoder;
+    LpcVocoderEngine lpcVocoder;
     HarmonizerEngine harmonizer;
     juce::AudioBuffer<float> harmonizerBuffer;
     juce::String activeMidiIdentifier;
@@ -228,6 +232,11 @@ private:
     std::atomic<float> inputPeak { 0.0f };
     std::atomic<float> outputPeak { 0.0f };
     std::atomic<int> selectedMode { 0 };
+    std::atomic<int> selectedVocoderEngine { 0 };
+    int audioCurrentVocoderEngine = 0;
+    int audioPreviousVocoderEngine = 0;
+    int audioVocoderCrossfadePosition = 480;
+    int audioVocoderCrossfadeLength = 480;
     std::atomic<int> selectedCarrier { 0 };
     std::atomic<bool> useSoundFontCarrier { false };
     std::atomic<bool> monitorMicrophone { false };

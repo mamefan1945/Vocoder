@@ -135,6 +135,22 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     };
     addAndMakeVisible(processingMode);
 
+    vocoderEngineLabel.setText("Vocoder engine", juce::dontSendNotification);
+    addAndMakeVisible(vocoderEngineLabel);
+    vocoderEngineSelector.addItem("Classic Filterbank", 1);
+    vocoderEngineSelector.addItem("LPC / Source-Filter (experimental)", 2);
+    vocoderEngineSelector.setSelectedId(1, juce::dontSendNotification);
+    vocoderEngineSelector.setTooltip("Selects the vocoder algorithm. Classic Filterbank preserves the original sound; LPC / Source-Filter is an experimental alternative. Switching is smoothed while audio runs.");
+    vocoderEngineSelector.onChange = [this]
+    {
+        selectedVocoderEngine.store(vocoderEngineSelector.getSelectedId() == 2 ? 1 : 0,
+                                    std::memory_order_relaxed);
+        statusLabel.setText(vocoderEngineSelector.getSelectedId() == 2
+            ? "LPC / Source-Filter selected (experimental)"
+            : "Classic Filterbank selected", juce::dontSendNotification);
+    };
+    addAndMakeVisible(vocoderEngineSelector);
+
     carrierLabel.setText("Carrier", juce::dontSendNotification);
     addAndMakeVisible(carrierLabel);
     carrierSource.addItem("Internal MIDI synth", 1);
@@ -481,6 +497,8 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     // parameter's role and the audible trade-offs of changing it.
     addControlInfo(modeLabel, "Processing mode",
         "Pass-through sends the input directly to the output. Vocoder uses the voice to shape a selected carrier sound. Harmonizer detects the voice pitch and creates notes from the keys you play. Each mode has different controls and a different sound.");
+    addControlInfo(vocoderEngineLabel, "Vocoder engine",
+        "Classic Filterbank is the original 56-band analysis/synthesis design. LPC / Source-Filter is an experimental alternative that estimates a vocal-tract model from the incoming voice and filters the played carrier through that model. It is a different sound and may use more CPU; it is not yet the default.");
     addControlInfo(carrierLabel, "Carrier source",
         "Selects what sound the Vocoder reshapes. Internal MIDI synth uses the built-in oscillator or SoundFont instrument. External input 2 uses audio arriving on your interface's second input. The external option requires a correctly connected second input.");
     addControlInfo(carrierPresetLabel, "Carrier profile",
@@ -728,6 +746,8 @@ void MainComponent::updateModeControls()
     const auto harmonizerMode = mode == 3;
     const auto hasKeyboard = vocoderMode || harmonizerMode;
     const auto show = [](juce::Component& component, bool visible) { component.setVisible(visible); };
+    show(vocoderEngineLabel, vocoderMode);
+    show(vocoderEngineSelector, vocoderMode);
     show(carrierLabel, vocoderMode);
     show(carrierSource, vocoderMode);
     show(carrierPresetLabel, vocoderMode);
@@ -1239,7 +1259,11 @@ void MainComponent::resized()
     }
     if (vocoderMode)
     {
-        area.removeFromTop(8);
+        area.removeFromTop(6);
+        row = area.removeFromTop(30);
+        vocoderEngineLabel.setBounds(row.removeFromLeft(112));
+        vocoderEngineSelector.setBounds(row.removeFromLeft(300));
+        area.removeFromTop(6);
         row = area.removeFromTop(32);
         carrierLabel.setBounds(row.removeFromLeft(58));
         carrierSource.setBounds(row.removeFromLeft(150));
@@ -1441,6 +1465,7 @@ void MainComponent::savePreset()
             juce::DynamicObject::Ptr data = new juce::DynamicObject();
             data->setProperty("formatVersion", 1);
             data->setProperty("mode", processingMode.getSelectedId());
+            data->setProperty("vocoderEngine", vocoderEngineSelector.getSelectedId());
             data->setProperty("carrierSource", carrierSource.getSelectedId());
             data->setProperty("waveform", waveform.getSelectedId());
             data->setProperty("carrierPreset", carrierPreset.getSelectedId());
@@ -1520,6 +1545,9 @@ void MainComponent::applyPreset(const juce::var& preset)
     processingMode.setSelectedId(juce::jlimit(1, 3,
         static_cast<int>(preset.getProperty("mode", processingMode.getSelectedId()))),
         juce::sendNotificationSync);
+    vocoderEngineSelector.setSelectedId(juce::jlimit(1, 2,
+        static_cast<int>(preset.getProperty("vocoderEngine", vocoderEngineSelector.getSelectedId()))),
+        juce::sendNotificationSync);
     carrierSource.setSelectedId(juce::jlimit(1, 2,
         static_cast<int>(preset.getProperty("carrierSource", carrierSource.getSelectedId()))),
         juce::sendNotificationSync);
@@ -1571,6 +1599,7 @@ void MainComponent::sliderValueChanged(juce::Slider* slider)
         const auto gain = static_cast<float>(outputLevel.getValue());
         outputGain.store(gain);
         vocoder.setOutputGain(gain);
+        lpcVocoder.setOutputGain(gain);
     }
     else if (slider == &attackTime)
         vocoder.setAttackMs(static_cast<float>(attackTime.getValue()));
@@ -1596,6 +1625,7 @@ void MainComponent::sliderValueChanged(juce::Slider* slider)
     {
         const auto mix = static_cast<float>(dryWetMix.getValue() / 100.0);
         vocoder.setDryWet(mix);
+        lpcVocoder.setDryWet(mix);
         harmonizerMix.store(mix, std::memory_order_relaxed);
     }
     else if (slider == &formantShiftSlider)
@@ -1705,8 +1735,13 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
         externalMidiCollector.reset(device->getCurrentSampleRate());
         testAudioTransport.prepareToPlay(device->getCurrentBufferSizeSamples(), device->getCurrentSampleRate());
         testAudioBuffer.setSize(1, juce::jmax(512, device->getCurrentBufferSizeSamples()), false, false, true);
-        writeStartupTrace("Preparing vocoder");
+        writeStartupTrace("Preparing vocoder engines");
         vocoder.prepare(device->getCurrentSampleRate());
+        lpcVocoder.prepare(device->getCurrentSampleRate());
+        audioVocoderCrossfadeLength = juce::jmax(1, juce::roundToInt(device->getCurrentSampleRate() * 0.010));
+        audioVocoderCrossfadePosition = audioVocoderCrossfadeLength;
+        audioCurrentVocoderEngine = selectedVocoderEngine.load(std::memory_order_relaxed);
+        audioPreviousVocoderEngine = audioCurrentVocoderEngine;
         writeStartupTrace("Preparing carrier synth");
         carrierSynth.setCurrentPlaybackSampleRate(device->getCurrentSampleRate());
         synthBuffer.setSize(1, juce::jmax(512, device->getCurrentBufferSizeSamples()), false, false, true);
@@ -1745,6 +1780,7 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
 void MainComponent::audioDeviceStopped()
 {
     vocoder.reset();
+    lpcVocoder.reset();
     harmonizer.reset();
     testAudioTransport.releaseResources();
     juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<MainComponent>(this)]
@@ -1844,10 +1880,31 @@ void MainComponent::processAudio(const float* const* inputChannelData,
         // Keep the analysis/envelope state moving even when no internal MIDI
         // note is held. Passing silence as the carrier lets speech envelopes
         // decay naturally without freezing stale state between notes.
-        const auto vocoderOutput = vocoderEnabled
-            ? vocoder.processSample(voice, external, externalCarrier,
-                                    carrierReady ? synth : 0.0f)
-            : 0.0f;
+        float vocoderOutput = 0.0f;
+        if (vocoderEnabled)
+        {
+            const auto carrier = carrierReady ? synth : 0.0f;
+            // Keep both algorithms warm so engine changes do not expose stale
+            // analysis state. A 10 ms equal-power transition avoids a hard click.
+            const auto filterbank = vocoder.processSample(voice, external, externalCarrier, carrier);
+            const auto sourceFilter = lpcVocoder.processSample(voice,
+                externalCarrier ? external : carrier);
+            const auto requestedEngine = selectedVocoderEngine.load(std::memory_order_relaxed);
+            if (requestedEngine != audioCurrentVocoderEngine)
+            {
+                audioPreviousVocoderEngine = audioCurrentVocoderEngine;
+                audioCurrentVocoderEngine = requestedEngine;
+                audioVocoderCrossfadePosition = 0;
+            }
+            const auto alpha = juce::jlimit(0.0f, 1.0f,
+                static_cast<float>(audioVocoderCrossfadePosition)
+                / static_cast<float>(audioVocoderCrossfadeLength));
+            const auto oldOutput = audioPreviousVocoderEngine == 0 ? filterbank : sourceFilter;
+            const auto newOutput = audioCurrentVocoderEngine == 0 ? filterbank : sourceFilter;
+            vocoderOutput = oldOutput * (1.0f - alpha) + newOutput * alpha;
+            if (audioVocoderCrossfadePosition < audioVocoderCrossfadeLength)
+                ++audioVocoderCrossfadePosition;
+        }
         const auto harmonizerOutput = harmonizerEnabled
             ? harmonizerBuffer.getReadPointer(0)[sample]
             : 0.0f;

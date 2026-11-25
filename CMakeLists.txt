@@ -93,6 +93,8 @@ target_sources(PrismaVox PRIVATE
     Source/HarmonizerEngine.h
     Source/HarmonizerEngine.cpp
     Source/VocoderEngine.cpp
+    Source/LpcVocoderEngine.h
+    Source/LpcVocoderEngine.cpp
 )
 
 if(WIN32)
@@ -174,6 +176,8 @@ target_sources(VocoderDSPTests PRIVATE
     Tests/VocoderDSPTests.cpp
     Source/VocoderEngine.h
     Source/VocoderEngine.cpp
+    Source/LpcVocoderEngine.h
+    Source/LpcVocoderEngine.cpp
 )
 target_compile_definitions(VocoderDSPTests PRIVATE
     JUCE_WEB_BROWSER=0
