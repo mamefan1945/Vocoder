@@ -63,8 +63,11 @@ void ProAudioLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int 
                 * static_cast<float>(tick) / 10.0f;
             const auto major = (tick % 2) == 0;
             g.setColour(juce::Colour(major ? 0xff75818d : 0xff46515c));
-            g.drawLine(trackX - (major ? 19.0f : 14.0f), tickY,
-                       trackX - 7.0f, tickY, major ? 1.2f : 0.8f);
+            const auto tickLength = major ? 12.0f : 7.0f;
+            const auto tickWidth = major ? 1.2f : 0.8f;
+            // Symmetric engraved scale marks on both sides of the fader slot.
+            g.drawLine(trackX - 19.0f, tickY, trackX - 7.0f, tickY, tickWidth);
+            g.drawLine(trackX + 7.0f, tickY, trackX + 19.0f, tickY, tickWidth);
         }
         g.setColour(juce::Colour(0xff080b0f));
         g.fillRoundedRectangle(trackX - 4.5f, trackTop, 9.0f,
