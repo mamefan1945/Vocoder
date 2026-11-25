@@ -395,10 +395,8 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     pitchHoldSlider.setTooltip("How long the last reliable vocal pitch is retained through unvoiced gaps.");
     configureControl(pitchRecoverySlider, pitchRecoveryLabel, "Pitch recovery", 50.0, 1000.0, 10.0, 250.0, " ms");
     pitchRecoverySlider.setTooltip("How quickly the held pitch fades after the hold time expires.");
-    inputMeterLabel.setText("Input: -120.0 dBFS", juce::dontSendNotification);
-    outputMeterLabel.setText("Output: -120.0 dBFS", juce::dontSendNotification);
-    addAndMakeVisible(inputMeterLabel);
-    addAndMakeVisible(outputMeterLabel);
+    addAndMakeVisible(inputLevelMeter);
+    addAndMakeVisible(outputLevelMeter);
     harmonizerPitchLabel.setText("Pitch: waiting for voice", juce::dontSendNotification);
     harmonizerPitchLabel.setTooltip("Live detected vocal fundamental, musical note, and PSOLA grain coverage.");
     addAndMakeVisible(harmonizerPitchLabel);
@@ -1379,9 +1377,10 @@ void MainComponent::resized()
         pitchRecoveryLabel.setBounds(row.removeFromLeft(90));
         pitchRecoverySlider.setBounds(row.removeFromLeft(150));
     }
-    row = area.removeFromTop(24);
-    inputMeterLabel.setBounds(row.removeFromLeft(180));
-    outputMeterLabel.setBounds(row);
+    row = area.removeFromTop(116);
+    inputLevelMeter.setBounds(row.removeFromLeft(86));
+    row.removeFromLeft(10);
+    outputLevelMeter.setBounds(row.removeFromLeft(86));
     if (harmonizerMode)
     {
         area.removeFromTop(3);
@@ -1705,8 +1704,8 @@ void MainComponent::timerCallback()
     {
         return peak > 0.000001f ? juce::Decibels::gainToDecibels(peak, -120.0f) : -120.0f;
     };
-    inputMeterLabel.setText("Input: " + juce::String(toDb(input), 1) + " dBFS", juce::dontSendNotification);
-    outputMeterLabel.setText("Output: " + juce::String(toDb(output), 1) + " dBFS", juce::dontSendNotification);
+    inputLevelMeter.setLevelDb(toDb(input));
+    outputLevelMeter.setLevelDb(toDb(output));
 
     if (processingMode.getSelectedId() == 3)
     {
