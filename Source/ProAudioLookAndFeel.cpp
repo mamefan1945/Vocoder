@@ -55,12 +55,40 @@ void ProAudioLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int 
     if (style == juce::Slider::LinearVertical)
     {
         const auto trackX = area.getCentreX();
-        g.setColour(juce::Colour(0xff0b0f13));
-        g.fillRoundedRectangle(trackX-3.0f, area.getY(), 6.0f, area.getHeight(), 3.0f);
+        const auto trackTop = area.getY() + 8.0f;
+        const auto trackBottom = area.getBottom() - 8.0f;
+        for (int tick = 0; tick <= 10; ++tick)
+        {
+            const auto tickY = trackTop + (trackBottom - trackTop)
+                * static_cast<float>(tick) / 10.0f;
+            const auto major = (tick % 2) == 0;
+            g.setColour(juce::Colour(major ? 0xff75818d : 0xff46515c));
+            g.drawLine(trackX - (major ? 19.0f : 14.0f), tickY,
+                       trackX - 7.0f, tickY, major ? 1.2f : 0.8f);
+        }
+        g.setColour(juce::Colour(0xff080b0f));
+        g.fillRoundedRectangle(trackX - 4.5f, trackTop, 9.0f,
+                               trackBottom - trackTop, 4.0f);
+        g.setColour(juce::Colour(0xff303b46));
+        g.drawRoundedRectangle(trackX - 4.5f, trackTop, 9.0f,
+                               trackBottom - trackTop, 4.0f, 1.0f);
         g.setColour(juce::Colour(0xff39c7b4));
-        g.fillRoundedRectangle(trackX-2.0f, pos, 4.0f, area.getBottom()-pos, 2.0f);
-        g.setColour(juce::Colour(0xffdce5ec));
-        g.fillRoundedRectangle(trackX-9.0f, pos-5.0f, 18.0f, 10.0f, 2.0f);
+        g.fillRoundedRectangle(trackX - 1.5f, pos, 3.0f,
+                               juce::jmax(0.0f, trackBottom - pos), 1.5f);
+        auto cap = juce::Rectangle<float>(trackX - 13.0f, pos - 8.0f, 26.0f, 16.0f);
+        juce::ColourGradient metal(juce::Colour(0xfff0f4f7), cap.getX(), cap.getY(),
+                                   juce::Colour(0xff8795a2), cap.getX(), cap.getBottom(), false);
+        g.setGradientFill(metal);
+        g.fillRoundedRectangle(cap, 3.0f);
+        g.setColour(juce::Colour(0xff26313b));
+        g.drawRoundedRectangle(cap, 3.0f, 1.0f);
+        g.setColour(juce::Colour(0xff667482));
+        g.drawLine(cap.getX() + 5.0f, cap.getCentreY() - 3.0f,
+                   cap.getRight() - 5.0f, cap.getCentreY() - 3.0f, 0.8f);
+        g.drawLine(cap.getX() + 5.0f, cap.getCentreY(),
+                   cap.getRight() - 5.0f, cap.getCentreY(), 0.8f);
+        g.drawLine(cap.getX() + 5.0f, cap.getCentreY() + 3.0f,
+                   cap.getRight() - 5.0f, cap.getCentreY() + 3.0f, 0.8f);
         return;
     }
     const auto cy = area.getCentreY();
