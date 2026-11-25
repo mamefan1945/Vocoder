@@ -745,6 +745,11 @@ void MainComponent::updateSoundFontControls()
     resized();
 }
 
+void MainComponent::selectModeForUiCapture(int mode)
+{
+    processingMode.setSelectedId(juce::jlimit(1, 3, mode), juce::sendNotificationSync);
+}
+
 void MainComponent::updateModeControls()
 {
     const auto mode = processingMode.getSelectedId();
