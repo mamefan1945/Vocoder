@@ -9,8 +9,7 @@ namespace
         const auto traceFile = juce::File::getSpecialLocation(
             juce::File::userDesktopDirectory).getChildFile("PrismaVox-startup.log");
         traceFile.appendText(juce::Time::getCurrentTime().toISO8601(true)
-            + " | " + message + "\r
-");
+            + " | " + message + "\\r\\n");
     }
 
     class ControlInfoButton final : public juce::TextButton
