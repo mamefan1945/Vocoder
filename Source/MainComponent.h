@@ -201,8 +201,55 @@ private:
     juce::Label pitchSensitivityLabel;
     juce::Label pitchHoldLabel;
     juce::Label pitchRecoveryLabel;
-    juce::Label inputMeterLabel;
-    juce::Label outputMeterLabel;
+    class StereoLedMeter final : public juce::Component
+    {
+    public:
+        explicit StereoLedMeter(const juce::String& title) : name(title) {}
+        void setLevelDb(float db) { levelDb = juce::jlimit(-60.0f, 0.0f, db); repaint(); }
+        void paint(juce::Graphics& g) override
+        {
+            auto bounds = getLocalBounds().toFloat();
+            g.setColour(juce::Colour(0xff202832));
+            g.fillRoundedRectangle(bounds, 5.0f);
+            g.setColour(juce::Colour(0xffdce5ee));
+            g.setFont(juce::Font(juce::FontOptions(12.0f, juce::Font::bold)));
+            g.drawText(name, getLocalBounds().removeFromTop(19), juce::Justification::centred);
+            auto area = getLocalBounds().toFloat().reduced(12.0f, 23.0f);
+            const float gap = 7.0f;
+            const float barWidth = (area.getWidth() - gap) * 0.5f;
+            const int segments = 24;
+            const float segmentGap = 2.0f;
+            const float segmentHeight = (area.getHeight() - (segments - 1) * segmentGap) / segments;
+            const int lit = juce::jlimit(0, segments, juce::roundToInt(
+                (levelDb + 60.0f) / 60.0f * segments));
+            for (int channel = 0; channel < 2; ++channel)
+            {
+                const float x = area.getX() + channel * (barWidth + gap);
+                g.setColour(juce::Colour(0xff0b1015));
+                g.fillRoundedRectangle(x, area.getY(), barWidth, area.getHeight(), 2.0f);
+                for (int segment = 0; segment < segments; ++segment)
+                {
+                    const float y = area.getBottom() - (segment + 1) * (segmentHeight + segmentGap) + segmentGap;
+                    const bool active = segment >= segments - lit;
+                    juce::Colour colour = segment >= 21 ? juce::Colour(0xffe34d4d)
+                        : (segment >= 17 ? juce::Colour(0xffe8b943) : juce::Colour(0xff39c77b));
+                    g.setColour(active ? colour : juce::Colour(0xff29323a));
+                    g.fillRoundedRectangle(x + 2.0f, y, barWidth - 4.0f,
+                                           segmentHeight, 1.0f);
+                }
+                g.setColour(juce::Colour(0xffaebbc7));
+                g.setFont(juce::Font(juce::FontOptions(9.0f)));
+                g.drawText(channel == 0 ? "L" : "R",
+                    juce::Rectangle<float>(x, area.getBottom() + 2.0f, barWidth, 11.0f),
+                    juce::Justification::centred);
+            }
+        }
+    private:
+        juce::String name;
+        float levelDb = -60.0f;
+    };
+    StereoLedMeter inputLevelMeter { "INPUT" };
+    StereoLedMeter outputLevelMeter { "OUTPUT" };
     juce::Label harmonizerPitchLabel;
     juce::Label harmonizerConfidenceLed;
     juce::ToggleButton microphoneMonitor;
