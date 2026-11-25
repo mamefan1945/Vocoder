@@ -230,7 +230,7 @@ private:
                 for (int segment = 0; segment < segments; ++segment)
                 {
                     const float y = area.getBottom() - (segment + 1) * (segmentHeight + segmentGap) + segmentGap;
-                    const bool active = segment >= segments - lit;
+                    const bool active = segment < lit;
                     juce::Colour colour = segment >= 21 ? juce::Colour(0xffe34d4d)
                         : (segment >= 17 ? juce::Colour(0xffe8b943) : juce::Colour(0xff39c77b));
                     g.setColour(active ? colour : juce::Colour(0xff29323a));
