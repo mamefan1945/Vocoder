@@ -87,6 +87,7 @@ target_sources(PrismaVox PRIVATE
     Source/Main.cpp
     Source/MainComponent.h
     Source/MainComponent.cpp
+    Source/ProAudioLookAndFeel.cpp
     Source/CarrierSynth.h
     Source/CarrierSynth.cpp
     Source/SoundFontEngine.cpp
