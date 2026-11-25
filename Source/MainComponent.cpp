@@ -813,8 +813,8 @@ void MainComponent::updateModeControls()
     show(dryWetMix, showMix);
     show(outputLevelLabel, true);
     show(outputLevel, true);
-    show(inputMeterLabel, true);
-    show(outputMeterLabel, true);
+    show(inputLevelMeter, true);
+    show(outputLevelMeter, true);
     resized();
 }
 void MainComponent::populateSoundFontInstruments()
