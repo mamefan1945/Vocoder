@@ -69,6 +69,28 @@ namespace
     };
 }
 
+// Keep the full control surface available on compact/high-DPI displays.
+// The application layout retains its design size; the viewport exposes any
+// content that cannot fit and expands the viewed component on larger windows.
+class MainContentViewport final : public juce::Viewport
+{
+public:
+    MainContentViewport()
+    {
+        setScrollBarsShown(true, true);
+        setScrollBarThickness(12);
+        setViewedComponent(new MainComponent(), true);
+    }
+
+    void resized() override
+    {
+        if (auto* content = getViewedComponent())
+            content->setSize(juce::jmax(1380, getWidth() - 12),
+                             juce::jmax(790, getHeight() - 12));
+        juce::Viewport::resized();
+    }
+};
+
 class VocoderApplication final : public juce::JUCEApplication
 {
 public:
@@ -104,8 +126,17 @@ private:
                     safeThis->startMainComponent();
             }), true);
             setResizable(true, true);
-            setResizeLimits(1180, 700, 1920, 1200);
-            centreWithSize(1380, 790);
+            // JUCE uses logical component coordinates and the process manifest
+            // enables per-monitor DPI awareness. Start within the active display
+            // work area rather than assuming a fixed physical pixel resolution.
+            const auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
+            const auto available = display != nullptr
+                ? display->userArea : juce::Rectangle<int>(0, 0, 1380, 790);
+            setResizeLimits(680, 480, 0, 0);
+            centreWithSize(juce::jmax(680, juce::jmin(1380,
+                                static_cast<int>(available.getWidth() * 0.90f))),
+                           juce::jmax(480, juce::jmin(790,
+                                static_cast<int>(available.getHeight() * 0.90f))));
             setVisible(true);
             applySystemTitleBarTheme();
             applyNativeApplicationIcon();
@@ -173,7 +204,7 @@ private:
             // own worker thread. Install the usable UI immediately so a slow
             // or unavailable audio driver cannot leave the app on the splash.
             mainComponentInstalled = true;
-            setContentOwned(new MainComponent(), true);
+            setContentOwned(new MainContentViewport(), true);
         }
 #if JUCE_WINDOWS
         HICON nativeIcon = nullptr;
