@@ -103,7 +103,14 @@ private:
     void timerCallback() override
     {
         stopTimer();
-        const auto image = createComponentSnapshot(getLocalBounds(), true, 1.0f);
+        // Capture the complete design surface rather than the viewport's
+        // currently visible slice. This keeps CI screenshots useful even
+        // when the hosted runner has a small desktop resolution.
+        auto* content = getViewedComponent();
+        if (content == nullptr)
+            return;
+        const auto image = content->createComponentSnapshot(
+            content->getLocalBounds(), true, 1.0f);
         if (image.isNull())
             return;
         juce::File outputFile(capturePath);
