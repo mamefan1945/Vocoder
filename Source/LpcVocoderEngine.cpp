@@ -135,6 +135,20 @@ float LpcVocoderEngine::processSample(float voice, float carrier) noexcept
     const auto carrierCoefficient = std::exp(-1.0f / (0.008f * static_cast<float>(sampleRate)));
     carrierRms = carrierCoefficient * carrierRms
         + (1.0f - carrierCoefficient) * carrier * carrier;
+
+    const auto mix = dryWet.load(std::memory_order_relaxed);
+    const auto gain = outputGain.load(std::memory_order_relaxed);
+
+    // The LPC filter is a resonator: exciting it with its unvoiced-noise
+    // component while the MIDI carrier is silent creates whistles/chirps.
+    // Once the carrier envelope has decayed below -80 dBFS, close the wet
+    // path and clear its delay line so no stored resonance can ring on.
+    if (carrierRms < 1.0e-8f)
+    {
+        previousOutput.fill(0.0f);
+        return voice * (1.0f - mix) * gain;
+    }
+
     noiseState ^= noiseState << 13;
     noiseState ^= noiseState >> 17;
     noiseState ^= noiseState << 5;
@@ -166,8 +180,6 @@ float LpcVocoderEngine::processSample(float voice, float carrier) noexcept
     // a purely periodic carrier cannot reproduce. Soft limiting contains
     // occasional resonant peaks without hard clipping.
     const auto wet = std::tanh((synthesized + voice * 0.10f * unvoicedAmount) * 1.6f);
-    const auto mix = dryWet.load(std::memory_order_relaxed);
-    const auto gain = outputGain.load(std::memory_order_relaxed);
     const auto output = (wet * mix + voice * (1.0f - mix)) * gain;
     return std::isfinite(output) ? output : 0.0f;
 }
