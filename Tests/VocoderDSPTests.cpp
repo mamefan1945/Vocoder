@@ -408,6 +408,70 @@ bool testLpcVocoderSignalIntegrity()
     return finite && rms > 1.0e-5 && peak < 1.5f;
 }
 
+bool testLpcSilentCarrierGate()
+{
+    LpcVocoderEngine engine;
+    engine.prepare(48000.0);
+    engine.setDryWet(1.0f);
+
+    float silentWetPeak = 0.0f;
+    bool finite = true;
+    for (int i = 0; i < 4800; ++i)
+    {
+        const auto voice = 0.20f * std::sin(
+            2.0f * juce::MathConstants<float>::pi * 180.0f * static_cast<float>(i) / 48000.0f);
+        const auto output = engine.processSample(voice, 0.0f);
+        finite = finite && std::isfinite(output);
+        silentWetPeak = juce::jmax(silentWetPeak, std::abs(output));
+    }
+
+    // Closing the wet path must not break the user's dry-bypass endpoint.
+    engine.setDryWet(0.0f);
+    float dryMaximumError = 0.0f;
+    for (int i = 0; i < 2048; ++i)
+    {
+        const auto voice = 0.20f * std::sin(
+            2.0f * juce::MathConstants<float>::pi * 180.0f * static_cast<float>(i) / 48000.0f);
+        dryMaximumError = juce::jmax(dryMaximumError,
+            std::abs(engine.processSample(voice, 0.0f) - voice));
+    }
+
+    // Exercise note-off after a real carrier has excited the LPC resonator.
+    engine.reset();
+    engine.setDryWet(1.0f);
+    float activeCarrierPeak = 0.0f;
+    for (int i = 0; i < 9600; ++i)
+    {
+        const auto t = static_cast<float>(i) / 48000.0f;
+        const auto voice = 0.20f * std::sin(2.0f * juce::MathConstants<float>::pi * 180.0f * t);
+        const auto carrier = 0.20f * (
+            std::sin(2.0f * juce::MathConstants<float>::pi * 110.0f * t)
+            + 0.5f * std::sin(2.0f * juce::MathConstants<float>::pi * 220.0f * t));
+        const auto output = engine.processSample(voice, carrier);
+        finite = finite && std::isfinite(output);
+        activeCarrierPeak = juce::jmax(activeCarrierPeak, std::abs(output));
+    }
+
+    float settledTailPeak = 0.0f;
+    for (int i = 0; i < 14400; ++i)
+    {
+        const auto t = static_cast<float>(i + 9600) / 48000.0f;
+        const auto voice = 0.20f * std::sin(2.0f * juce::MathConstants<float>::pi * 180.0f * t);
+        const auto output = engine.processSample(voice, 0.0f);
+        finite = finite && std::isfinite(output);
+        if (i >= 12000) // final 50 ms, well after the carrier envelope should close
+            settledTailPeak = juce::jmax(settledTailPeak, std::abs(output));
+    }
+
+    std::cout << "LPC silent-carrier gate: wet peak=" << silentWetPeak
+              << "; dry bypass max error=" << dryMaximumError
+              << "; active carrier peak=" << activeCarrierPeak
+              << "; settled note-off tail peak=" << settledTailPeak
+              << "; finite=" << finite << '\\n';
+    return finite && silentWetPeak < 1.0e-8f && dryMaximumError < 1.0e-6f
+        && activeCarrierPeak > 1.0e-5f && settledTailPeak < 1.0e-8f;
+}
+
 bool testUnvoicedDetectorUsesBothCues()
 {
     const auto measureNoisePath = [](bool broadband)
@@ -630,6 +694,7 @@ int main()
     passed = testSampleRatesAndBlockSizes() && passed;
     passed = testConfigurationChangesRemainFinite() && passed;
     passed = testLpcVocoderSignalIntegrity() && passed;
+    passed = testLpcSilentCarrierGate() && passed;
     passed = testUnvoicedDetectorUsesBothCues() && passed;
     passed = testPlosiveBurstIsTransientOnly() && passed;
     passed = testPlosiveDetectorTracksFastBurst() && passed;
