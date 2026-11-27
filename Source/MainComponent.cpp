@@ -140,7 +140,15 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     addAndMakeVisible(engineDisplay);
     processingMode.onChange = [this]
     {
-        selectedMode.store(processingMode.getSelectedId() - 1, std::memory_order_relaxed);
+        const auto mode = processingMode.getSelectedId();
+        selectedMode.store(mode - 1, std::memory_order_relaxed);
+        const auto text = mode == 2
+            ? (vocoderEngineSelector.getSelectedId() == 2 ? "LPC / SOURCE-FILTER" : "CLASSIC FILTERBANK")
+            : (mode == 3 ? "HARMONIZER" : "PASS-THROUGH");
+        engineDisplay.setText(text, juce::dontSendNotification);
+        engineDisplay.setColour(juce::Label::textColourId,
+            mode == 2 && vocoderEngineSelector.getSelectedId() == 2
+                ? juce::Colour(0xffffd27a) : juce::Colour(0xffa8f0a0));
         updateModeControls();
     };
     addAndMakeVisible(processingMode);
@@ -153,11 +161,17 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     vocoderEngineSelector.setTooltip("Selects the vocoder algorithm. Classic Filterbank preserves the original sound; LPC / Source-Filter is an experimental alternative. Switching is smoothed while audio runs.");
     vocoderEngineSelector.onChange = [this]
     {
-        selectedVocoderEngine.store(vocoderEngineSelector.getSelectedId() == 2 ? 1 : 0,
-                                    std::memory_order_relaxed);
-        statusLabel.setText(vocoderEngineSelector.getSelectedId() == 2
-            ? "LPC / Source-Filter selected (experimental)"
-            : "Classic Filterbank selected", juce::dontSendNotification);
+        const auto useLpc = vocoderEngineSelector.getSelectedId() == 2;
+        selectedVocoderEngine.store(useLpc ? 1 : 0, std::memory_order_relaxed);
+        if (processingMode.getSelectedId() == 2)
+        {
+            engineDisplay.setText(useLpc ? "LPC / SOURCE-FILTER" : "CLASSIC FILTERBANK",
+                                  juce::dontSendNotification);
+            engineDisplay.setColour(juce::Label::textColourId,
+                useLpc ? juce::Colour(0xffffd27a) : juce::Colour(0xffa8f0a0));
+        }
+        statusLabel.setText(useLpc ? "LPC / Source-Filter selected (experimental)"
+                                   : "Classic Filterbank selected", juce::dontSendNotification);
     };
     addAndMakeVisible(vocoderEngineSelector);
 
