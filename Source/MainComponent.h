@@ -10,7 +10,7 @@
 #include <thread>
 #include <vector>
 
-class SegmentedLcdLabel final : public juce::Label
+class DotMatrixLcdLabel final : public juce::Label
 {
 public:
     void paint(juce::Graphics& graphics) override;
@@ -138,7 +138,7 @@ private:
     juce::StringArray midiInputIdentifiers;
 
     juce::ComboBox processingMode;
-    SegmentedLcdLabel engineDisplay;
+    DotMatrixLcdLabel engineDisplay;
     juce::ComboBox vocoderEngineSelector;
     juce::Label vocoderEngineLabel;
     juce::ComboBox carrierSource;
