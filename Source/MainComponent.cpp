@@ -130,7 +130,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     processingMode.addItem("Harmonizer", 3);
     processingMode.setSelectedId(1);
     engineDisplay.setText("CLASSIC FILTERBANK", juce::dontSendNotification);
-    engineDisplay.setFont(juce::Font(juce::FontOptions(15.0f, juce::Font::bold).withTypefaceStyle("Monospaced")));
+    engineDisplay.setFont(juce::Font(juce::FontOptions(15.0f).withName("Consolas").withStyle("Bold")));
     engineDisplay.setJustificationType(juce::Justification::centred);
     engineDisplay.setColour(juce::Label::backgroundColourId, juce::Colour(0xff18251d));
     engineDisplay.setColour(juce::Label::textColourId, juce::Colour(0xffa8f0a0));
