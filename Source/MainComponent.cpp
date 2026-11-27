@@ -130,7 +130,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     processingMode.addItem("Harmonizer", 3);
     processingMode.setSelectedId(1);
     engineDisplay.setText("CLASSIC FILTERBANK", juce::dontSendNotification);
-    engineDisplay.setColour(juce::Label::textColourId, juce::Colour(0xffa8ffad));
+    engineDisplay.setColour(juce::Label::textColourId, juce::Colour(0xffffffff));
     engineDisplay.setTooltip("Live vocoder engine selection");
     addAndMakeVisible(engineDisplay);
     processingMode.onChange = [this]
@@ -143,7 +143,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
         engineDisplay.setText(text, juce::dontSendNotification);
         engineDisplay.setColour(juce::Label::textColourId,
             mode == 2 && vocoderEngineSelector.getSelectedId() == 2
-                ? juce::Colour(0xffffd27a) : juce::Colour(0xffa8f0a0));
+                ? juce::Colour(0xffffffff) : juce::Colour(0xffffffff));
         updateModeControls();
     };
     addAndMakeVisible(processingMode);
@@ -163,7 +163,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
             engineDisplay.setText(useLpc ? "LPC / SOURCE-FILTER" : "CLASSIC FILTERBANK",
                                   juce::dontSendNotification);
             engineDisplay.setColour(juce::Label::textColourId,
-                useLpc ? juce::Colour(0xffffd27a) : juce::Colour(0xffa8f0a0));
+                useLpc ? juce::Colour(0xffffffff) : juce::Colour(0xffffffff));
         }
         statusLabel.setText(useLpc ? "LPC / Source-Filter selected (experimental)"
                                    : "Classic Filterbank selected", juce::dontSendNotification);
@@ -1241,12 +1241,12 @@ bool MainComponent::keyStateChanged(bool, juce::Component*)
 void SegmentedLcdLabel::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    g.setColour(juce::Colour(0xff080f0b));
+    g.setColour(juce::Colour(0xff06152b));
     g.fillRoundedRectangle(bounds, 5.0f);
-    g.setColour(juce::Colour(0xff35483a));
+    g.setColour(juce::Colour(0xff315b88));
     g.drawRoundedRectangle(bounds.reduced(0.7f), 5.0f, 1.0f);
     auto display = bounds.reduced(8.0f, 4.0f);
-    g.setColour(juce::Colour(0xff101d14));
+    juce::ColourGradient backlight(juce::Colour(0xff1765b5), display.getX(), display.getY(),\n                                  juce::Colour(0xff0b3974), display.getRight(), display.getBottom(), false);\n    g.setGradientFill(backlight);
     g.fillRoundedRectangle(display, 2.0f);
 
     // Fourteen-segment glyphs: horizontal, vertical and diagonal strokes.
@@ -1308,7 +1308,7 @@ void SegmentedLcdLabel::paint(juce::Graphics& g)
     const auto charWidth = 14.0f * sx;
     const auto charHeight = 20.0f * sx;
     const auto baseColour = findColour(juce::Label::textColourId);
-    const auto lit = baseColour.isTransparent() ? juce::Colour(0xffa8ffad) : baseColour;
+    const auto lit = juce::Colour(0xffffffff);
 
     for (int i = 0; i < text.length(); ++i)
     {
@@ -1323,13 +1323,13 @@ void SegmentedLcdLabel::paint(juce::Graphics& g)
                                                y + starts[static_cast<size_t>(s)].y * sx);
             const auto p2 = juce::Point<float>(x + ends[static_cast<size_t>(s)].x * sx,
                                                y + ends[static_cast<size_t>(s)].y * sx);
-            g.setColour(juce::Colour(0xff23452b));
+            g.setColour(juce::Colour(0xff3974ad));
             g.drawLine(juce::Line<float>(p1, p2), 2.4f * sx);
             if ((mask & bit(s)) != 0)
             {
-                g.setColour(lit.withAlpha(0.13f));
+                g.setColour(lit.withAlpha(0.20f));
                 g.drawLine(juce::Line<float>(p1, p2), 7.0f * sx);
-                g.setColour(lit.withAlpha(0.28f));
+                g.setColour(lit.withAlpha(0.42f));
                 g.drawLine(juce::Line<float>(p1, p2), 4.2f * sx);
                 g.setColour(lit);
                 g.drawLine(juce::Line<float>(p1, p2), 1.8f * sx);
