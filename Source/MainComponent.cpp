@@ -507,7 +507,24 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
 
     keyboardComponent.setAvailableRange(12, 108);
     keyboardComponent.setKeyWidth(24.0f);
+    // Use dedicated octave controls on the right; JUCE's built-in controls
+    // place the previous-octave button at the far left of the keyboard.
+    keyboardComponent.setScrollButtonsVisible(false);
     addAndMakeVisible(keyboardComponent);
+    keyboardScrollLeft.setTooltip("Scroll the virtual keyboard one octave lower");
+    keyboardScrollLeft.onClick = [this]
+    {
+        keyboardComponent.setLowestVisibleKey(
+            juce::jmax(12, keyboardComponent.getLowestVisibleKey() - 12));
+    };
+    keyboardScrollRight.setTooltip("Scroll the virtual keyboard one octave higher");
+    keyboardScrollRight.onClick = [this]
+    {
+        keyboardComponent.setLowestVisibleKey(
+            juce::jmin(108, keyboardComponent.getLowestVisibleKey() + 12));
+    };
+    addAndMakeVisible(keyboardScrollLeft);
+    addAndMakeVisible(keyboardScrollRight);
 
     statusLabel.setText("Starting in background...", juce::dontSendNotification);
     addAndMakeVisible(statusLabel);
@@ -1521,7 +1538,12 @@ void MainComponent::resized()
     if (hasKeyboard)
     {
         area.removeFromTop(8);
-        keyboardComponent.setBounds(area.removeFromTop(88));
+        row = area.removeFromTop(88);
+        keyboardComponent.setBounds(row.removeFromLeft(juce::jmax(1, row.getWidth() - 34)));
+        auto scrollControls = row.removeFromRight(30);
+        keyboardScrollLeft.setBounds(scrollControls.removeFromTop(42));
+        scrollControls.removeFromTop(4);
+        keyboardScrollRight.setBounds(scrollControls.removeFromTop(42));
     }
     area.removeFromTop(8);
     statusLabel.setBounds(area.removeFromTop(24));
