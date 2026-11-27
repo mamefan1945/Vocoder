@@ -131,7 +131,8 @@ private:
     std::array<bool, 19> computerKeysDown {};
     juce::StringArray midiInputIdentifiers;
 
-    juce::ComboBox processingMode;\n    juce::Label engineDisplay;
+    juce::ComboBox processingMode;
+    juce::Label engineDisplay;
     juce::ComboBox vocoderEngineSelector;
     juce::Label vocoderEngineLabel;
     juce::ComboBox carrierSource;
