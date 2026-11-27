@@ -29,7 +29,7 @@ public:
     void paint(juce::Graphics& graphics) override;
     void resized() override;
     void selectModeForUiCapture(int mode);
-    int getPreferredContentHeight() const noexcept { return 900; }
+    int getPreferredContentHeight() const noexcept { return 820; }
     bool keyPressed(const juce::KeyPress& key, juce::Component* originatingComponent) override;
     bool keyStateChanged(bool isKeyDown, juce::Component* originatingComponent) override;
 
