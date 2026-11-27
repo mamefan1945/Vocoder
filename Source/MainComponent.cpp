@@ -507,24 +507,12 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
 
     keyboardComponent.setAvailableRange(12, 108);
     keyboardComponent.setKeyWidth(24.0f);
-    // Use dedicated octave controls on the right; JUCE's built-in controls
-    // place the previous-octave button at the far left of the keyboard.
-    keyboardComponent.setScrollButtonsVisible(false);
+    // JUCE automatically shows the right arrow when higher keys are hidden,
+    // the left arrow after scrolling right, and both while movement is
+    // possible in both directions. Its native controls preserve continuous
+    // keyboard scrolling and adapt to the currently visible key range.
+    keyboardComponent.setScrollButtonsVisible(true);
     addAndMakeVisible(keyboardComponent);
-    keyboardScrollLeft.setTooltip("Scroll the virtual keyboard one octave lower");
-    keyboardScrollLeft.onClick = [this]
-    {
-        keyboardComponent.setLowestVisibleKey(
-            juce::jmax(12, keyboardComponent.getLowestVisibleKey() - 12));
-    };
-    keyboardScrollRight.setTooltip("Scroll the virtual keyboard one octave higher");
-    keyboardScrollRight.onClick = [this]
-    {
-        keyboardComponent.setLowestVisibleKey(
-            juce::jmin(108, keyboardComponent.getLowestVisibleKey() + 12));
-    };
-    addAndMakeVisible(keyboardScrollLeft);
-    addAndMakeVisible(keyboardScrollRight);
 
     statusLabel.setText("Starting in background...", juce::dontSendNotification);
     addAndMakeVisible(statusLabel);
@@ -1539,11 +1527,7 @@ void MainComponent::resized()
     {
         area.removeFromTop(8);
         row = area.removeFromTop(88);
-        keyboardComponent.setBounds(row.removeFromLeft(juce::jmax(1, row.getWidth() - 34)));
-        auto scrollControls = row.removeFromRight(30);
-        keyboardScrollLeft.setBounds(scrollControls.removeFromTop(42));
-        scrollControls.removeFromTop(4);
-        keyboardScrollRight.setBounds(scrollControls.removeFromTop(42));
+        keyboardComponent.setBounds(row);
     }
     area.removeFromTop(8);
     statusLabel.setBounds(area.removeFromTop(24));
