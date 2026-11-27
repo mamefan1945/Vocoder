@@ -130,12 +130,7 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     processingMode.addItem("Harmonizer", 3);
     processingMode.setSelectedId(1);
     engineDisplay.setText("CLASSIC FILTERBANK", juce::dontSendNotification);
-    engineDisplay.setFont(juce::Font(juce::FontOptions(15.0f).withName("Consolas").withStyle("Bold")));
-    engineDisplay.setJustificationType(juce::Justification::centred);
-    engineDisplay.setColour(juce::Label::backgroundColourId, juce::Colour(0xff18251d));
-    engineDisplay.setColour(juce::Label::textColourId, juce::Colour(0xffa8f0a0));
-    engineDisplay.setColour(juce::Label::outlineColourId, juce::Colour(0xff526b55));
-    engineDisplay.setBorderSize(juce::BorderSize<int>(5, 8, 5, 8));
+    engineDisplay.setColour(juce::Label::textColourId, juce::Colour(0xffa8ffad));
     engineDisplay.setTooltip("Live vocoder engine selection");
     addAndMakeVisible(engineDisplay);
     processingMode.onChange = [this]
@@ -1241,6 +1236,106 @@ bool MainComponent::keyStateChanged(bool, juce::Component*)
         handled = true;
     }
     return handled;
+}
+
+void SegmentedLcdLabel::paint(juce::Graphics& g)
+{
+    auto bounds = getLocalBounds().toFloat();
+    g.setColour(juce::Colour(0xff080f0b));
+    g.fillRoundedRectangle(bounds, 5.0f);
+    g.setColour(juce::Colour(0xff35483a));
+    g.drawRoundedRectangle(bounds.reduced(0.7f), 5.0f, 1.0f);
+    auto display = bounds.reduced(8.0f, 4.0f);
+    g.setColour(juce::Colour(0xff101d14));
+    g.fillRoundedRectangle(display, 2.0f);
+
+    // Fourteen-segment glyphs: horizontal, vertical and diagonal strokes.
+    constexpr std::array<juce::Point<float>, 14> starts {{
+        {2,1}, {13,2}, {13,11}, {2,19}, {1,11}, {1,2}, {2,10},
+        {8,10}, {2,2}, {12,2}, {2,18}, {12,18}, {7,2}, {7,11}
+    }};
+    constexpr std::array<juce::Point<float>, 14> ends {{
+        {12,1}, {13,9}, {13,18}, {12,19}, {1,18}, {1,9}, {6,10},
+        {12,10}, {7,9}, {7,9}, {7,11}, {7,11}, {7,9}, {7,18}
+    }};
+    const auto bit = [](int n) { return static_cast<unsigned int>(1u << n); };
+    const auto glyph = [&](juce::juce_wchar ch) -> unsigned int
+    {
+        switch (juce::CharacterFunctions::toUpperCase(ch))
+        {
+            case '0': return bit(0)|bit(1)|bit(2)|bit(3)|bit(4)|bit(5);
+            case '1': return bit(1)|bit(2);
+            case '2': return bit(0)|bit(1)|bit(6)|bit(7)|bit(4)|bit(3);
+            case '3': return bit(0)|bit(1)|bit(6)|bit(7)|bit(2)|bit(3);
+            case '4': return bit(5)|bit(6)|bit(7)|bit(1)|bit(2);
+            case '5': return bit(0)|bit(5)|bit(6)|bit(7)|bit(2)|bit(3);
+            case '6': return bit(0)|bit(5)|bit(6)|bit(7)|bit(4)|bit(2)|bit(3);
+            case '7': return bit(0)|bit(1)|bit(2);
+            case '8': return bit(0)|bit(1)|bit(2)|bit(3)|bit(4)|bit(5)|bit(6)|bit(7);
+            case '9': return bit(0)|bit(1)|bit(2)|bit(3)|bit(5)|bit(6)|bit(7);
+            case 'A': return bit(0)|bit(1)|bit(2)|bit(4)|bit(5)|bit(6)|bit(7);
+            case 'B': return bit(0)|bit(1)|bit(2)|bit(3)|bit(6)|bit(7)|bit(13)|bit(4);
+            case 'C': return bit(0)|bit(3)|bit(4)|bit(5);
+            case 'D': return bit(0)|bit(1)|bit(2)|bit(3)|bit(4)|bit(13);
+            case 'E': return bit(0)|bit(3)|bit(4)|bit(5)|bit(6)|bit(7);
+            case 'F': return bit(0)|bit(4)|bit(5)|bit(6)|bit(7);
+            case 'G': return bit(0)|bit(2)|bit(3)|bit(4)|bit(5)|bit(7);
+            case 'H': return bit(1)|bit(2)|bit(4)|bit(5)|bit(6)|bit(7);
+            case 'I': return bit(0)|bit(3)|bit(12)|bit(13);
+            case 'J': return bit(1)|bit(2)|bit(3)|bit(4);
+            case 'L': return bit(3)|bit(4)|bit(5);
+            case 'N': return bit(1)|bit(2)|bit(4)|bit(5)|bit(8)|bit(11);
+            case 'O': return bit(0)|bit(1)|bit(2)|bit(3)|bit(4)|bit(5);
+            case 'P': return bit(0)|bit(1)|bit(4)|bit(5)|bit(6)|bit(7);
+            case 'R': return bit(0)|bit(1)|bit(4)|bit(5)|bit(6)|bit(7)|bit(11);
+            case 'S': return bit(0)|bit(5)|bit(6)|bit(7)|bit(2)|bit(3);
+            case 'T': return bit(0)|bit(12)|bit(13);
+            case 'U': return bit(1)|bit(2)|bit(3)|bit(4)|bit(5);
+            case 'V': return bit(1)|bit(2)|bit(9)|bit(10);
+            case 'Y': return bit(1)|bit(2)|bit(3)|bit(5)|bit(6)|bit(7);
+            case '-': return bit(6)|bit(7);
+            case '/': return bit(9)|bit(10);
+            default: return 0;
+        }
+    };
+
+    const auto text = getText().toUpperCase();
+    const auto count = juce::jmax(1, text.length());
+    const auto cellWidth = display.getWidth() / static_cast<float>(count);
+    const auto scaleX = juce::jmin(1.0f, (cellWidth - 2.0f) / 14.0f);
+    const auto scaleY = juce::jmin(1.0f, (display.getHeight() - 2.0f) / 20.0f);
+    const auto sx = juce::jmin(scaleX, scaleY);
+    const auto charWidth = 14.0f * sx;
+    const auto charHeight = 20.0f * sx;
+    const auto baseColour = findColour(juce::Label::textColourId);
+    const auto lit = baseColour.isTransparent() ? juce::Colour(0xffa8ffad) : baseColour;
+
+    for (int i = 0; i < text.length(); ++i)
+    {
+        const auto mask = glyph(text[i]);
+        if (mask == 0)
+            continue;
+        const auto x = display.getX() + i * cellWidth + (cellWidth - charWidth) * 0.5f;
+        const auto y = display.getCentreY() - charHeight * 0.5f;
+        for (int s = 0; s < 14; ++s)
+        {
+            const auto p1 = juce::Point<float>(x + starts[static_cast<size_t>(s)].x * sx,
+                                               y + starts[static_cast<size_t>(s)].y * sx);
+            const auto p2 = juce::Point<float>(x + ends[static_cast<size_t>(s)].x * sx,
+                                               y + ends[static_cast<size_t>(s)].y * sx);
+            g.setColour(juce::Colour(0xff23452b));
+            g.drawLine(p1, p2, 2.4f * sx);
+            if ((mask & bit(s)) != 0)
+            {
+                g.setColour(lit.withAlpha(0.13f));
+                g.drawLine(p1, p2, 7.0f * sx);
+                g.setColour(lit.withAlpha(0.28f));
+                g.drawLine(p1, p2, 4.2f * sx);
+                g.setColour(lit);
+                g.drawLine(p1, p2, 1.8f * sx);
+            }
+        }
+    }
 }
 
 void MainComponent::paint(juce::Graphics& graphics)
