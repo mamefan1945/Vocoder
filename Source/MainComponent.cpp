@@ -1282,6 +1282,7 @@ void MainComponent::resized()
     auto row = area.removeFromTop(32);
     modeLabel.setBounds(row.removeFromLeft(82));
     processingMode.setBounds(row.removeFromLeft(180));
+    engineDisplay.setBounds(row.removeFromRight(340).reduced(0, 1));
     const auto mode = processingMode.getSelectedId();
     const auto vocoderMode = mode == 2;
     const auto harmonizerMode = mode == 3;
