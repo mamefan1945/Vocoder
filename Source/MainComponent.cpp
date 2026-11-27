@@ -1238,103 +1238,99 @@ bool MainComponent::keyStateChanged(bool, juce::Component*)
     return handled;
 }
 
-void SegmentedLcdLabel::paint(juce::Graphics& g)
+void DotMatrixLcdLabel::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    g.setColour(juce::Colour(0xff06152b));
+    g.setColour(juce::Colour(0xff020b18));
     g.fillRoundedRectangle(bounds, 5.0f);
-    g.setColour(juce::Colour(0xff315b88));
+    g.setColour(juce::Colour(0xff142b48));
     g.drawRoundedRectangle(bounds.reduced(0.7f), 5.0f, 1.0f);
+
     auto display = bounds.reduced(8.0f, 4.0f);
-    juce::ColourGradient backlight(juce::Colour(0xff1765b5), display.getX(), display.getY(),\n                                  juce::Colour(0xff0b3974), display.getRight(), display.getBottom(), false);\n    g.setGradientFill(backlight);
+    juce::ColourGradient backlight(juce::Colour(0xff174fe0), display.getX(), display.getY(),
+                                   juce::Colour(0xff0738bd), display.getRight(), display.getBottom(), false);
+    g.setGradientFill(backlight);
     g.fillRoundedRectangle(display, 2.0f);
 
-    // Fourteen-segment glyphs: horizontal, vertical and diagonal strokes.
-    constexpr std::array<juce::Point<float>, 14> starts {{
-        {2,1}, {13,2}, {13,11}, {2,19}, {1,11}, {1,2}, {2,10},
-        {8,10}, {2,2}, {12,2}, {2,18}, {12,18}, {7,2}, {7,11}
-    }};
-    constexpr std::array<juce::Point<float>, 14> ends {{
-        {12,1}, {13,9}, {13,18}, {12,19}, {1,18}, {1,9}, {6,10},
-        {12,10}, {7,9}, {7,9}, {7,11}, {7,11}, {7,9}, {7,18}
-    }};
-    const auto bit = [](int n) { return static_cast<unsigned int>(1u << n); };
-    const auto glyph = [&](juce::juce_wchar ch) -> unsigned int
+    // A classic 5x7 dot-matrix font, as used by character LCD modules.
+    // Each row is a five-bit bitmap; the sixth column is character spacing.
+    const auto glyph = [](juce::juce_wchar ch) -> std::array<unsigned char, 7>
     {
         switch (juce::CharacterFunctions::toUpperCase(ch))
         {
-            case '0': return bit(0)|bit(1)|bit(2)|bit(3)|bit(4)|bit(5);
-            case '1': return bit(1)|bit(2);
-            case '2': return bit(0)|bit(1)|bit(6)|bit(7)|bit(4)|bit(3);
-            case '3': return bit(0)|bit(1)|bit(6)|bit(7)|bit(2)|bit(3);
-            case '4': return bit(5)|bit(6)|bit(7)|bit(1)|bit(2);
-            case '5': return bit(0)|bit(5)|bit(6)|bit(7)|bit(2)|bit(3);
-            case '6': return bit(0)|bit(5)|bit(6)|bit(7)|bit(4)|bit(2)|bit(3);
-            case '7': return bit(0)|bit(1)|bit(2);
-            case '8': return bit(0)|bit(1)|bit(2)|bit(3)|bit(4)|bit(5)|bit(6)|bit(7);
-            case '9': return bit(0)|bit(1)|bit(2)|bit(3)|bit(5)|bit(6)|bit(7);
-            case 'A': return bit(0)|bit(1)|bit(2)|bit(4)|bit(5)|bit(6)|bit(7);
-            case 'B': return bit(0)|bit(1)|bit(2)|bit(3)|bit(6)|bit(7)|bit(13)|bit(4);
-            case 'C': return bit(0)|bit(3)|bit(4)|bit(5);
-            case 'D': return bit(0)|bit(1)|bit(2)|bit(3)|bit(4)|bit(13);
-            case 'E': return bit(0)|bit(3)|bit(4)|bit(5)|bit(6)|bit(7);
-            case 'F': return bit(0)|bit(4)|bit(5)|bit(6)|bit(7);
-            case 'G': return bit(0)|bit(2)|bit(3)|bit(4)|bit(5)|bit(7);
-            case 'H': return bit(1)|bit(2)|bit(4)|bit(5)|bit(6)|bit(7);
-            case 'I': return bit(0)|bit(3)|bit(12)|bit(13);
-            case 'J': return bit(1)|bit(2)|bit(3)|bit(4);
-            case 'L': return bit(3)|bit(4)|bit(5);
-            case 'N': return bit(1)|bit(2)|bit(4)|bit(5)|bit(8)|bit(11);
-            case 'O': return bit(0)|bit(1)|bit(2)|bit(3)|bit(4)|bit(5);
-            case 'P': return bit(0)|bit(1)|bit(4)|bit(5)|bit(6)|bit(7);
-            case 'R': return bit(0)|bit(1)|bit(4)|bit(5)|bit(6)|bit(7)|bit(11);
-            case 'S': return bit(0)|bit(5)|bit(6)|bit(7)|bit(2)|bit(3);
-            case 'T': return bit(0)|bit(12)|bit(13);
-            case 'U': return bit(1)|bit(2)|bit(3)|bit(4)|bit(5);
-            case 'V': return bit(1)|bit(2)|bit(9)|bit(10);
-            case 'Y': return bit(1)|bit(2)|bit(3)|bit(5)|bit(6)|bit(7);
-            case '-': return bit(6)|bit(7);
-            case '/': return bit(9)|bit(10);
-            default: return 0;
+            case 'A': return {{14,17,17,31,17,17,17}};
+            case 'B': return {{30,17,17,30,17,17,30}};
+            case 'C': return {{14,17,16,16,16,17,14}};
+            case 'D': return {{30,17,17,17,17,17,30}};
+            case 'E': return {{31,16,16,30,16,16,31}};
+            case 'F': return {{31,16,16,30,16,16,16}};
+            case 'G': return {{14,17,16,23,17,17,15}};
+            case 'H': return {{17,17,17,31,17,17,17}};
+            case 'I': return {{14,4,4,4,4,4,14}};
+            case 'J': return {{7,2,2,2,18,18,12}};
+            case 'K': return {{17,18,20,24,20,18,17}};
+            case 'L': return {{16,16,16,16,16,16,31}};
+            case 'M': return {{17,27,21,21,17,17,17}};
+            case 'N': return {{17,25,25,21,19,19,17}};
+            case 'O': return {{14,17,17,17,17,17,14}};
+            case 'P': return {{30,17,17,30,16,16,16}};
+            case 'Q': return {{14,17,17,17,21,18,13}};
+            case 'R': return {{30,17,17,30,20,18,17}};
+            case 'S': return {{15,16,16,14,1,1,30}};
+            case 'T': return {{31,4,4,4,4,4,4}};
+            case 'U': return {{17,17,17,17,17,17,14}};
+            case 'V': return {{17,17,17,17,17,10,4}};
+            case 'W': return {{17,17,17,21,21,21,10}};
+            case 'X': return {{17,17,10,4,10,17,17}};
+            case 'Y': return {{17,17,10,4,4,4,4}};
+            case 'Z': return {{31,1,2,4,8,16,31}};
+            case '0': return {{14,17,19,21,25,17,14}};
+            case '1': return {{4,12,4,4,4,4,14}};
+            case '2': return {{14,17,1,2,4,8,31}};
+            case '3': return {{30,1,1,14,1,1,30}};
+            case '4': return {{2,6,10,18,31,2,2}};
+            case '5': return {{31,16,16,30,1,1,30}};
+            case '6': return {{14,16,16,30,17,17,14}};
+            case '7': return {{31,1,2,4,8,8,8}};
+            case '8': return {{14,17,17,14,17,17,14}};
+            case '9': return {{14,17,17,15,1,1,14}};
+            case '-': return {{0,0,0,31,0,0,0}};
+            case '/': return {{1,1,2,4,8,16,16}};
+            case '*': return {{0,21,14,31,14,21,0}};
+            case '.': return {{0,0,0,0,0,12,12}};
+            case ':': return {{0,12,12,0,12,12,0}};
+            default: return {{0,0,0,0,0,0,0}};
         }
     };
 
     const auto text = getText().toUpperCase();
     const auto count = juce::jmax(1, text.length());
     const auto cellWidth = display.getWidth() / static_cast<float>(count);
-    const auto scaleX = juce::jmin(1.0f, (cellWidth - 2.0f) / 14.0f);
-    const auto scaleY = juce::jmin(1.0f, (display.getHeight() - 2.0f) / 20.0f);
-    const auto sx = juce::jmin(scaleX, scaleY);
-    const auto charWidth = 14.0f * sx;
-    const auto charHeight = 20.0f * sx;
-    const auto baseColour = findColour(juce::Label::textColourId);
-    const auto lit = juce::Colour(0xffffffff);
+    const auto pixel = juce::jmin((cellWidth - 1.0f) / 6.0f,
+                                  (display.getHeight() - 4.0f) / 8.0f);
+    const auto glyphWidth = 5.0f * pixel;
+    const auto glyphHeight = 7.0f * pixel;
+    const auto top = display.getCentreY() - glyphHeight * 0.5f;
 
     for (int i = 0; i < text.length(); ++i)
     {
-        const auto mask = glyph(text[i]);
-        if (mask == 0)
-            continue;
-        const auto x = display.getX() + i * cellWidth + (cellWidth - charWidth) * 0.5f;
-        const auto y = display.getCentreY() - charHeight * 0.5f;
-        for (int s = 0; s < 14; ++s)
-        {
-            const auto p1 = juce::Point<float>(x + starts[static_cast<size_t>(s)].x * sx,
-                                               y + starts[static_cast<size_t>(s)].y * sx);
-            const auto p2 = juce::Point<float>(x + ends[static_cast<size_t>(s)].x * sx,
-                                               y + ends[static_cast<size_t>(s)].y * sx);
-            g.setColour(juce::Colour(0xff3974ad));
-            g.drawLine(juce::Line<float>(p1, p2), 2.4f * sx);
-            if ((mask & bit(s)) != 0)
+        const auto rows = glyph(text[i]);
+        const auto left = display.getX() + i * cellWidth
+                        + (cellWidth - glyphWidth) * 0.5f;
+        for (int row = 0; row < 7; ++row)
+            for (int column = 0; column < 5; ++column)
             {
-                g.setColour(lit.withAlpha(0.20f));
-                g.drawLine(juce::Line<float>(p1, p2), 7.0f * sx);
-                g.setColour(lit.withAlpha(0.42f));
-                g.drawLine(juce::Line<float>(p1, p2), 4.2f * sx);
-                g.setColour(lit);
-                g.drawLine(juce::Line<float>(p1, p2), 1.8f * sx);
+                const auto x = left + column * pixel;
+                const auto y = top + row * pixel;
+                const auto active = (rows[static_cast<size_t>(row)] & (1u << (4 - column))) != 0;
+                // Unlit pixel locations remain subtly visible in the blue glass.
+                g.setColour(active ? juce::Colour(0xfff1f5ff)
+                                   : juce::Colour(0xff123aa8).withAlpha(0.38f));
+                g.fillRect(juce::Rectangle<float>(x + pixel * 0.10f,
+                                                    y + pixel * 0.10f,
+                                                    pixel * 0.80f,
+                                                    pixel * 0.80f));
             }
-        }
     }
 }
 
