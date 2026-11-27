@@ -1372,10 +1372,19 @@ void MainComponent::paint(juce::Graphics& graphics)
 
 void MainComponent::resized()
 {
-    auto area = getLocalBounds().reduced(28);
-    titleLabel.setBounds(area.removeFromTop(42));
-    area.removeFromTop(10);
-    auto row = area.removeFromTop(32);
+    // Scale vertical spacing gently on shorter displays. The content viewport
+    // can still scroll when necessary, but the main controls use the available
+    // height more efficiently instead of retaining a fixed 900 px layout.
+    const auto verticalScale = juce::jlimit(0.82f, 1.0f,
+        static_cast<float>(getHeight()) / 900.0f);
+    const auto v = [verticalScale](int pixels)
+    {
+        return juce::jmax(1, juce::roundToInt(pixels * verticalScale));
+    };
+    auto area = getLocalBounds().reduced(v(28));
+    titleLabel.setBounds(area.removeFromTop(v(42)));
+    area.removeFromTop(v(10));
+    auto row = area.removeFromTop(v(32));
     modeLabel.setBounds(row.removeFromLeft(82));
     processingMode.setBounds(row.removeFromLeft(180));
     engineDisplay.setBounds(row.removeFromRight(340).reduced(0, 1));
@@ -1383,15 +1392,15 @@ void MainComponent::resized()
     const auto vocoderMode = mode == 2;
     const auto harmonizerMode = mode == 3;
     const auto hasKeyboard = vocoderMode || harmonizerMode;
-    area.removeFromTop(8);
-    row = area.removeFromTop(30);
+    area.removeFromTop(v(8));
+    row = area.removeFromTop(v(30));
     presetLabel.setBounds(row.removeFromLeft(58));
     row.removeFromLeft(8);
     savePresetButton.setBounds(row.removeFromLeft(124));
     row.removeFromLeft(8);
     loadPresetButton.setBounds(row.removeFromLeft(124));
-    area.removeFromTop(6);
-    row = area.removeFromTop(30);
+    area.removeFromTop(v(6));
+    row = area.removeFromTop(v(30));
     loadTestAudioButton.setBounds(row.removeFromLeft(130));
     row.removeFromLeft(5);
     playTestAudioButton.setBounds(row.removeFromLeft(52));
@@ -1403,10 +1412,10 @@ void MainComponent::resized()
     testVoiceSelector.setBounds(row.removeFromLeft(225));
     row.removeFromLeft(8);
     runSpeechTestButton.setBounds(row.removeFromLeft(130));
-    area.removeFromTop(6);
+    area.removeFromTop(v(6));
     if (hasKeyboard)
     {
-        row = area.removeFromTop(32);
+        row = area.removeFromTop(v(32));
         midiLabel.setBounds(row.removeFromLeft(72));
         midiInput.setBounds(row.removeFromLeft(240));
         row.removeFromLeft(8);
@@ -1414,12 +1423,12 @@ void MainComponent::resized()
     }
     if (vocoderMode)
     {
-        area.removeFromTop(6);
-        row = area.removeFromTop(30);
+        area.removeFromTop(v(6));
+        row = area.removeFromTop(v(30));
         vocoderEngineLabel.setBounds(row.removeFromLeft(112));
         vocoderEngineSelector.setBounds(row.removeFromLeft(300));
-        area.removeFromTop(6);
-        row = area.removeFromTop(32);
+        area.removeFromTop(v(6));
+        row = area.removeFromTop(v(32));
         carrierLabel.setBounds(row.removeFromLeft(58));
         carrierSource.setBounds(row.removeFromLeft(150));
         row.removeFromLeft(8);
@@ -1442,15 +1451,15 @@ void MainComponent::resized()
     }
     else if (harmonizerMode)
     {
-        area.removeFromTop(8);
-        row = area.removeFromTop(32);
+        area.removeFromTop(v(8));
+        row = area.removeFromTop(v(32));
         octaveLabel.setBounds(row.removeFromLeft(55));
         octave.setBounds(row.removeFromLeft(90));
         row.removeFromLeft(14);
         harmonizerAlgorithmLabel.setBounds(row.removeFromLeft(76));
         harmonizerAlgorithm.setBounds(row.removeFromLeft(220));
     }
-    area.removeFromTop(8);
+    area.removeFromTop(v(8));
     row = area.removeFromTop(vocoderMode ? 206 : (harmonizerMode ? 190 : 104));
     const auto placeVerticalFader = [](juce::Rectangle<int> cell,
                                        juce::Label& label, juce::Slider& slider)
@@ -1459,7 +1468,8 @@ void MainComponent::resized()
         label.setBounds(cell.removeFromTop(20));
         auto faderArea = cell.reduced(5, 0);
         slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 74, 20);
-        slider.setBounds(faderArea.withSizeKeepingCentre(82, faderArea.getHeight()));
+        const auto faderWidth = juce::jmin(82, juce::jmax(1, faderArea.getWidth()));
+        slider.setBounds(faderArea.withSizeKeepingCentre(faderWidth, faderArea.getHeight()));
     };
 
     auto knobCell = row.removeFromLeft(112);
@@ -1489,7 +1499,7 @@ void MainComponent::resized()
         placeVerticalFader(row.removeFromLeft(faderCellWidth), filterQLabel, filterQSlider);
         auto bandsCell = row;
         filterBandCountLabel.setBounds(bandsCell.removeFromTop(20));
-        filterBandCount.setBounds(bandsCell.removeFromTop(30).reduced(4, 0));
+        filterBandCount.setBounds(bandsCell.removeFromTop(v(30)).reduced(4, 0));
     }
     else if (harmonizerMode)
     {
@@ -1504,34 +1514,34 @@ void MainComponent::resized()
         placeVerticalFader(row, pitchRecoveryLabel, pitchRecoverySlider);
     }
 
-    area.removeFromTop(6);
-    row = area.removeFromTop(116);
+    area.removeFromTop(v(6));
+    row = area.removeFromTop(v(116));
     inputLevelMeter.setBounds(row.removeFromLeft(86));
     row.removeFromLeft(10);
     outputLevelMeter.setBounds(row.removeFromLeft(86));
     if (harmonizerMode)
     {
-        area.removeFromTop(3);
-        row = area.removeFromTop(26);
+        area.removeFromTop(v(3));
+        row = area.removeFromTop(v(26));
         harmonizerConfidenceLed.setBounds(row.removeFromLeft(28));
         harmonizerPitchLabel.setBounds(row);
     }
     if (vocoderMode)
     {
-        area.removeFromTop(6);
-        row = area.removeFromTop(28);
+        area.removeFromTop(v(6));
+        row = area.removeFromTop(v(28));
         microphoneMonitor.setBounds(row.removeFromLeft(150));
         carrierPreview.setBounds(row.removeFromLeft(170));
     }
     if (hasKeyboard)
     {
-        area.removeFromTop(8);
-        row = area.removeFromTop(88);
+        area.removeFromTop(v(8));
+        row = area.removeFromTop(v(88));
         keyboardComponent.setBounds(row);
     }
-    area.removeFromTop(8);
-    statusLabel.setBounds(area.removeFromTop(24));
-    area.removeFromTop(8);
+    area.removeFromTop(v(8));
+    statusLabel.setBounds(area.removeFromTop(v(24)));
+    area.removeFromTop(v(8));
     deviceViewport.setBounds(area);
     deviceSelector.setBounds(0, 0, juce::jmax(320, deviceViewport.getWidth() - 18),
                              juce::jmax(300, deviceViewport.getHeight()));
