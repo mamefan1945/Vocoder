@@ -339,7 +339,7 @@ bool testReferenceSpeechFile(const juce::String& filename)
         return false;
     }
     const auto renderFile = renderDirectory.getChildFile(
-        filename.upToLastOccurrenceOf(".", false, false) + "_vocoded.wav");
+        filename.upToLastOccurrenceOf(".", false, false) + "_classic.wav");
     auto outputStream = std::unique_ptr<juce::FileOutputStream>(renderFile.createOutputStream());
     if (outputStream == nullptr)
     {
@@ -378,6 +378,89 @@ bool testReferenceSpeechFile(const juce::String& filename)
               << ", active 20 ms input frames=" << metrics.activeFrameRatio
               << "; " << (passed ? "PASS" : "FAIL") << '\n';
     return passed;
+#endif
+}
+
+
+
+bool renderLpcReferenceSpeechFile(const juce::String& filename)
+{
+#ifndef PRISMAVOX_TEST_AUDIO_DIR
+    juce::ignoreUnused(filename);
+    std::cout << "LPC reference render skipped: audio directory is not configured.\n";
+    return true;
+#else
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    const auto file = juce::File(PRISMAVOX_TEST_AUDIO_DIR).getChildFile(filename);
+    std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
+    if (reader == nullptr || reader->lengthInSamples <= 0 || reader->numChannels <= 0)
+        return false;
+
+    const auto sampleCount = static_cast<int>(juce::jmin<juce::int64>(
+        reader->lengthInSamples, static_cast<juce::int64>(reader->sampleRate * 120.0)));
+    const auto sampleRate = reader->sampleRate;
+    juce::AudioBuffer<float> input(1, sampleCount), processed(1, sampleCount);
+    if (!reader->read(&input, 0, sampleCount, 0, true, false))
+        return false;
+
+    LpcVocoderEngine engine;
+    engine.prepare(sampleRate);
+    engine.setDryWet(1.0f);
+    engine.setOutputGain(1.0f);
+
+    double inputEnergy = 0.0, outputEnergy = 0.0;
+    float peak = 0.0f;
+    bool finite = true;
+    for (int i = 0; i < sampleCount; ++i)
+    {
+        const auto voice = input.getSample(0, i);
+        const auto phase = 2.0 * juce::MathConstants<double>::pi * 110.0
+                         * static_cast<double>(i) / sampleRate;
+        const auto carrier = 0.13f * static_cast<float>(
+            std::sin(phase) + 0.5 * std::sin(2.0 * phase)
+            + 0.333333 * std::sin(3.0 * phase) + 0.25 * std::sin(4.0 * phase)
+            + 0.2 * std::sin(5.0 * phase));
+        const auto output = engine.processSample(voice, carrier);
+        processed.setSample(0, i, output);
+        finite = finite && std::isfinite(output);
+        peak = juce::jmax(peak, std::abs(output));
+        inputEnergy += static_cast<double>(voice) * voice;
+        outputEnergy += static_cast<double>(output) * output;
+    }
+
+    const auto divisor = static_cast<double>(juce::jmax(1, sampleCount));
+    const auto inputRms = std::sqrt(inputEnergy / divisor);
+    const auto outputRms = std::sqrt(outputEnergy / divisor);
+    const auto relativeDb = 20.0 * std::log10(
+        juce::jmax(1.0e-12, outputRms) / juce::jmax(1.0e-12, inputRms));
+
+#ifdef PRISMAVOX_TEST_RENDER_DIR
+    const auto renderDirectory = juce::File(PRISMAVOX_TEST_RENDER_DIR);
+    if (renderDirectory.createDirectory().failed())
+        return false;
+    const auto renderFile = renderDirectory.getChildFile(
+        filename.upToLastOccurrenceOf(".", false, false) + "_lpc.wav");
+    auto outputStream = std::unique_ptr<juce::FileOutputStream>(renderFile.createOutputStream());
+    if (outputStream == nullptr)
+        return false;
+    juce::WavAudioFormat wavFormat;
+    auto writer = std::unique_ptr<juce::AudioFormatWriter>(wavFormat.createWriterFor(
+        outputStream.get(), sampleRate, 1, 24, {}, 0));
+    if (writer == nullptr)
+        return false;
+    outputStream.release();
+    if (!writer->writeFromAudioSampleBuffer(processed, 0, sampleCount))
+        return false;
+    writer.reset();
+    std::cout << "LPC comparison render written: " << renderFile.getFullPathName() << '\n';
+#endif
+
+    std::cout << "LPC speech " << filename << ": input RMS=" << inputRms
+              << "; output RMS=" << outputRms << "; output/input=" << relativeDb
+              << " dB; peak=" << peak << "; finite=" << finite << '\n';
+    // Preserve the measured level; do not normalize away the low-output issue.
+    return finite && std::isfinite(outputRms) && peak < 2.0f;
 #endif
 }
 
@@ -680,7 +763,9 @@ bool testReferenceSpeechCorpus()
 {
     const auto ash = testReferenceSpeechFile("vocoder_test_ash.wav");
     const auto nova = testReferenceSpeechFile("vocoder_test_nova.wav");
-    return ash && nova;
+    const auto lpcAsh = renderLpcReferenceSpeechFile("vocoder_test_ash.wav");
+    const auto lpcNova = renderLpcReferenceSpeechFile("vocoder_test_nova.wav");
+    return ash && nova && lpcAsh && lpcNova;
 }
 
 }
