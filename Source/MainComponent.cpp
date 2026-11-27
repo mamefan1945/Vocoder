@@ -1324,15 +1324,15 @@ void SegmentedLcdLabel::paint(juce::Graphics& g)
             const auto p2 = juce::Point<float>(x + ends[static_cast<size_t>(s)].x * sx,
                                                y + ends[static_cast<size_t>(s)].y * sx);
             g.setColour(juce::Colour(0xff23452b));
-            g.drawLine(p1, p2, 2.4f * sx);
+            g.drawLine(juce::Line<float>(p1, p2), 2.4f * sx);
             if ((mask & bit(s)) != 0)
             {
                 g.setColour(lit.withAlpha(0.13f));
-                g.drawLine(p1, p2, 7.0f * sx);
+                g.drawLine(juce::Line<float>(p1, p2), 7.0f * sx);
                 g.setColour(lit.withAlpha(0.28f));
-                g.drawLine(p1, p2, 4.2f * sx);
+                g.drawLine(juce::Line<float>(p1, p2), 4.2f * sx);
                 g.setColour(lit);
-                g.drawLine(p1, p2, 1.8f * sx);
+                g.drawLine(juce::Line<float>(p1, p2), 1.8f * sx);
             }
         }
     }
