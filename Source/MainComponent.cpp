@@ -1460,7 +1460,7 @@ void MainComponent::resized()
         harmonizerAlgorithm.setBounds(row.removeFromLeft(220));
     }
     area.removeFromTop(v(8));
-    row = area.removeFromTop(vocoderMode ? 206 : (harmonizerMode ? 190 : 104));
+    row = area.removeFromTop(v(vocoderMode ? 206 : (harmonizerMode ? 190 : 104)));
     const auto placeVerticalFader = [](juce::Rectangle<int> cell,
                                        juce::Label& label, juce::Slider& slider)
     {
