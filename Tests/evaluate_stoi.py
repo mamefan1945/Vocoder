@@ -157,98 +157,138 @@ def band_envelope_correlations(reference: np.ndarray, processed: np.ndarray,
     return results
 
 
+
 def main() -> int:
     failures = []
+    rows: list[dict[str, float | str]] = []
     for stem in ("vocoder_test_ash", "vocoder_test_nova"):
         reference_path = REFERENCE_DIR / f"{stem}.wav"
-        processed_path = RENDER_DIR / f"{stem}_vocoded.wav"
-        if not reference_path.is_file() or not processed_path.is_file():
-            print(f"ERROR: missing reference or render for {stem}", file=sys.stderr)
+        if not reference_path.is_file():
+            print(f"ERROR: missing reference {reference_path}", file=sys.stderr)
             failures.append(stem)
             continue
-
         ref_rate, reference = read_mono(reference_path)
-        out_rate, processed = read_mono(processed_path)
-        if ref_rate != out_rate:
-            print(f"ERROR: sample-rate mismatch for {stem}: {ref_rate} vs {out_rate}",
-                  file=sys.stderr)
-            failures.append(stem)
-            continue
-
         identity_score = float(stoi(reference, reference, ref_rate, extended=False))
-        unaligned_length = min(reference.size, processed.size)
-        if unaligned_length < ref_rate:
-            print(f"ERROR: less than one second of unaligned speech for {stem}",
-                  file=sys.stderr)
-            failures.append(stem)
-            continue
-        unaligned_score = float(stoi(
-            reference[:unaligned_length], processed[:unaligned_length],
-            ref_rate, extended=False))
-        try:
-            delay_samples, alignment_correlation = estimate_delay_samples(
-                reference, processed, ref_rate)
-            aligned_reference, aligned_processed = align_signals(
-                reference, processed, delay_samples)
-        except ValueError as error:
-            print(f"ERROR: alignment failed for {stem}: {error}", file=sys.stderr)
-            failures.append(stem)
-            continue
-
-        length = min(aligned_reference.size, aligned_processed.size)
-        aligned_reference = aligned_reference[:length]
-        aligned_processed = aligned_processed[:length]
-        if length < ref_rate:
-            print(f"ERROR: less than one second of aligned speech for {stem}",
-                  file=sys.stderr)
-            failures.append(stem)
-            continue
-
-        vocoder_score = float(stoi(
-            aligned_reference, aligned_processed, ref_rate, extended=False))
         if not np.isfinite(identity_score) or identity_score < 0.99:
             print(f"ERROR: STOI identity sanity check failed for {stem}: {identity_score}",
                   file=sys.stderr)
             failures.append(stem)
             continue
-        if (not np.isfinite(vocoder_score) or not -1.0 <= vocoder_score <= 1.0
-                or not np.isfinite(unaligned_score)
-                or not -1.0 <= unaligned_score <= 1.0):
-            print(f"ERROR: invalid STOI score for {stem}: {vocoder_score}",
-                  file=sys.stderr)
-            failures.append(stem)
-            continue
 
-        delay_ms = delay_samples * 1000.0 / ref_rate
-        band_scores = band_envelope_correlations(
-            aligned_reference, aligned_processed, ref_rate)
-        if band_scores:
-            band_summary = ", ".join(
-                f"{centre}Hz:corr={values['correlation']:.3f},"
-                f"ref={values['reference_share'] * 100.0:.1f}%,"
-                f"level={values['level_change_db']:+.1f}dB"
-                for centre, values in band_scores.items())
+        for engine_name in ("classic", "lpc"):
+            processed_path = RENDER_DIR / f"{stem}_{engine_name}.wav"
+            if not processed_path.is_file():
+                print(f"ERROR: missing {engine_name} render for {stem}: {processed_path}",
+                      file=sys.stderr)
+                failures.append(f"{stem}/{engine_name}")
+                continue
+            out_rate, processed = read_mono(processed_path)
+            if ref_rate != out_rate:
+                print(f"ERROR: sample-rate mismatch for {stem}/{engine_name}: "
+                      f"{ref_rate} vs {out_rate}", file=sys.stderr)
+                failures.append(f"{stem}/{engine_name}")
+                continue
+            if not np.all(np.isfinite(processed)):
+                print(f"ERROR: non-finite samples in {stem}/{engine_name}", file=sys.stderr)
+                failures.append(f"{stem}/{engine_name}")
+                continue
+
+            delay_samples, alignment_correlation = estimate_delay_samples(
+                reference, processed, ref_rate)
+            aligned_reference, aligned_processed = align_signals(
+                reference, processed, delay_samples)
+            length = min(aligned_reference.size, aligned_processed.size)
+            aligned_reference = aligned_reference[:length]
+            aligned_processed = aligned_processed[:length]
+            if length < ref_rate:
+                print(f"ERROR: less than one second of aligned speech for "
+                      f"{stem}/{engine_name}", file=sys.stderr)
+                failures.append(f"{stem}/{engine_name}")
+                continue
+
+            aligned_stoi = float(stoi(
+                aligned_reference, aligned_processed, ref_rate, extended=False))
+            bands = band_envelope_correlations(
+                aligned_reference, aligned_processed, ref_rate)
+            if not bands:
+                print(f"ERROR: no usable band metrics for {stem}/{engine_name}",
+                      file=sys.stderr)
+                failures.append(f"{stem}/{engine_name}")
+                continue
             band_mean = float(np.mean(
-                [values["correlation"] for values in band_scores.values()]))
-            weighted_mean = sum(
+                [values["correlation"] for values in bands.values()]))
+            band_weighted = float(sum(
                 values["correlation"] * values["reference_share"]
-                for values in band_scores.values())
-            band_report = (
-                f"band-envelope mean={band_mean:.3f}, "
-                f"reference-energy-weighted={weighted_mean:.3f} "
-                f"({band_summary})")
-        else:
-            band_report = "band-envelope correlation unavailable"
-        print(f"{stem}: STOI unaligned={unaligned_score:.4f}, "
-              f"aligned={vocoder_score:.4f} (estimated processed delay="
-              f"{delay_ms:+.1f} ms; envelope correlation={alignment_correlation:.3f}; "
-              f"identity control={identity_score:.4f}); {band_report}; "
-              "diagnostic baselines only; no quality threshold applied")
+                for values in bands.values()))
+            input_rms = float(np.sqrt(np.mean(aligned_reference ** 2)))
+            output_rms = float(np.sqrt(np.mean(aligned_processed ** 2)))
+            output_peak = float(np.max(np.abs(aligned_processed)))
+            output_crest = output_peak / max(output_rms, 1.0e-12)
+            output_to_input_db = 20.0 * np.log10(
+                max(output_rms, 1.0e-12) / max(input_rms, 1.0e-12))
+            clipping_percent = 100.0 * float(
+                np.mean(np.abs(aligned_processed) >= 0.999))
+            delay_ms = delay_samples * 1000.0 / ref_rate
+
+            if (not np.isfinite(aligned_stoi) or not -1.0 <= aligned_stoi <= 1.0
+                    or not np.isfinite(band_weighted)):
+                print(f"ERROR: invalid metrics for {stem}/{engine_name}",
+                      file=sys.stderr)
+                failures.append(f"{stem}/{engine_name}")
+                continue
+
+            row = {
+                "speaker": stem.removeprefix("vocoder_test_"),
+                "engine": engine_name,
+                "stoi_aligned": aligned_stoi,
+                "band_envelope_mean": band_mean,
+                "band_envelope_weighted": band_weighted,
+                "output_to_input_rms_db": float(output_to_input_db),
+                "output_peak": output_peak,
+                "output_crest_factor": float(output_crest),
+                "clipped_sample_percent": clipping_percent,
+                "estimated_delay_ms": delay_ms,
+                "alignment_envelope_correlation": alignment_correlation,
+            }
+            rows.append(row)
+            band_summary = ", ".join(
+                f"{centre}Hz={values['correlation']:.3f}"
+                for centre, values in bands.items())
+            print(
+                f"{stem} / {engine_name.upper()}: STOI={aligned_stoi:.4f}, "
+                f"band-envelope weighted={band_weighted:.4f}, "
+                f"band mean={band_mean:.4f}, output/input RMS={output_to_input_db:+.2f} dB, "
+                f"peak={output_peak:.4f}, crest={output_crest:.2f}, "
+                f"clipped={clipping_percent:.5f}%, delay={delay_ms:+.1f} ms; "
+                f"bands[{band_summary}]"
+            )
 
     if failures:
-        print("STOI evaluation failed for: " + ", ".join(failures), file=sys.stderr)
+        print("Engine comparison failed for: " + ", ".join(failures), file=sys.stderr)
         return 1
-    print("STOI evaluation completed.")
+
+    by_key = {(row["speaker"], row["engine"]): row for row in rows}
+    print("\nLPC minus Classic (positive STOI/band values favour LPC):")
+    for speaker in ("ash", "nova"):
+        classic = by_key[(speaker, "classic")]
+        lpc = by_key[(speaker, "lpc")]
+        print(
+            f"{speaker}: STOI {lpc['stoi_aligned'] - classic['stoi_aligned']:+.4f}; "
+            f"band-envelope {lpc['band_envelope_weighted'] - classic['band_envelope_weighted']:+.4f}; "
+            f"output level {lpc['output_to_input_rms_db'] - classic['output_to_input_rms_db']:+.2f} dB; "
+            f"peak {lpc['output_peak'] - classic['output_peak']:+.4f}"
+        )
+
+    if rows:
+        import csv
+        output_csv = RENDER_DIR / "engine-comparison.csv"
+        with output_csv.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"\nMachine-readable comparison: {output_csv}")
+    print("\nEngine comparison completed. STOI and band-envelope metrics are diagnostic proxies, "
+          "not a complete perceptual-quality score; review paired WAVs before choosing a winner.")
     return 0
 
 
