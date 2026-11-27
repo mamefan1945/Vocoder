@@ -124,6 +124,17 @@ jobs:
       - name: Evaluate vocoder speech intelligibility (STOI)
         run: python Tests/evaluate_stoi.py build/test-renders
 
+      - name: Upload Classic vs LPC objective comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrismaVox-Engine-Comparison-${{ github.run_number }}
+          path: |
+            build/test-renders/*_classic.wav
+            build/test-renders/*_lpc.wav
+            build/test-renders/engine-comparison.csv
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Render vocoder parameter candidates
         shell: pwsh
         run: |
