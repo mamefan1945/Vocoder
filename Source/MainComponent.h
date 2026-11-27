@@ -10,6 +10,12 @@
 #include <thread>
 #include <vector>
 
+class SegmentedLcdLabel final : public juce::Label
+{
+public:
+    void paint(juce::Graphics& graphics) override;
+};
+
 class MainComponent final : public juce::Component,
                             public juce::KeyListener,
                             public juce::AudioIODeviceCallback,
@@ -132,7 +138,7 @@ private:
     juce::StringArray midiInputIdentifiers;
 
     juce::ComboBox processingMode;
-    juce::Label engineDisplay;
+    SegmentedLcdLabel engineDisplay;
     juce::ComboBox vocoderEngineSelector;
     juce::Label vocoderEngineLabel;
     juce::ComboBox carrierSource;
