@@ -134,6 +134,8 @@ private:
     juce::MidiMessageCollector externalMidiCollector;
     MidiInputRouter midiInputRouter;
     LockableMidiKeyboard keyboardComponent;
+    juce::TextButton keyboardScrollLeft { "‹" };
+    juce::TextButton keyboardScrollRight { "›" };
     std::array<bool, 19> computerKeysDown {};
     juce::StringArray midiInputIdentifiers;
 
