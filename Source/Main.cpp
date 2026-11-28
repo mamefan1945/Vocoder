@@ -182,8 +182,11 @@ private:
             // the available client area. The user can restore and resize normally.
             centreWithSize(juce::jmax(680, available.getWidth()),
                            juce::jmax(480, available.getHeight()));
+            // Size the window to the display work area. JUCE DocumentWindow
+            // does not expose a setMaximised() method; using the work-area
+            // bounds preserves the native title bar and normal restore behavior.
+            setBounds(available);
             setVisible(true);
-            setMaximised(true);
             applySystemTitleBarTheme();
             applyNativeApplicationIcon();
         }
