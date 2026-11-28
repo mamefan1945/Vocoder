@@ -177,15 +177,13 @@ private:
             const auto available = display != nullptr
                 ? display->userArea : juce::Rectangle<int>(0, 0, 1380, 790);
             setResizeLimits(680, 480, 16384, 16384);
-            // Open large enough that the 1380 x 790 logical control surface
-            // fits without immediately introducing viewport scrollbars on a
-            // typical 1080p display at 125% Windows scaling. The user can still
-            // resize freely, and smaller displays retain the existing limits.
-            centreWithSize(juce::jmax(680, juce::jmin(1500,
-                                static_cast<int>(available.getWidth() * 0.95f))),
-                           juce::jmax(480, juce::jmin(850,
-                                static_cast<int>(available.getHeight() * 0.98f))));
+            // Start maximized so the full mixer surface is immediately usable,
+            // including on high-DPI displays where the non-client frame reduces
+            // the available client area. The user can restore and resize normally.
+            centreWithSize(juce::jmax(680, available.getWidth()),
+                           juce::jmax(480, available.getHeight()));
             setVisible(true);
+            setMaximised(true);
             applySystemTitleBarTheme();
             applyNativeApplicationIcon();
         }
