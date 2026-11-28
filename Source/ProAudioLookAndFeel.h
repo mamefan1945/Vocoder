@@ -7,6 +7,7 @@ class ProAudioLookAndFeel final : public juce::LookAndFeel_V4
 public:
     ProAudioLookAndFeel();
     void drawRotarySlider(juce::Graphics&, int, int, int, int, float, float, float, juce::Slider&) override;
+    int getSliderThumbRadius(juce::Slider& slider) override;
     void drawLinearSlider(juce::Graphics&, int, int, int, int, float, float, float,
                           juce::Slider::SliderStyle, juce::Slider&) override;
     void drawButtonBackground(juce::Graphics&, juce::Button&, const juce::Colour&,
