@@ -110,10 +110,6 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
     testAudioFormats.registerBasicFormats();
     testAudioReadAheadThread.startThread();
 
-    titleLabel.setText("PrismaVox   |   Vocoder + Vocal Harmonizer", juce::dontSendNotification);
-    titleLabel.setFont(juce::Font(juce::FontOptions(24.0f, juce::Font::bold)));
-    addAndMakeVisible(titleLabel);
-
     presetLabel.setText("Presets", juce::dontSendNotification);
     addAndMakeVisible(presetLabel);
     savePresetButton.setTooltip("Save all processing, carrier and sound controls to a reusable .vcpreset file.");
@@ -1382,8 +1378,6 @@ void MainComponent::resized()
         return juce::jmax(1, juce::roundToInt(pixels * verticalScale));
     };
     auto area = getLocalBounds().reduced(v(28));
-    titleLabel.setBounds(area.removeFromTop(v(42)));
-    area.removeFromTop(v(10));
     auto row = area.removeFromTop(v(32));
     modeLabel.setBounds(row.removeFromLeft(82));
     processingMode.setBounds(row.removeFromLeft(180));
