@@ -1544,6 +1544,10 @@ void MainComponent::resized()
         microphoneMonitor.setBounds(row.removeFromLeft(150));
         carrierPreview.setBounds(row.removeFromLeft(170));
     }
+    const auto meteringBottom = area.getY();
+    meteringPanel.setBounds(panelLeft, meteringTop, panelWidth,
+                            juce::jmax(1, meteringBottom - meteringTop));
+
     if (hasKeyboard)
     {
         area.removeFromTop(v(8));
@@ -1553,10 +1557,6 @@ void MainComponent::resized()
     }
     else
         keyboardPanel.setBounds(0, 0, 0, 0);
-
-    const auto meteringBottom = area.getY();
-    meteringPanel.setBounds(panelLeft, meteringTop, panelWidth,
-                            juce::jmax(1, meteringBottom - meteringTop));
 
     area.removeFromTop(v(8));
     statusLabel.setBounds(area.removeFromTop(v(24)));
