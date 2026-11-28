@@ -274,7 +274,6 @@ private:
     juce::Label highFrequencyLabel;
     juce::Label dryWetLabel;
     juce::Label statusLabel;
-    juce::Label titleLabel;
 
     CarrierSynth carrierSynth;
     SoundFontEngine soundFontEngine;
