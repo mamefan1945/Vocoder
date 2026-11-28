@@ -53,7 +53,7 @@ int ProAudioLookAndFeel::getSliderThumbRadius(juce::Slider& slider)
     // JUCE uses this radius when mapping values to the slider's on-screen position,
     // so the drawn thumb and its hit-test position stay aligned at 0% and 100%.
     if (slider.getSliderStyle() == juce::Slider::LinearVertical)
-        return 20;
+        return 12;
 
     return juce::LookAndFeel_V4::getSliderThumbRadius(slider);
 }
@@ -66,8 +66,10 @@ void ProAudioLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int 
     if (style == juce::Slider::LinearVertical)
     {
         const auto trackX = area.getCentreX();
-        const auto trackTop = area.getY() + 8.0f;
-        const auto trackBottom = area.getBottom() - 8.0f;
+        // Match JUCE's 12 px thumb radius: the fader cap remains inside
+        // the visible slot at both endpoints instead of overshooting it.
+        const auto trackTop = area.getY();
+        const auto trackBottom = area.getBottom();
         for (int tick = 0; tick <= 10; ++tick)
         {
             const auto tickY = trackTop + (trackBottom - trackTop)
