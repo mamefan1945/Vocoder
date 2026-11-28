@@ -7,6 +7,35 @@
 #include "LpcVocoderEngine.h"
 #include "SoundFontEngine.h"
 #include "HarmonizerEngine.h"
+class MixerSectionPanel final : public juce::Component
+{
+public:
+    MixerSectionPanel(const juce::String& heading, juce::Colour accentColour)
+        : title(heading), accent(accentColour)
+    {
+        setInterceptsMouseClicks(false, false);
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        auto r = getLocalBounds().toFloat().reduced(1.0f);
+        g.setColour(accent.withAlpha(0.075f));
+        g.fillRoundedRectangle(r, 8.0f);
+        g.setColour(accent.withAlpha(0.48f));
+        g.drawRoundedRectangle(r, 8.0f, 1.2f);
+        g.setColour(accent.withAlpha(0.9f));
+        g.fillRoundedRectangle(r.getX() + 12.0f, r.getY(), 3.0f, 22.0f, 1.5f);
+        g.setColour(accent.brighter(0.35f));
+        g.setFont(juce::Font(juce::FontOptions(10.5f, juce::Font::bold)));
+        g.drawText(title, getLocalBounds().reduced(21, 2).removeFromTop(18),
+                   juce::Justification::centredLeft);
+    }
+
+private:
+    juce::String title;
+    juce::Colour accent;
+};
+
 #include <thread>
 #include <vector>
 
@@ -127,6 +156,11 @@ private:
                       const float* prerecordedVoice);
 
     ProAudioLookAndFeel proAudioLookAndFeel;
+    MixerSectionPanel routingPanel { "SOURCE  /  ROUTING", juce::Colour(0xff62a8e8) };
+    MixerSectionPanel processingPanel { "PROCESSING CHANNEL", juce::Colour(0xff39c7b4) };
+    MixerSectionPanel meteringPanel { "LEVELS  /  MONITORING", juce::Colour(0xffe6b85c) };
+    MixerSectionPanel keyboardPanel { "MIDI PERFORMANCE", juce::Colour(0xffa78bfa) };
+    MixerSectionPanel audioPanel { "AUDIO DEVICE I/O", juce::Colour(0xff70a6b8) };
     juce::AudioDeviceManager deviceManager;
     juce::AudioDeviceSelectorComponent deviceSelector;
     juce::Viewport deviceViewport;
