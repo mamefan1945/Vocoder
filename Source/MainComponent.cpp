@@ -1382,14 +1382,18 @@ void MainComponent::resized()
     {
         return juce::jmax(1, juce::roundToInt(pixels * verticalScale));
     };
-    auto area = getLocalBounds().reduced(v(28));
-    const auto panelLeft = area.getX();
-    const auto panelWidth = area.getWidth();
-    const auto routingTop = area.getY();
-    auto row = area.removeFromTop(v(32));
+    auto outer = getLocalBounds().reduced(v(22));
+    const auto panelLeft = outer.getX();
+    const auto panelWidth = outer.getWidth();
+    auto area = outer.reduced(v(12), v(8));
+
+    // LCD is a standalone status display above the mixer sections.
+    auto row = area.removeFromTop(v(34));
+    engineDisplay.setBounds(row.removeFromLeft(340).reduced(0, 1));
+    row.removeFromLeft(v(18));
     modeLabel.setBounds(row.removeFromLeft(82));
     processingMode.setBounds(row.removeFromLeft(180));
-    engineDisplay.setBounds(row.removeFromRight(340).reduced(0, 1));
+    const auto routingTop = area.getY();
     const auto mode = processingMode.getSelectedId();
     const auto vocoderMode = mode == 2;
     const auto harmonizerMode = mode == 3;
@@ -1462,8 +1466,8 @@ void MainComponent::resized()
         harmonizerAlgorithm.setBounds(row.removeFromLeft(220));
     }
     const auto routingBottom = area.getY();
-    routingPanel.setBounds(panelLeft, routingTop, panelWidth,
-                           juce::jmax(1, routingBottom - routingTop));
+    routingPanel.setBounds(panelLeft, routingTop - v(5), panelWidth,
+                           juce::jmax(1, routingBottom - routingTop + v(10)));
 
     area.removeFromTop(v(8));
     const auto processingTop = area.getY();
@@ -1479,9 +1483,7 @@ void MainComponent::resized()
         slider.setBounds(faderArea.withSizeKeepingCentre(faderWidth, faderArea.getHeight()));
     };
 
-    auto knobCell = row.removeFromLeft(112);
-    outputLevelLabel.setBounds(knobCell.removeFromTop(20));
-    outputLevel.setBounds(knobCell);
+    auto knobCell = juce::Rectangle<int>();
 
     if (vocoderMode)
     {
@@ -1491,11 +1493,7 @@ void MainComponent::resized()
         knobCell = row.removeFromLeft(112);
         releaseLabel.setBounds(knobCell.removeFromTop(20));
         releaseTime.setBounds(knobCell);
-        knobCell = row.removeFromLeft(112);
-        dryWetLabel.setBounds(knobCell.removeFromTop(20));
-        dryWetMix.setBounds(knobCell);
-
-        const auto faderCellWidth = (row.getWidth() - 112) / 8;
+        const auto faderCellWidth = row.getWidth() / 9;
         placeVerticalFader(row.removeFromLeft(faderCellWidth), lowFrequencyLabel, lowFrequency);
         placeVerticalFader(row.removeFromLeft(faderCellWidth), highFrequencyLabel, highFrequency);
         placeVerticalFader(row.removeFromLeft(faderCellWidth), formantShiftLabel, formantShiftSlider);
@@ -1510,9 +1508,6 @@ void MainComponent::resized()
     }
     else if (harmonizerMode)
     {
-        knobCell = row.removeFromLeft(112);
-        dryWetLabel.setBounds(knobCell.removeFromTop(20));
-        dryWetMix.setBounds(knobCell);
         const auto cellWidth = row.getWidth() / 5;
         placeVerticalFader(row.removeFromLeft(cellWidth), formantPreservationLabel, formantPreservationSlider);
         placeVerticalFader(row.removeFromLeft(cellWidth), transientProtectionLabel, transientProtectionSlider);
@@ -1521,39 +1516,46 @@ void MainComponent::resized()
         placeVerticalFader(row, pitchRecoveryLabel, pitchRecoverySlider);
     }
 
-    processingPanel.setBounds(panelLeft, processingTop, panelWidth,
-                              juce::jmax(1, row.getBottom() - processingTop));
+    processingPanel.setBounds(panelLeft, processingTop - v(5), panelWidth,
+                              juce::jmax(1, row.getBottom() - processingTop + v(10)));
 
     area.removeFromTop(v(6));
     const auto meteringTop = area.getY();
-    row = area.removeFromTop(v(116));
-    inputLevelMeter.setBounds(row.removeFromLeft(86));
-    row.removeFromLeft(10);
-    outputLevelMeter.setBounds(row.removeFromLeft(86));
+    row = area.removeFromTop(v(142));
+
+    // Master output and dry/wet controls share one section with the VU meters.
+    auto masterCell = row.removeFromLeft(112).reduced(4, 2);
+    outputLevelLabel.setBounds(masterCell.removeFromTop(20));
+    outputLevel.setBounds(masterCell);
+    masterCell = row.removeFromLeft(112).reduced(4, 2);
+    dryWetLabel.setBounds(masterCell.removeFromTop(20));
+    dryWetMix.setBounds(masterCell);
+    row.removeFromLeft(v(12));
+    inputLevelMeter.setBounds(row.removeFromLeft(96).reduced(3, 2));
+    row.removeFromLeft(v(10));
+    outputLevelMeter.setBounds(row.removeFromLeft(96).reduced(3, 2));
     if (harmonizerMode)
     {
-        area.removeFromTop(v(3));
-        row = area.removeFromTop(v(26));
+        row = area.removeFromTop(v(24));
         harmonizerConfidenceLed.setBounds(row.removeFromLeft(28));
         harmonizerPitchLabel.setBounds(row);
     }
     if (vocoderMode)
     {
-        area.removeFromTop(v(6));
-        row = area.removeFromTop(v(28));
+        row = area.removeFromTop(v(26));
         microphoneMonitor.setBounds(row.removeFromLeft(150));
         carrierPreview.setBounds(row.removeFromLeft(170));
     }
     const auto meteringBottom = area.getY();
-    meteringPanel.setBounds(panelLeft, meteringTop, panelWidth,
-                            juce::jmax(1, meteringBottom - meteringTop));
+    meteringPanel.setBounds(panelLeft, meteringTop - v(5), panelWidth,
+                            juce::jmax(1, meteringBottom - meteringTop + v(10)));
 
     if (hasKeyboard)
     {
         area.removeFromTop(v(8));
         row = area.removeFromTop(v(88));
         keyboardComponent.setBounds(row);
-        keyboardPanel.setBounds(panelLeft, row.getY() - v(5), panelWidth, row.getHeight() + v(10));
+        keyboardPanel.setBounds(panelLeft, row.getY() - v(7), panelWidth, row.getHeight() + v(14));
     }
     else
         keyboardPanel.setBounds(0, 0, 0, 0);
@@ -1562,8 +1564,8 @@ void MainComponent::resized()
     statusLabel.setBounds(area.removeFromTop(v(24)));
     area.removeFromTop(v(8));
     deviceViewport.setBounds(area);
-    audioPanel.setBounds(panelLeft, area.getY() - v(5), panelWidth,
-                         juce::jmax(1, area.getHeight() + v(10)));
+    audioPanel.setBounds(panelLeft, area.getY() - v(7), panelWidth,
+                         juce::jmax(1, area.getHeight() + v(14)));
     deviceSelector.setBounds(0, 0, juce::jmax(320, deviceViewport.getWidth() - 18),
                              juce::jmax(300, deviceViewport.getHeight()));
     // Keep help affordances compact and aligned like superscript markers.
