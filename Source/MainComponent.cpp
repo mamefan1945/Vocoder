@@ -94,6 +94,11 @@ MainComponent::MainComponent(std::function<void()> onStartupComplete)
       startupCompleteCallback(onStartupComplete)
 {
     setLookAndFeel(&proAudioLookAndFeel);
+    addAndMakeVisible(routingPanel);
+    addAndMakeVisible(processingPanel);
+    addAndMakeVisible(meteringPanel);
+    addAndMakeVisible(keyboardPanel);
+    addAndMakeVisible(audioPanel);
     writeStartupTrace("MainComponent constructor entered");
     // Start a fresh trace for each application launch.
     juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
@@ -1378,6 +1383,9 @@ void MainComponent::resized()
         return juce::jmax(1, juce::roundToInt(pixels * verticalScale));
     };
     auto area = getLocalBounds().reduced(v(28));
+    const auto panelLeft = area.getX();
+    const auto panelWidth = area.getWidth();
+    const auto routingTop = area.getY();
     auto row = area.removeFromTop(v(32));
     modeLabel.setBounds(row.removeFromLeft(82));
     processingMode.setBounds(row.removeFromLeft(180));
@@ -1453,7 +1461,12 @@ void MainComponent::resized()
         harmonizerAlgorithmLabel.setBounds(row.removeFromLeft(76));
         harmonizerAlgorithm.setBounds(row.removeFromLeft(220));
     }
+    const auto routingBottom = area.getY();
+    routingPanel.setBounds(panelLeft, routingTop, panelWidth,
+                           juce::jmax(1, routingBottom - routingTop));
+
     area.removeFromTop(v(8));
+    const auto processingTop = area.getY();
     row = area.removeFromTop(v(vocoderMode ? 206 : (harmonizerMode ? 190 : 104)));
     const auto placeVerticalFader = [](juce::Rectangle<int> cell,
                                        juce::Label& label, juce::Slider& slider)
@@ -1508,7 +1521,11 @@ void MainComponent::resized()
         placeVerticalFader(row, pitchRecoveryLabel, pitchRecoverySlider);
     }
 
+    processingPanel.setBounds(panelLeft, processingTop, panelWidth,
+                              juce::jmax(1, row.getBottom() - processingTop));
+
     area.removeFromTop(v(6));
+    const auto meteringTop = area.getY();
     row = area.removeFromTop(v(116));
     inputLevelMeter.setBounds(row.removeFromLeft(86));
     row.removeFromLeft(10);
@@ -1532,11 +1549,21 @@ void MainComponent::resized()
         area.removeFromTop(v(8));
         row = area.removeFromTop(v(88));
         keyboardComponent.setBounds(row);
+        keyboardPanel.setBounds(panelLeft, row.getY() - v(5), panelWidth, row.getHeight() + v(10));
     }
+    else
+        keyboardPanel.setBounds(0, 0, 0, 0);
+
+    const auto meteringBottom = area.getY();
+    meteringPanel.setBounds(panelLeft, meteringTop, panelWidth,
+                            juce::jmax(1, meteringBottom - meteringTop));
+
     area.removeFromTop(v(8));
     statusLabel.setBounds(area.removeFromTop(v(24)));
     area.removeFromTop(v(8));
     deviceViewport.setBounds(area);
+    audioPanel.setBounds(panelLeft, area.getY() - v(5), panelWidth,
+                         juce::jmax(1, area.getHeight() + v(10)));
     deviceSelector.setBounds(0, 0, juce::jmax(320, deviceViewport.getWidth() - 18),
                              juce::jmax(300, deviceViewport.getHeight()));
     // Keep help affordances compact and aligned like superscript markers.
