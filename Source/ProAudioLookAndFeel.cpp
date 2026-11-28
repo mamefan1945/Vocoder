@@ -47,6 +47,17 @@ void ProAudioLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int 
     g.fillPath(pointer, juce::AffineTransform::rotation(angle).translated(cx, cy));
 }
 
+int ProAudioLookAndFeel::getSliderThumbRadius(juce::Slider& slider)
+{
+    // Reserve enough travel at both ends for the complete 16 px vertical fader cap.
+    // JUCE uses this radius when mapping values to the slider's on-screen position,
+    // so the drawn thumb and its hit-test position stay aligned at 0% and 100%.
+    if (slider.getSliderStyle() == juce::Slider::LinearVertical)
+        return 20;
+
+    return juce::LookAndFeel_V4::getSliderThumbRadius(slider);
+}
+
 void ProAudioLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int w, int h,
     float pos, float, float, juce::Slider::SliderStyle style, juce::Slider&)
 {
