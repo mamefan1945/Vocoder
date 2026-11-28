@@ -1471,6 +1471,7 @@ void MainComponent::resized()
 
     area.removeFromTop(v(8));
     const auto processingTop = area.getY();
+    area.removeFromTop(v(24)); // keep the panel heading clear of the first control row
     row = area.removeFromTop(v(vocoderMode ? 206 : (harmonizerMode ? 190 : 104)));
     const auto placeVerticalFader = [](juce::Rectangle<int> cell,
                                        juce::Label& label, juce::Slider& slider)
@@ -1521,6 +1522,7 @@ void MainComponent::resized()
 
     area.removeFromTop(v(6));
     const auto meteringTop = area.getY();
+    area.removeFromTop(v(24)); // heading clearance for master controls and meters
     row = area.removeFromTop(v(142));
 
     // Master output and dry/wet controls share one section with the VU meters.
@@ -1555,7 +1557,7 @@ void MainComponent::resized()
         area.removeFromTop(v(8));
         row = area.removeFromTop(v(88));
         keyboardComponent.setBounds(row);
-        keyboardPanel.setBounds(panelLeft, row.getY() - v(7), panelWidth, row.getHeight() + v(14));
+        keyboardPanel.setBounds(panelLeft, row.getY() - v(25), panelWidth, row.getHeight() + v(32));
     }
     else
         keyboardPanel.setBounds(0, 0, 0, 0);
@@ -1564,8 +1566,8 @@ void MainComponent::resized()
     statusLabel.setBounds(area.removeFromTop(v(24)));
     area.removeFromTop(v(8));
     deviceViewport.setBounds(area);
-    audioPanel.setBounds(panelLeft, area.getY() - v(7), panelWidth,
-                         juce::jmax(1, area.getHeight() + v(14)));
+    audioPanel.setBounds(panelLeft, area.getY() - v(25), panelWidth,
+                         juce::jmax(1, area.getHeight() + v(32)));
     deviceSelector.setBounds(0, 0, juce::jmax(320, deviceViewport.getWidth() - 18),
                              juce::jmax(300, deviceViewport.getHeight()));
     // Keep help affordances compact and aligned like superscript markers.
